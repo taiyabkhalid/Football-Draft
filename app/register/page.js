@@ -5,7 +5,18 @@ import { supabase } from '../../lib/supabaseClient';
 import HeadshotCapture from '../../lib/HeadshotCapture';
 import MondayPicker from '../../lib/MondayPicker';
 
-const PREVIOUS_TEAMS = ['Warriors', 'Storm', 'T-Reds', 'Pink Panthers', 'Huskies', 'None'];
+const PREVIOUS_TEAMS = [
+  'Warriors',
+  'Storm',
+  'T-Reds',
+  'Pink Panthers',
+  'Huskies',
+  'Just Ballers',
+  'Purple Dragons',
+  'Other',
+  'Never Played',
+  'None',
+];
 
 const initialForm = {
   full_name: '',
@@ -77,6 +88,25 @@ export default function RegisterPage() {
 
     setSubmitting(true);
     try {
+      // Defensive check: catch any value that doesn't exactly match what the
+      // database allows, with a clear message, before we even try to upload/insert.
+      const ENUMS = {
+        offensive_position: ['QB', 'WR', 'C'],
+        defensive_position: ['CB', 'Safety', 'LB', 'Rush'],
+        position_preference: ['Offense only', 'Defense only', 'Both'],
+        gender: ['M', 'F'],
+        injury_status: ['None', 'Recovering', 'Injured'],
+        game_time_unavailable: ['7 PM game', '8 PM game', '9 PM game', 'Available for all'],
+      };
+      for (const [field, allowed] of Object.entries(ENUMS)) {
+        const value = String(form[field]).trim();
+        if (!allowed.includes(value)) {
+          throw new Error(
+            `"${field.replace(/_/g, ' ')}" has an unrecognized value ("${form[field]}"). Please re-select it and try again.`
+          );
+        }
+      }
+
       // 1. Upload the cropped headshot to Supabase Storage
       const fileName = `${crypto.randomUUID()}.jpg`;
       const { error: uploadError } = await supabase.storage
@@ -95,13 +125,13 @@ export default function RegisterPage() {
         phone: form.phone.trim(),
         email: form.email.trim(),
         headshot_url: publicUrl,
-        offensive_position: form.offensive_position,
-        defensive_position: form.defensive_position,
-        position_preference: form.position_preference,
+        offensive_position: form.offensive_position.trim(),
+        defensive_position: form.defensive_position.trim(),
+        position_preference: form.position_preference.trim(),
         height_feet: Number(form.height_feet),
         height_inches: Number(form.height_inches),
         gender: form.gender,
-        previous_team: form.previous_team === 'None' ? null : form.previous_team,
+        previous_team: ['None', 'Never Played'].includes(form.previous_team) ? null : form.previous_team,
         injury_status: form.injury_status,
         weeks_until_recovered:
           form.injury_status === 'Injured' ? Number(form.weeks_until_recovered) : null,
