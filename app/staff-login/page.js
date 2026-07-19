@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
+import BrandHeader from '../../lib/BrandHeader';
 
 export default function StaffLoginPage() {
   const router = useRouter();
@@ -32,31 +33,8 @@ export default function StaffLoginPage() {
 
   return (
     <main style={{ minHeight: '100vh', background: '#ffffff' }}>
-      <div style={{ maxWidth: 420, margin: '0 auto', padding: '0 16px' }}>
-        <div
-          style={{
-            background: '#0c2340',
-            padding: '20px',
-            borderRadius: '0 0 12px 12px',
-            marginBottom: 32,
-          }}
-        >
-          <p
-            style={{
-              fontSize: 11,
-              letterSpacing: '0.06em',
-              color: '#7fa8d9',
-              margin: '0 0 4px',
-              textTransform: 'uppercase',
-            }}
-          >
-            Go Mammoth League
-          </p>
-          <p style={{ fontSize: 20, fontWeight: 500, color: '#ffffff', margin: 0 }}>
-            Commissioner and GM login
-          </p>
-        </div>
-
+      <BrandHeader pageLabel="Commissioner and GM login" />
+      <div style={{ maxWidth: 420, margin: '0 auto', padding: '32px 16px 0' }}>
         <form onSubmit={handleLogin}>
           {error && (
             <div
