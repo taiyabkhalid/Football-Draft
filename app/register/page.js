@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import HeadshotCapture from '../../lib/HeadshotCapture';
 import MondayPicker from '../../lib/MondayPicker';
+import BrandHeader from '../../lib/BrandHeader';
 
 const PREVIOUS_TEAMS = [
   'Warriors',
@@ -154,26 +155,31 @@ export default function RegisterPage() {
 
   if (done) {
     return (
-      <main className="max-w-lg mx-auto px-4 py-16 text-center">
-        <p className="font-display text-4xl text-lights mb-3">You're on the board</p>
-        <p className="text-chalk/70 text-sm">
-          Your profile has been submitted. GMs will see your card when the draft opens.
-        </p>
+      <main>
+        <BrandHeader pageLabel="Player registration" />
+        <div className="max-w-lg mx-auto px-4 py-16 text-center">
+          <p className="font-display text-4xl text-royal mb-3">You're on the board</p>
+          <p className="text-muted text-sm">
+            Your profile has been submitted. GMs will see your card when the draft opens.
+          </p>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="max-w-xl mx-auto px-4 py-10">
-      <p className="font-display text-4xl text-lights leading-none mb-1">Player Registration</p>
-      <p className="text-chalk/60 text-sm mb-6">
+    <main>
+      <BrandHeader pageLabel="Player registration" />
+      <div className="max-w-xl mx-auto px-4 py-10">
+      <p className="font-display text-4xl text-royal leading-none mb-1">Player Registration</p>
+      <p className="text-muted text-sm mb-6">
         Every field below is required before your card can go into the draft pool.
       </p>
 
       {errors.length > 0 && (
         <div className="bg-flag/10 border border-flag/40 rounded-md p-3 mb-6">
-          <p className="text-xs font-semibold text-flag mb-1">Please fix the following:</p>
-          <ul className="text-xs text-chalk/80 list-disc list-inside">
+          <p className="text-xs font-semibold text-danger mb-1">Please fix the following:</p>
+          <ul className="text-xs text-muted list-disc list-inside">
             {errors.map((m) => (
               <li key={m}>{m}</li>
             ))}
@@ -185,8 +191,8 @@ export default function RegisterPage() {
         {/* 1st & Basic info */}
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lights font-display text-sm">1ST &amp; BASIC INFO</span>
-            <div className="flex-1 h-px bg-field-700" />
+            <span className="text-royal font-display text-sm">1ST &amp; BASIC INFO</span>
+            <div className="flex-1 h-px bg-line" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -207,8 +213,8 @@ export default function RegisterPage() {
         {/* 2nd & Headshot */}
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lights font-display text-sm">2ND &amp; HEADSHOT</span>
-            <div className="flex-1 h-px bg-field-700" />
+            <span className="text-royal font-display text-sm">2ND &amp; HEADSHOT</span>
+            <div className="flex-1 h-px bg-line" />
           </div>
           <HeadshotCapture onPhotoReady={setPhotoBlob} />
         </section>
@@ -216,8 +222,8 @@ export default function RegisterPage() {
         {/* 3rd & Position */}
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lights font-display text-sm">3RD &amp; POSITION</span>
-            <div className="flex-1 h-px bg-field-700" />
+            <span className="text-royal font-display text-sm">3RD &amp; POSITION</span>
+            <div className="flex-1 h-px bg-line" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div>
@@ -254,8 +260,8 @@ export default function RegisterPage() {
         {/* 4th & Bio */}
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lights font-display text-sm">4TH &amp; BIO</span>
-            <div className="flex-1 h-px bg-field-700" />
+            <span className="text-royal font-display text-sm">4TH &amp; BIO</span>
+            <div className="flex-1 h-px bg-line" />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -291,8 +297,8 @@ export default function RegisterPage() {
         {/* 5th & History */}
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lights font-display text-sm">5TH &amp; HISTORY</span>
-            <div className="flex-1 h-px bg-field-700" />
+            <span className="text-royal font-display text-sm">5TH &amp; HISTORY</span>
+            <div className="flex-1 h-px bg-line" />
           </div>
           <div>
             <label className="field-label">Previous team</label>
@@ -308,8 +314,8 @@ export default function RegisterPage() {
         {/* 6th & Health */}
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lights font-display text-sm">6TH &amp; HEALTH</span>
-            <div className="flex-1 h-px bg-field-700" />
+            <span className="text-royal font-display text-sm">6TH &amp; HEALTH</span>
+            <div className="flex-1 h-px bg-line" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -339,8 +345,8 @@ export default function RegisterPage() {
         {/* 7th & Availability */}
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lights font-display text-sm">7TH &amp; AVAILABILITY</span>
-            <div className="flex-1 h-px bg-field-700" />
+            <span className="text-royal font-display text-sm">7TH &amp; AVAILABILITY</span>
+            <div className="flex-1 h-px bg-line" />
           </div>
           <div className="mb-4">
             <label className="field-label">Game time not available</label>
@@ -372,8 +378,8 @@ export default function RegisterPage() {
         {/* 8th & Extras */}
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lights font-display text-sm">8TH &amp; EXTRAS</span>
-            <div className="flex-1 h-px bg-field-700" />
+            <span className="text-royal font-display text-sm">8TH &amp; EXTRAS</span>
+            <div className="flex-1 h-px bg-line" />
           </div>
           <label className="flex items-center gap-2 text-sm mb-2 cursor-pointer">
             <input
@@ -394,6 +400,7 @@ export default function RegisterPage() {
           {submitting ? 'Submitting…' : 'Submit profile'}
         </button>
       </form>
+      </div>
     </main>
   );
 }

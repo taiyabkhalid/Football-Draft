@@ -22,7 +22,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body
-        className="bg-field-950 text-chalk font-body min-h-screen"
+        className="bg-white text-ink font-body min-h-screen"
         style={{ '--font-display': "'Anton', sans-serif", '--font-body': "'Inter', sans-serif" }}
       >
         {children}
