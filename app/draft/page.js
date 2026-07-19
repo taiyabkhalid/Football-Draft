@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock } from '../../lib/draftLogic';
+import BrandHeader from '../../lib/BrandHeader';
 
 export default function DraftPage() {
   const router = useRouter();
@@ -176,25 +177,32 @@ export default function DraftPage() {
 
   if (!authChecked || !settings) {
     return (
-      <main style={{ padding: 40, textAlign: 'center', color: '#5a6b7d', fontSize: 13 }}>
-        Loading draft room…
+      <main style={{ background: '#ffffff', minHeight: '100vh' }}>
+        <BrandHeader pageLabel="Live draft" />
+        <p style={{ padding: 40, textAlign: 'center', color: '#5a6b7d', fontSize: 13 }}>
+          Loading draft room…
+        </p>
       </main>
     );
   }
 
   if (draftStatus === 'not_started') {
     return (
-      <main style={{ padding: 40, textAlign: 'center' }}>
-        <p style={{ fontSize: 16, color: '#0c2340', fontWeight: 500 }}>
-          The draft hasn't started yet.
-        </p>
-        <p style={{ fontSize: 13, color: '#5a6b7d' }}>Check back once the commissioner opens it.</p>
+      <main style={{ background: '#ffffff', minHeight: '100vh' }}>
+        <BrandHeader pageLabel="Live draft" />
+        <div style={{ padding: 40, textAlign: 'center' }}>
+          <p style={{ fontSize: 16, color: '#0c2340', fontWeight: 500 }}>
+            The draft hasn't started yet.
+          </p>
+          <p style={{ fontSize: 13, color: '#5a6b7d' }}>Check back once the commissioner opens it.</p>
+        </div>
       </main>
     );
   }
 
   return (
     <main style={{ background: '#ffffff', minHeight: '100vh' }}>
+      <BrandHeader pageLabel="Live draft" liveIndicator />
       <div
         style={{
           background: '#e6f1fb',
