@@ -8,18 +8,18 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        field: {
-          950: '#0b1f16',
-          900: '#0f2b1e',
-          800: '#163a28',
-          700: '#1e4a34',
+        navy: '#0c2340',
+        royal: {
+          DEFAULT: '#185fa5',
+          soft: '#4a86c4',
+          pale: '#e6f1fb',
         },
-        chalk: '#f4f1e8',
-        lights: {
-          DEFAULT: '#e8a339',
-          soft: '#f3c37a',
-        },
-        flag: '#c0392b',
+        surface: '#f1f3f6',
+        line: '#d8dde2',
+        ink: '#0c2340',
+        muted: '#5a6b7d',
+        faint: '#8b97a3',
+        danger: '#c0392b',
       },
       fontFamily: {
         display: ['var(--font-display)'],
