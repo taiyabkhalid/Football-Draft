@@ -212,10 +212,14 @@ export default function RegisterPage() {
 
       if (mode === 'edit') {
         const { error: updateError } = await supabase.from('players').update(payload).eq('email', form.email.trim());
-        if (updateError) throw updateError;
+        if (updateError) {
+          throw new Error(`${updateError.message} — position_preference sent was: "${payload.position_preference}"`);
+        }
       } else {
         const { error: insertError } = await supabase.from('players').insert({ ...payload, email: form.email.trim() });
-        if (insertError) throw insertError;
+        if (insertError) {
+          throw new Error(`${insertError.message} — position_preference sent was: "${payload.position_preference}"`);
+        }
 
         const { error: signUpError } = await supabase.auth.signUp({
           email: form.email.trim(),
