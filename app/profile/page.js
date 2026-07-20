@@ -155,7 +155,7 @@ export default function ProfilePage() {
           </Link>
         )}
 
-        <Link href="/draft" className="block text-center text-sm font-medium" style={{ color: '#185fa5' }}>
+        <Link href="/live" className="block text-center text-sm font-medium" style={{ color: '#185fa5' }}>
           Watch the live draft <i className="ti ti-arrow-right text-sm" aria-hidden="true" />
         </Link>
       </div>

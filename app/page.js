@@ -12,7 +12,7 @@ export default function Home() {
         <Link href="/login" className="btn-primary" style={{ display: 'block', textAlign: 'center', marginBottom: 10 }}>
           Log in
         </Link>
-        <Link href="/draft" className="btn-secondary" style={{ display: 'block', textAlign: 'center', marginBottom: 24 }}>
+        <Link href="/live" className="btn-secondary" style={{ display: 'block', textAlign: 'center', marginBottom: 24 }}>
           View live draft / results
         </Link>
 
