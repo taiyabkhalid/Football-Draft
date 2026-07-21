@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import HeadshotCapture from '../../lib/HeadshotCapture';
 import MondayPicker from '../../lib/MondayPicker';
@@ -53,6 +54,7 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [autoLoggedIn, setAutoLoggedIn] = useState(false);
 
   // On load: if logged in, switch to edit mode and pre-fill with their data
   useEffect(() => {
@@ -215,6 +217,7 @@ export default function RegisterPage() {
         if (updateError) {
           throw new Error(`${updateError.message} — position_preference sent was: "${payload.position_preference}"`);
         }
+        setAutoLoggedIn(true); // editing means they were already logged in
       } else {
         const { error: insertError } = await supabase.from('players').insert({ ...payload, email: form.email.trim() });
         if (insertError) {
@@ -228,6 +231,16 @@ export default function RegisterPage() {
         if (signUpError && !signUpError.message.includes('already registered')) {
           console.error('Account creation issue:', signUpError.message);
         }
+
+        // Guarantee a session for the common case (brand new player using the
+        // shared password). If this email already has a different password
+        // (e.g. a GM/commissioner account), this will simply fail quietly,
+        // and they'll need to log in once with their own credentials.
+        const { data: signInData } = await supabase.auth.signInWithPassword({
+          email: form.email.trim(),
+          password: 'draft2026',
+        });
+        setAutoLoggedIn(!!signInData?.session);
       }
 
       setDone(true);
@@ -270,11 +283,20 @@ export default function RegisterPage() {
         <BrandHeader pageLabel={mode === 'edit' ? 'Edit your profile' : 'Player registration'} />
         <div className="max-w-lg mx-auto px-4 py-16 text-center">
           <p className="font-display text-4xl text-royal mb-3">{mode === 'edit' ? 'Changes saved' : "You're on the board"}</p>
-          <p className="text-muted text-sm">
+          <p className="text-muted text-sm mb-6">
             {mode === 'edit'
               ? 'Your profile has been updated.'
               : "Your profile has been submitted. GMs will see your card when the draft opens."}
           </p>
+          {autoLoggedIn ? (
+            <Link href="/profile" className="btn-primary inline-block">
+              Go to your profile
+            </Link>
+          ) : (
+            <Link href="/login" className="btn-primary inline-block">
+              Log in to view your profile
+            </Link>
+          )}
         </div>
       </main>
     );

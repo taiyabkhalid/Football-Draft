@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
+import FootballIcon from '../../lib/FootballIcon';
 
 export default function LiveDraftPage() {
   const [teams, setTeams] = useState([]);
@@ -192,20 +193,24 @@ export default function LiveDraftPage() {
         </div>
       )}
 
-      <div className="px-4 sm:px-5 pt-4">
-        <p className="text-[10px] uppercase tracking-wide text-muted mb-2">Tap a team to view their picks</p>
+      <div className="mx-4 sm:mx-5 mt-4 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5">
+        <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: '#0c447c' }}>
+          Draft board
+        </p>
+        <p className="text-[10px] text-muted mb-2">Tap a team to view their picks</p>
         <div className="flex gap-2 flex-wrap mb-3">
           {teams.map((t) => (
             <button
               key={t.id}
               onClick={() => setViewingTeamId(viewingTeamId === t.id ? null : t.id)}
-              className="text-xs px-2.5 py-1.5 rounded-md font-medium"
+              className="text-xs px-2.5 py-1.5 rounded-md font-medium flex items-center gap-1.5"
               style={{
-                background: viewingTeamId === t.id ? '#185fa5' : t.id === myTeamId ? '#e6f1fb' : '#f1f3f6',
+                background: viewingTeamId === t.id ? '#185fa5' : t.id === myTeamId ? '#e6f1fb' : '#ffffff',
                 color: viewingTeamId === t.id ? '#ffffff' : t.id === myTeamId ? '#0c447c' : '#3d4a57',
                 border: t.id === myTeamId && viewingTeamId !== t.id ? '1px solid #185fa5' : 'none',
               }}
             >
+              <FootballIcon color={viewingTeamId === t.id ? '#ffffff' : t.team_color || '#0074ff'} size={14} />
               {t.name}
               {t.id === myTeamId ? ' (you)' : ''}
             </button>
@@ -213,7 +218,7 @@ export default function LiveDraftPage() {
         </div>
 
         {viewingTeamId && rosterByTeam[viewingTeamId] && (
-          <div className="bg-surface rounded-lg p-3.5 mb-4">
+          <div className="bg-white rounded-lg p-3.5 mb-1">
             <div className="flex justify-between items-center mb-2">
               <p className="text-sm font-medium text-ink m-0">{teamsById[viewingTeamId]?.name}</p>
               {ownerByTeam[viewingTeamId] && (
@@ -231,7 +236,7 @@ export default function LiveDraftPage() {
             ) : (
               <div className="flex flex-col gap-1.5">
                 {rosterByTeam[viewingTeamId].players.map((p) => (
-                  <div key={p.id} className="flex items-center gap-2.5 bg-white rounded-md px-2.5 py-2">
+                  <div key={p.id} className="flex items-center gap-2.5 bg-surface rounded-md px-2.5 py-2">
                     {p.headshot_url ? (
                       <img src={p.headshot_url} alt={p.full_name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                     ) : (

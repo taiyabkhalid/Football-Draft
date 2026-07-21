@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import BrandHeader from '../../lib/BrandHeader';
+import FootballIcon, { TEAM_COLORS } from '../../lib/FootballIcon';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function ProfilePage() {
   const [settings, setSettings] = useState(null);
   const [role, setRole] = useState(null);
   const [teamNameDraft, setTeamNameDraft] = useState('');
+  const [teamColorDraft, setTeamColorDraft] = useState('#0074ff');
   const [savingTeamName, setSavingTeamName] = useState(false);
 
   const loadProfile = useCallback(async () => {
@@ -46,6 +48,7 @@ export default function ProfilePage() {
       const { data: teamRow } = await supabase.from('teams').select('*').eq('id', teamId).single();
       setTeam(teamRow);
       setTeamNameDraft(teamRow?.name || '');
+      setTeamColorDraft(teamRow?.team_color || '#0074ff');
     }
 
     setLoading(false);
@@ -69,8 +72,11 @@ export default function ProfilePage() {
   async function saveTeamName() {
     if (!team) return;
     setSavingTeamName(true);
-    await supabase.from('teams').update({ name: teamNameDraft.trim() }).eq('id', team.id);
-    setTeam((t) => ({ ...t, name: teamNameDraft.trim() }));
+    await supabase
+      .from('teams')
+      .update({ name: teamNameDraft.trim(), team_color: teamColorDraft })
+      .eq('id', team.id);
+    setTeam((t) => ({ ...t, name: teamNameDraft.trim(), team_color: teamColorDraft }));
     setSavingTeamName(false);
   }
 
@@ -161,21 +167,43 @@ export default function ProfilePage() {
         {(role === 'gm' || role === 'commissioner') && team && (
           <div className="bg-surface rounded-lg p-3.5 mb-3">
             <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Your team name</p>
-            <div className="flex gap-2">
+            <div className="flex gap-2 mb-3">
               <input
                 type="text"
                 value={teamNameDraft}
                 onChange={(e) => setTeamNameDraft(e.target.value)}
                 className="flex-1 text-xs"
               />
-              <button
-                onClick={saveTeamName}
-                disabled={savingTeamName || teamNameDraft.trim() === team.name}
-                className="btn-secondary text-xs"
-              >
-                {savingTeamName ? 'Saving…' : 'Save'}
-              </button>
             </div>
+
+            <p className="text-[10px] uppercase tracking-wide text-muted mb-2">Team color</p>
+            <div className="flex gap-2 flex-wrap mb-3">
+              {TEAM_COLORS.map((c) => (
+                <button
+                  key={c.hex}
+                  type="button"
+                  onClick={() => setTeamColorDraft(c.hex)}
+                  aria-label={c.name}
+                  className="rounded-full flex items-center justify-center"
+                  style={{
+                    width: 30,
+                    height: 30,
+                    background: '#ffffff',
+                    border: teamColorDraft === c.hex ? `2px solid ${c.hex}` : '1px solid #d8dde2',
+                  }}
+                >
+                  <FootballIcon color={c.hex} size={16} />
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={saveTeamName}
+              disabled={savingTeamName || (teamNameDraft.trim() === team.name && teamColorDraft === team.team_color)}
+              className="btn-secondary text-xs w-full"
+            >
+              {savingTeamName ? 'Saving…' : 'Save'}
+              </button>
           </div>
         )}
 

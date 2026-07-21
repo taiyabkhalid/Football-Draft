@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
+import FootballIcon from '../../lib/FootballIcon';
 
 const ALL_POSITIONS = ['QB', 'WR', 'C', 'CB', 'Safety', 'LB', 'Rush'];
 const OFFENSIVE_POSITIONS = ['QB', 'WR', 'C'];
@@ -142,11 +143,7 @@ export default function DraftPage() {
     return map;
   }, [teams, players]);
 
-  const canDraft =
-    profile &&
-    teamOnClock &&
-    draftStatus === 'in_progress' &&
-    (profile.role === 'commissioner' || profile.team_id === teamOnClock.id);
+  const canDraft = profile && teamOnClock && draftStatus === 'in_progress' && profile.team_id === teamOnClock.id;
 
   const mustDraftFemale = useMemo(() => {
     if (!teamOnClock) return false;
@@ -355,32 +352,36 @@ export default function DraftPage() {
       )}
 
       {/* Team roster viewer */}
-      <div className="px-4 sm:px-5 pt-3">
-        <p className="text-[10px] uppercase tracking-wide text-muted mb-2">Tap a team to view their picks</p>
+      <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5">
+        <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: '#0c447c' }}>
+          Draft board
+        </p>
+        <p className="text-[10px] text-muted mb-2">Tap a team to view their picks</p>
         <div className="flex gap-2 flex-wrap mb-2">
           {teams.map((t) => (
             <button
               key={t.id}
               onClick={() => setViewingTeamId(viewingTeamId === t.id ? null : t.id)}
-              className="text-xs px-2.5 py-1.5 rounded-md font-medium"
+              className="text-xs px-2.5 py-1.5 rounded-md font-medium flex items-center gap-1.5"
               style={{
-                background: viewingTeamId === t.id ? '#185fa5' : '#f1f3f6',
+                background: viewingTeamId === t.id ? '#185fa5' : '#ffffff',
                 color: viewingTeamId === t.id ? '#ffffff' : '#3d4a57',
               }}
             >
+              <FootballIcon color={viewingTeamId === t.id ? '#ffffff' : t.team_color || '#0074ff'} size={14} />
               {t.name}
             </button>
           ))}
         </div>
         {viewingTeamId && rosterByTeam[viewingTeamId] && (
-          <div className="bg-surface rounded-lg p-3 mb-2">
+          <div className="bg-white rounded-lg p-3 mb-1">
             <p className="text-sm font-medium text-ink mb-2">{teamsById[viewingTeamId]?.name}</p>
             {rosterByTeam[viewingTeamId].players.length === 0 ? (
               <p className="text-xs text-muted m-0">No picks yet.</p>
             ) : (
               <div className="flex flex-col gap-1.5">
                 {rosterByTeam[viewingTeamId].players.map((p) => (
-                  <div key={p.id} className="flex justify-between text-xs bg-white rounded-md px-2.5 py-2">
+                  <div key={p.id} className="flex justify-between text-xs bg-surface rounded-md px-2.5 py-2">
                     <span className="text-ink">{p.full_name}</span>
                     <span className="text-muted">
                       {p.offensive_position} &middot; {p.gender}
@@ -466,7 +467,7 @@ export default function DraftPage() {
 
       {/* Main layout */}
       <div className="flex flex-col lg:flex-row px-4 sm:px-5 pb-6 pt-3">
-        <aside className="w-full lg:w-64 flex-shrink-0 order-2 lg:order-1 lg:pr-3 lg:border-r border-line">
+        <aside className="w-full lg:w-64 flex-shrink-0 order-2 lg:order-1 lg:pr-3 lg:border-r border-line min-h-0">
           <p className="text-[10px] uppercase tracking-wide text-muted mb-2">Available ({sortedAvailable.length})</p>
           <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto pr-1">
             {sortedAvailable.map((p) => (
@@ -491,24 +492,32 @@ export default function DraftPage() {
               return (
                 <div
                   key={p.id}
-                  className="flex-none rounded-xl p-3.5"
+                  className="flex-none rounded-xl p-3.5 flex flex-col"
                   style={{
                     width: 'calc(33.333% - 8px)',
                     minWidth: 190,
+                    height: 230,
                     background: isMatch ? '#e6f1fb' : '#f1f3f6',
                     border: isMatch ? '1.5px solid #185fa5' : '1.5px solid transparent',
                   }}
                 >
-                  <div className="flex gap-2.5 items-center mb-2">
+                  <div className="flex gap-2.5 items-start mb-2">
                     {p.headshot_url ? (
-                      <img src={p.headshot_url} alt={p.full_name} className="w-11 h-11 rounded-full object-cover" />
+                      <img
+                        src={p.headshot_url}
+                        alt={p.full_name}
+                        className="w-11 h-11 rounded-full object-cover flex-shrink-0"
+                      />
                     ) : (
                       <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center flex-shrink-0">
                         <i className="ti ti-user text-faint text-2xl" aria-hidden="true" />
                       </div>
                     )}
-                    <div>
-                      <p className="text-sm font-medium m-0" style={{ color: isMatch ? '#042c53' : '#0c2340' }}>
+                    <div className="min-w-0">
+                      <p
+                        className="text-sm font-medium m-0 leading-snug"
+                        style={{ color: isMatch ? '#042c53' : '#0c2340' }}
+                      >
                         {p.full_name} <span className="font-normal text-muted">({p.gender})</span>
                       </p>
                       <p className="text-[11px] m-0" style={{ color: isMatch ? '#0c447c' : '#5a6b7d' }}>
@@ -519,13 +528,13 @@ export default function DraftPage() {
                   <p className="text-[11px] my-0.5" style={{ color: isMatch ? '#0c447c' : '#5a6b7d' }}>
                     Offense: {p.offensive_position} &nbsp; Defense: {p.defensive_position}
                   </p>
-                  <p className="text-[11px] mt-0.5 mb-2.5" style={{ color: isMatch ? '#0c447c' : '#5a6b7d' }}>
+                  <p className="text-[11px] mt-0.5" style={{ color: isMatch ? '#0c447c' : '#5a6b7d' }}>
                     Injuries: {p.injury_status === 'None' ? 'None' : `${p.injury_status} (${p.weeks_until_recovered || '?'}w)`}
                   </p>
                   <button
                     onClick={() => draftPlayer(p)}
                     disabled={disabled}
-                    className="w-full text-xs font-medium rounded-lg py-2"
+                    className="w-full text-xs font-medium rounded-lg py-2 mt-auto"
                     style={{ background: disabled ? '#d8dde2' : '#185fa5', color: '#ffffff', border: 'none' }}
                   >
                     {drafting === p.id ? 'Drafting…' : 'Draft player'}
