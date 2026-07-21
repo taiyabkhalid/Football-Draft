@@ -278,28 +278,7 @@ export default function DraftPage() {
 
   return (
     <main style={{ background: '#ffffff', minHeight: '100vh' }}>
-      {/* Header with clock */}
-      <div style={{ background: '#0c2340', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-        <div>
-          <p style={{ fontSize: 10, letterSpacing: '0.06em', color: '#7fa8d9', margin: '0 0 2px', textTransform: 'uppercase' }}>
-            Go Mammoth League
-          </p>
-          <p style={{ fontSize: 16, fontWeight: 500, color: '#ffffff', margin: 0 }}>GM Flag Football Draft 2026</p>
-          <p style={{ fontSize: 12, color: '#a9c6e8', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-            Live draft
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#639922' }} />
-              <span style={{ fontSize: 11, color: '#c0dd97' }}>Live</span>
-            </span>
-          </p>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <p style={{ fontSize: 10, letterSpacing: '0.04em', color: '#7fa8d9', margin: '0 0 2px', textTransform: 'uppercase' }}>
-            Draft clock: time remaining
-          </p>
-          <p style={{ fontSize: 32, fontWeight: 500, color: '#ffffff', margin: 0, lineHeight: 1 }}>{timerDisplay}</p>
-        </div>
-      </div>
+      <BrandHeader pageLabel="Live draft" liveIndicator />
 
       {/* Previous / current / next strip */}
       <div className="flex flex-col sm:flex-row gap-2 px-4 sm:px-5 pt-4">
@@ -315,12 +294,17 @@ export default function DraftPage() {
             <p className="text-xs text-faint">None yet</p>
           )}
         </div>
-        <div className="flex-1 rounded-lg p-3" style={{ background: '#185fa5' }}>
-          <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: '#cfe2f5' }}>
-            On the clock
-          </p>
-          <p className="text-[13px] font-semibold" style={{ color: '#ffffff' }}>
-            {teamOnClock?.name || '—'}
+        <div className="flex-1 rounded-lg p-3 flex items-center justify-between gap-2" style={{ background: '#185fa5' }}>
+          <div>
+            <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: '#cfe2f5' }}>
+              On the clock
+            </p>
+            <p className="text-[13px] font-semibold" style={{ color: '#ffffff' }}>
+              {teamOnClock?.name || '—'}
+            </p>
+          </div>
+          <p className="text-xl font-medium" style={{ color: '#ffffff' }}>
+            {timerDisplay}
           </p>
         </div>
         <div className="flex-1 bg-surface rounded-lg p-3">
