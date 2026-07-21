@@ -24,7 +24,9 @@ export default function DraftPage() {
   const [searchName, setSearchName] = useState('');
   const [searchPosition, setSearchPosition] = useState('');
   const [searchGender, setSearchGender] = useState('');
+  const [searchPreviousTeam, setSearchPreviousTeam] = useState('');
   const [sortBy, setSortBy] = useState('name');
+  const [viewByTeamOpen, setViewByTeamOpen] = useState(false);
 
   const [drafting, setDrafting] = useState(null);
   const [skipping, setSkipping] = useState(false);
@@ -154,7 +156,13 @@ export default function DraftPage() {
     return femaleNeeded > 0 && femaleNeeded >= slotsRemaining;
   }, [teamOnClock, rosterByTeam, minFemale, maxRoster]);
 
-  const hasActiveSearch = searchName.trim() !== '' || searchPosition !== '' || searchGender !== '';
+  const hasActiveSearch =
+    searchName.trim() !== '' || searchPosition !== '' || searchGender !== '' || searchPreviousTeam !== '';
+
+  const previousTeamOptions = useMemo(() => {
+    const set = new Set(players.map((p) => p.previous_team).filter(Boolean));
+    return Array.from(set).sort();
+  }, [players]);
 
   function sortList(list, key) {
     const sorted = [...list];
@@ -174,13 +182,14 @@ export default function DraftPage() {
       const posOk =
         searchPosition === '' || p.offensive_position === searchPosition || p.defensive_position === searchPosition;
       const genderOk = searchGender === '' || p.gender === searchGender;
-      return nameOk && posOk && genderOk;
+      const prevTeamOk = searchPreviousTeam === '' || p.previous_team === searchPreviousTeam;
+      return nameOk && posOk && genderOk && prevTeamOk;
     });
     const matchIds = new Set(matches.map((p) => p.id));
     const rest = availablePlayers.filter((p) => !matchIds.has(p.id));
 
     return [...sortList(matches, 'name'), ...sortList(rest, sortBy)];
-  }, [availablePlayers, hasActiveSearch, searchName, searchPosition, searchGender, sortBy]);
+  }, [availablePlayers, hasActiveSearch, searchName, searchPosition, searchGender, searchPreviousTeam, sortBy]);
 
   const matchIdSet = useMemo(() => {
     if (!hasActiveSearch) return new Set();
@@ -191,16 +200,18 @@ export default function DraftPage() {
           const posOk =
             searchPosition === '' || p.offensive_position === searchPosition || p.defensive_position === searchPosition;
           const genderOk = searchGender === '' || p.gender === searchGender;
-          return nameOk && posOk && genderOk;
+          const prevTeamOk = searchPreviousTeam === '' || p.previous_team === searchPreviousTeam;
+          return nameOk && posOk && genderOk && prevTeamOk;
         })
         .map((p) => p.id)
     );
-  }, [availablePlayers, hasActiveSearch, searchName, searchPosition, searchGender]);
+  }, [availablePlayers, hasActiveSearch, searchName, searchPosition, searchGender, searchPreviousTeam]);
 
   function clearSearch() {
     setSearchName('');
     setSearchPosition('');
     setSearchGender('');
+    setSearchPreviousTeam('');
     setSortBy('name');
   }
 
@@ -275,7 +286,7 @@ export default function DraftPage() {
 
   return (
     <main style={{ background: '#ffffff', minHeight: '100vh' }}>
-      <BrandHeader pageLabel="Live draft" liveIndicator />
+      <BrandHeader pageLabel="Live draft" liveIndicator pickTimer={timerDisplay} />
 
       {/* Previous / current / next strip */}
       <div className="flex flex-col sm:flex-row gap-2 px-4 sm:px-5 pt-4">
@@ -352,52 +363,64 @@ export default function DraftPage() {
       )}
 
       {/* Team roster viewer */}
-      <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5">
-        <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: '#0c447c' }}>
-          Draft board
-        </p>
-        <p className="text-[10px] text-muted mb-2">Tap a team to view their picks</p>
-        <div className="flex gap-2 flex-wrap mb-2">
-          {teams.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setViewingTeamId(viewingTeamId === t.id ? null : t.id)}
-              className="text-xs px-2.5 py-1.5 rounded-md font-medium flex items-center gap-1.5"
-              style={{
-                background: viewingTeamId === t.id ? '#185fa5' : '#ffffff',
-                color: viewingTeamId === t.id ? '#ffffff' : '#3d4a57',
-              }}
-            >
-              <FootballIcon color={viewingTeamId === t.id ? '#ffffff' : t.team_color || '#0074ff'} size={14} />
-              {t.name}
-            </button>
-          ))}
-        </div>
-        {viewingTeamId && rosterByTeam[viewingTeamId] && (
-          <div className="bg-white rounded-lg p-3 mb-1">
-            <p className="text-sm font-medium text-ink mb-2">{teamsById[viewingTeamId]?.name}</p>
-            {rosterByTeam[viewingTeamId].players.length === 0 ? (
-              <p className="text-xs text-muted m-0">No picks yet.</p>
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                {rosterByTeam[viewingTeamId].players.map((p) => (
-                  <div key={p.id} className="flex justify-between text-xs bg-surface rounded-md px-2.5 py-2">
-                    <span className="text-ink">{p.full_name}</span>
-                    <span className="text-muted">
-                      {p.offensive_position} &middot; {p.gender}
-                    </span>
+      <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-surface px-4 py-3">
+        <button
+          onClick={() => setViewByTeamOpen((o) => !o)}
+          className="w-full flex items-center justify-between"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
+            View by team
+          </p>
+          <i className={`ti ti-chevron-${viewByTeamOpen ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+        </button>
+        {viewByTeamOpen && (
+          <>
+            <p className="text-[10px] text-muted mt-2 mb-2">Tap a team to view their picks</p>
+            <div className="flex gap-2 flex-wrap mb-2">
+              {teams.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setViewingTeamId(viewingTeamId === t.id ? null : t.id)}
+                  className="text-xs px-2.5 py-1.5 rounded-md font-medium flex items-center gap-1.5"
+                  style={{
+                    background: viewingTeamId === t.id ? '#185fa5' : '#ffffff',
+                    color: viewingTeamId === t.id ? '#ffffff' : '#3d4a57',
+                  }}
+                >
+                  <FootballIcon color={viewingTeamId === t.id ? '#ffffff' : t.team_color || '#0074ff'} size={14} />
+                  {t.name}
+                </button>
+              ))}
+            </div>
+            {viewingTeamId && rosterByTeam[viewingTeamId] && (
+              <div className="bg-white rounded-lg p-3 mb-1">
+                <p className="text-sm font-medium text-ink mb-2">{teamsById[viewingTeamId]?.name}</p>
+                {rosterByTeam[viewingTeamId].players.length === 0 ? (
+                  <p className="text-xs text-muted m-0">No picks yet.</p>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {rosterByTeam[viewingTeamId].players.map((p) => (
+                      <div key={p.id} className="flex justify-between text-xs bg-surface rounded-md px-2.5 py-2">
+                        <span className="text-ink">{p.full_name}</span>
+                        <span className="text-muted">
+                          {p.offensive_position} &middot; {p.gender}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
 
-      <div className="border-t border-line mx-4 sm:mx-5 mt-1" />
+      {/* Draft board - the main drafting area: search/sort, available players, cards, your team */}
+      <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5">
+        <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: '#0c447c' }}>
+          Draft board
+        </p>
 
-      {/* Search + sort */}
-      <div className="px-4 sm:px-5 py-3">
         <div className="flex gap-2 flex-wrap items-center">
           <div className="flex-[2] min-w-[150px] relative">
             <i className="ti ti-search absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-faint" aria-hidden="true" />
@@ -442,6 +465,19 @@ export default function DraftPage() {
             <option value="M">M</option>
             <option value="F">F</option>
           </select>
+          <select
+            value={searchPreviousTeam}
+            onChange={(e) => setSearchPreviousTeam(e.target.value)}
+            className="flex-1 min-w-[130px] text-xs"
+            style={{ width: 'auto', borderColor: searchPreviousTeam ? '#185fa5' : undefined }}
+          >
+            <option value="">Previous team: any</option>
+            {previousTeamOptions.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="flex-1 min-w-[100px] text-xs" style={{ width: 'auto' }}>
             <option value="name">Sort: name</option>
             <option value="gender">Sort: M/F</option>
@@ -456,17 +492,19 @@ export default function DraftPage() {
         {hasActiveSearch && (
           <p className="text-[10px] text-faint mt-1.5">
             Filtering by:{' '}
-            {[searchName && `name "${searchName}"`, searchPosition && searchPosition, searchGender && searchGender]
+            {[
+              searchName && `name "${searchName}"`,
+              searchPosition && searchPosition,
+              searchGender && searchGender,
+              searchPreviousTeam && `previous team ${searchPreviousTeam}`,
+            ]
               .filter(Boolean)
               .join(', ')}
           </p>
         )}
-      </div>
 
-      <div className="border-t border-line mx-4 sm:mx-5 mb-1" />
-
-      {/* Main layout */}
-      <div className="flex flex-col lg:flex-row px-4 sm:px-5 pb-6 pt-3">
+        {/* Main layout: sidebar / card row / my team */}
+        <div className="flex flex-col lg:flex-row pt-3">
         <aside className="w-full lg:w-64 flex-shrink-0 order-2 lg:order-1 lg:pr-3 lg:border-r border-line min-h-0">
           <p className="text-[10px] uppercase tracking-wide text-muted mb-2">Available ({sortedAvailable.length})</p>
           <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto pr-1">
@@ -571,6 +609,7 @@ export default function DraftPage() {
             )}
           </aside>
         )}
+        </div>
       </div>
     </main>
   );

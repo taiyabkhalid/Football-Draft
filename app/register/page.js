@@ -135,7 +135,7 @@ export default function RegisterPage() {
     if (!form.firstName.trim()) missing.push('First name');
     if (!form.lastName.trim()) missing.push('Last name');
     if (!form.phone.trim()) missing.push('Phone number');
-    if (mode === 'create' && !form.email.trim()) missing.push('Email');
+    if (mode === 'create' && !form.email.trim().toLowerCase()) missing.push('Email');
     if (!photoBlob && !existingHeadshotUrl) missing.push('Headshot');
     if (!form.offensive_position) missing.push('Offensive position');
     if (!form.defensive_position) missing.push('Defensive position');
@@ -213,19 +213,19 @@ export default function RegisterPage() {
       };
 
       if (mode === 'edit') {
-        const { error: updateError } = await supabase.from('players').update(payload).eq('email', form.email.trim());
+        const { error: updateError } = await supabase.from('players').update(payload).eq('email', form.email.trim().toLowerCase());
         if (updateError) {
           throw new Error(`${updateError.message} — position_preference sent was: "${payload.position_preference}"`);
         }
         setAutoLoggedIn(true); // editing means they were already logged in
       } else {
-        const { error: insertError } = await supabase.from('players').insert({ ...payload, email: form.email.trim() });
+        const { error: insertError } = await supabase.from('players').insert({ ...payload, email: form.email.trim().toLowerCase() });
         if (insertError) {
           throw new Error(`${insertError.message} — position_preference sent was: "${payload.position_preference}"`);
         }
 
         const { error: signUpError } = await supabase.auth.signUp({
-          email: form.email.trim(),
+          email: form.email.trim().toLowerCase(),
           password: 'draft2026',
         });
         if (signUpError && !signUpError.message.includes('already registered')) {
@@ -237,7 +237,7 @@ export default function RegisterPage() {
         // (e.g. a GM/commissioner account), this will simply fail quietly,
         // and they'll need to log in once with their own credentials.
         const { data: signInData } = await supabase.auth.signInWithPassword({
-          email: form.email.trim(),
+          email: form.email.trim().toLowerCase(),
           password: 'draft2026',
         });
         setAutoLoggedIn(!!signInData?.session);
