@@ -33,7 +33,7 @@ export default function PlayerLoginPage() {
 
   return (
     <main style={{ minHeight: '100vh', background: '#ffffff' }}>
-      <BrandHeader pageLabel="Player login" />
+      <BrandHeader pageLabel="Log in" />
       <div className="max-w-md mx-auto px-4 py-8">
         <form onSubmit={handleLogin}>
           {error && (
@@ -61,7 +61,9 @@ export default function PlayerLoginPage() {
             placeholder="draft2026"
             className="mb-1"
           />
-          <p className="text-[11px] text-faint mb-4">Every player uses the same password: draft2026</p>
+          <p className="text-[11px] text-faint mb-4">
+            Players use the shared password: draft2026. GMs and the commissioner use their own assigned password.
+          </p>
 
           <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? 'Signing in…' : 'Log in'}

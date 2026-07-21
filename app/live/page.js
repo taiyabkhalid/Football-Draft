@@ -10,21 +10,24 @@ export default function LiveDraftPage() {
   const [players, setPlayers] = useState([]);
   const [picks, setPicks] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [profiles, setProfiles] = useState([]);
   const [viewingTeamId, setViewingTeamId] = useState(null);
   const [myTeamId, setMyTeamId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
-    const [teamsRes, playersRes, picksRes, settingsRes] = await Promise.all([
+    const [teamsRes, playersRes, picksRes, settingsRes, profilesRes] = await Promise.all([
       supabase.from('teams').select('*').order('draft_position', { ascending: true }),
       supabase.from('players').select('*').eq('is_active', true),
       supabase.from('draft_picks').select('*').order('pick_number', { ascending: true }),
       supabase.from('draft_settings').select('*').eq('id', 1).single(),
+      supabase.from('profiles').select('role, team_id, email'),
     ]);
     setTeams(teamsRes.data || []);
     setPlayers(playersRes.data || []);
     setPicks(picksRes.data || []);
     setSettings(settingsRes.data || null);
+    setProfiles(profilesRes.data || []);
     setLoading(false);
   }, []);
 
@@ -75,6 +78,29 @@ export default function LiveDraftPage() {
     }
     return list;
   }, [currentPickNumber, numTeams, teams]);
+
+  const playersByEmail = useMemo(() => Object.fromEntries(players.map((p) => [p.email, p])), [players]);
+
+  const ownerByTeam = useMemo(() => {
+    const map = {};
+    for (const profile of profiles) {
+      if (!profile.team_id) continue;
+      const ownerPlayer = playersByEmail[profile.email];
+      map[profile.team_id] = {
+        name: ownerPlayer?.full_name || profile.email,
+        role: profile.role,
+      };
+    }
+    return map;
+  }, [profiles, playersByEmail]);
+
+  const roundByPlayerId = useMemo(() => {
+    const map = {};
+    for (const pick of picks) {
+      if (pick.player_id) map[pick.player_id] = pick.round;
+    }
+    return map;
+  }, [picks]);
 
   const rosterByTeam = useMemo(() => {
     const map = {};
@@ -188,17 +214,40 @@ export default function LiveDraftPage() {
 
         {viewingTeamId && rosterByTeam[viewingTeamId] && (
           <div className="bg-surface rounded-lg p-3.5 mb-4">
-            <p className="text-sm font-medium text-ink mb-2">{teamsById[viewingTeamId]?.name}</p>
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-sm font-medium text-ink m-0">{teamsById[viewingTeamId]?.name}</p>
+              {ownerByTeam[viewingTeamId] && (
+                <p className="text-xs m-0 flex items-center gap-1" style={{ color: '#185fa5' }}>
+                  <i
+                    className={ownerByTeam[viewingTeamId].role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'}
+                    aria-hidden="true"
+                  />
+                  {ownerByTeam[viewingTeamId].name}
+                </p>
+              )}
+            </div>
             {rosterByTeam[viewingTeamId].players.length === 0 ? (
               <p className="text-xs text-muted m-0">No picks yet.</p>
             ) : (
               <div className="flex flex-col gap-1.5">
                 {rosterByTeam[viewingTeamId].players.map((p) => (
-                  <div key={p.id} className="flex justify-between text-xs bg-white rounded-md px-2.5 py-2">
-                    <span className="text-ink">{p.full_name}</span>
-                    <span className="text-muted">
-                      {p.offensive_position} / {p.defensive_position} &middot; {p.gender}
-                    </span>
+                  <div key={p.id} className="flex items-center gap-2.5 bg-white rounded-md px-2.5 py-2">
+                    {p.headshot_url ? (
+                      <img src={p.headshot_url} alt={p.full_name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-surface flex items-center justify-center flex-shrink-0">
+                        <i className="ti ti-user text-faint text-base" aria-hidden="true" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-ink m-0">{p.full_name}</p>
+                      <p className="text-[11px] text-muted m-0">
+                        {p.offensive_position} / {p.defensive_position} &middot; {p.gender}
+                      </p>
+                    </div>
+                    {roundByPlayerId[p.id] && (
+                      <span className="text-[10px] text-muted whitespace-nowrap">Round {roundByPlayerId[p.id]}</span>
+                    )}
                   </div>
                 ))}
               </div>

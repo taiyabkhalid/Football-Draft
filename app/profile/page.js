@@ -12,6 +12,9 @@ export default function ProfilePage() {
   const [player, setPlayer] = useState(null);
   const [team, setTeam] = useState(null);
   const [settings, setSettings] = useState(null);
+  const [role, setRole] = useState(null);
+  const [teamNameDraft, setTeamNameDraft] = useState('');
+  const [savingTeamName, setSavingTeamName] = useState(false);
 
   const loadProfile = useCallback(async () => {
     const {
@@ -23,9 +26,10 @@ export default function ProfilePage() {
       return;
     }
 
-    const [{ data: playerRow }, { data: settingsRow }] = await Promise.all([
+    const [{ data: playerRow }, { data: settingsRow }, { data: profileRow }] = await Promise.all([
       supabase.from('players').select('*').eq('email', user.email).single(),
       supabase.from('draft_settings').select('*').eq('id', 1).single(),
+      supabase.from('profiles').select('role, team_id').eq('id', user.id).maybeSingle(),
     ]);
 
     if (!playerRow) {
@@ -35,10 +39,13 @@ export default function ProfilePage() {
 
     setPlayer(playerRow);
     setSettings(settingsRow);
+    setRole(profileRow?.role || null);
 
-    if (playerRow.team_id) {
-      const { data: teamRow } = await supabase.from('teams').select('*').eq('id', playerRow.team_id).single();
+    const teamId = profileRow?.team_id || playerRow.team_id;
+    if (teamId) {
+      const { data: teamRow } = await supabase.from('teams').select('*').eq('id', teamId).single();
       setTeam(teamRow);
+      setTeamNameDraft(teamRow?.name || '');
     }
 
     setLoading(false);
@@ -58,6 +65,14 @@ export default function ProfilePage() {
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [loadProfile]);
+
+  async function saveTeamName() {
+    if (!team) return;
+    setSavingTeamName(true);
+    await supabase.from('teams').update({ name: teamNameDraft.trim() }).eq('id', team.id);
+    setTeam((t) => ({ ...t, name: teamNameDraft.trim() }));
+    setSavingTeamName(false);
+  }
 
   if (loading || !player) {
     return (
@@ -113,6 +128,16 @@ export default function ProfilePage() {
               {player.offensive_position} / {player.defensive_position} &middot; {player.height_feet}'
               {player.height_inches}" &middot; {player.gender}
             </p>
+            {role === 'commissioner' && (
+              <p className="text-[11px] font-medium m-0 mt-1 flex items-center gap-1" style={{ color: '#185fa5' }}>
+                <i className="ti ti-star-filled text-sm" aria-hidden="true" /> Commish
+              </p>
+            )}
+            {role === 'gm' && (
+              <p className="text-[11px] font-medium m-0 mt-1 flex items-center gap-1" style={{ color: '#185fa5' }}>
+                <i className="ti ti-star text-sm" aria-hidden="true" /> General Manager
+              </p>
+            )}
           </div>
         </div>
 
@@ -131,6 +156,27 @@ export default function ProfilePage() {
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#639922', display: 'inline-block' }} />
             Updates automatically once you're picked
           </p>
+        )}
+
+        {(role === 'gm' || role === 'commissioner') && team && (
+          <div className="bg-surface rounded-lg p-3.5 mb-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Your team name</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={teamNameDraft}
+                onChange={(e) => setTeamNameDraft(e.target.value)}
+                className="flex-1 text-xs"
+              />
+              <button
+                onClick={saveTeamName}
+                disabled={savingTeamName || teamNameDraft.trim() === team.name}
+                className="btn-secondary text-xs"
+              >
+                {savingTeamName ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
         )}
 
         {draftStatus === 'completed' && (

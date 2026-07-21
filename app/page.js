@@ -12,26 +12,9 @@ export default function Home() {
         <Link href="/login" className="btn-primary" style={{ display: 'block', textAlign: 'center', marginBottom: 10 }}>
           Log in
         </Link>
-        <Link href="/live" className="btn-secondary" style={{ display: 'block', textAlign: 'center', marginBottom: 24 }}>
+        <Link href="/live" className="btn-secondary" style={{ display: 'block', textAlign: 'center' }}>
           View live draft / results
         </Link>
-
-        <div style={{ textAlign: 'center' }}>
-          <Link
-            href="/staff-login"
-            style={{
-              background: 'none',
-              border: '0.5px solid #d8dde2',
-              color: '#5a6b7d',
-              borderRadius: 6,
-              padding: '6px 12px',
-              fontSize: 11,
-              display: 'inline-block',
-            }}
-          >
-            Commissioner and GM login
-          </Link>
-        </div>
       </div>
     </main>
   );

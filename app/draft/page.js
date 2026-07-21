@@ -38,7 +38,7 @@ export default function DraftPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        router.push('/staff-login');
+        router.push('/login');
         return;
       }
       const { data: profileRow } = await supabase
@@ -47,7 +47,7 @@ export default function DraftPage() {
         .eq('id', user.id)
         .single();
       if (!profileRow) {
-        router.push('/staff-login');
+        router.push('/login');
         return;
       }
       setProfile(profileRow);
