@@ -224,6 +224,12 @@ export default function RegisterPage() {
           throw new Error(`${insertError.message} — position_preference sent was: "${payload.position_preference}"`);
         }
 
+        // If this email was already pre-assigned a team (e.g. a GM or the
+        // commissioner set up ahead of time), sync their new player card
+        // to that team immediately, rather than leaving them in the pool
+        // until someone manually reassigns them.
+        await supabase.rpc('sync_preassigned_team', { p_email: form.email.trim().toLowerCase() });
+
         const { error: signUpError } = await supabase.auth.signUp({
           email: form.email.trim().toLowerCase(),
           password: 'draft2026',
