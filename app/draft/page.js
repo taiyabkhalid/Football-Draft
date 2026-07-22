@@ -35,7 +35,6 @@ export default function DraftPage() {
   const [drafting, setDrafting] = useState(null);
   const [skipping, setSkipping] = useState(false);
   const [actionError, setActionError] = useState(null);
-  const [secondsLeft, setSecondsLeft] = useState(null);
   const [viewingTeamId, setViewingTeamId] = useState(null);
   const [openProfileIds, setOpenProfileIds] = useState([]);
 
@@ -108,24 +107,28 @@ export default function DraftPage() {
   const minFemale = settings?.min_female_players ?? 2;
   const pickClockSeconds = settings?.pick_clock_seconds ?? 120;
 
+  // The clock is anchored to a shared server timestamp (current_pick_started_at)
+  // rather than a local countdown, so leaving and returning to this page - or
+  // viewing from a different device - always shows the true remaining time
+  // instead of restarting from the full pick clock.
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    setSecondsLeft(pickClockSeconds);
-  }, [currentPickNumber, pickClockSeconds]);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-  useEffect(() => {
-    if (secondsLeft === null || secondsLeft <= 0) return;
-    const timer = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [secondsLeft]);
+  const pickStartedAt = settings?.current_pick_started_at ? new Date(settings.current_pick_started_at).getTime() : null;
+  const secondsLeft = pickStartedAt
+    ? Math.max(pickClockSeconds - Math.floor((now - pickStartedAt) / 1000), 0)
+    : pickClockSeconds;
 
   const timerDisplay = useMemo(() => {
-    if (secondsLeft === null) return '--:--';
-    const m = Math.floor(Math.max(secondsLeft, 0) / 60);
-    const s = Math.max(secondsLeft, 0) % 60;
+    const m = Math.floor(secondsLeft / 60);
+    const s = secondsLeft % 60;
     return `${m}:${String(s).padStart(2, '0')}`;
   }, [secondsLeft]);
 
-  const clockUrgent = secondsLeft !== null && secondsLeft <= 20;
+  const clockUrgent = secondsLeft <= 20;
 
   function openProfile(playerId) {
     setOpenProfileIds((ids) => (ids.includes(playerId) ? ids : [...ids, playerId]));
@@ -337,6 +340,7 @@ export default function DraftPage() {
       team_id: teamOnClock.id,
       player_id: player.id,
     });
+    await supabase.from('draft_settings').update({ current_pick_started_at: new Date().toISOString() }).eq('id', 1);
     setDrafting(null);
   }
 
@@ -350,6 +354,7 @@ export default function DraftPage() {
       team_id: teamOnClock.id,
       player_id: null,
     });
+    await supabase.from('draft_settings').update({ current_pick_started_at: new Date().toISOString() }).eq('id', 1);
     setSkipping(false);
   }
 

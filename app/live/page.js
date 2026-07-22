@@ -19,7 +19,6 @@ export default function LiveDraftPage() {
   const [rosterViewMode, setRosterViewMode] = useState('team'); // 'team' | 'round'
   const [selectedRound, setSelectedRound] = useState(1);
   const roundInitialized = useRef(false);
-  const [secondsLeft, setSecondsLeft] = useState(null);
   const [openProfileIds, setOpenProfileIds] = useState([]);
 
   const currentRoundRef = useRef(null);
@@ -77,24 +76,25 @@ export default function LiveDraftPage() {
   const pickClockSeconds = settings?.pick_clock_seconds ?? 120;
   const maxRounds = settings?.max_roster_size ?? 12;
 
+  // Same shared-timestamp clock as the GM draft page, so both views always agree.
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    setSecondsLeft(pickClockSeconds);
-  }, [currentPickNumber, pickClockSeconds]);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-  useEffect(() => {
-    if (secondsLeft === null || secondsLeft <= 0) return;
-    const timer = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [secondsLeft]);
+  const pickStartedAt = settings?.current_pick_started_at ? new Date(settings.current_pick_started_at).getTime() : null;
+  const secondsLeft = pickStartedAt
+    ? Math.max(pickClockSeconds - Math.floor((now - pickStartedAt) / 1000), 0)
+    : pickClockSeconds;
 
   const timerDisplay = useMemo(() => {
-    if (secondsLeft === null) return '--:--';
-    const m = Math.floor(Math.max(secondsLeft, 0) / 60);
-    const s = Math.max(secondsLeft, 0) % 60;
+    const m = Math.floor(secondsLeft / 60);
+    const s = secondsLeft % 60;
     return `${m}:${String(s).padStart(2, '0')}`;
   }, [secondsLeft]);
 
-  const clockUrgent = secondsLeft !== null && secondsLeft <= 20;
+  const clockUrgent = secondsLeft <= 20;
 
   function openProfile(playerId) {
     setOpenProfileIds((ids) => (ids.includes(playerId) ? ids : [...ids, playerId]));
