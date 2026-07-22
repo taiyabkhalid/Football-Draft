@@ -82,9 +82,10 @@ export default function LiveDraftPage() {
   const numTeams = settings?.num_teams || teams.length;
   const currentRound = numTeams ? getRound(currentPickNumber, numTeams) : 1;
   const nextRound = numTeams ? getRound(currentPickNumber + 1, numTeams) : 1;
-  const teamOnClock = numTeams ? getTeamOnTheClock(currentPickNumber, numTeams, teams) : null;
-  const teamNextOnClock = numTeams ? getTeamOnTheClock(currentPickNumber + 1, numTeams, teams) : null;
+  const teamOnClock = numTeams ? getTeamOnTheClock(currentPickNumber, numTeams, teams, draftType) : null;
+  const teamNextOnClock = numTeams ? getTeamOnTheClock(currentPickNumber + 1, numTeams, teams, draftType) : null;
   const draftStatus = settings?.draft_status || 'not_started';
+  const draftType = settings?.draft_type || 'snake';
   const pickClockSeconds = settings?.pick_clock_seconds ?? 120;
   const minRoster = settings?.min_roster_size ?? 9;
   const minFemale = settings?.min_female_players ?? 2;
@@ -128,11 +129,11 @@ export default function LiveDraftPage() {
       list.push({
         pickNumber: pickNum,
         round: getRound(pickNum, numTeams),
-        team: getTeamOnTheClock(pickNum, numTeams, teams),
+        team: getTeamOnTheClock(pickNum, numTeams, teams, draftType),
       });
     }
     return list;
-  }, [currentPickNumber, numTeams, teams]);
+  }, [currentPickNumber, numTeams, teams, draftType]);
 
   const playersByEmail = useMemo(() => Object.fromEntries(players.map((p) => [p.email, p])), [players]);
 
@@ -182,7 +183,7 @@ export default function LiveDraftPage() {
 
   const allSlots = useMemo(() => {
     if (!numTeams) return [];
-    return buildFullPickOrder(numTeams, totalPicks).map((slot) => {
+    return buildFullPickOrder(numTeams, totalPicks, draftType).map((slot) => {
       const team = teams.find((t) => t.draft_position === slot.draftPosition);
       const pick = pickByNumber[slot.pickNumber];
       return {
@@ -193,7 +194,7 @@ export default function LiveDraftPage() {
         player: pick?.player_id ? playersById[pick.player_id] : null,
       };
     });
-  }, [numTeams, totalPicks, teams, pickByNumber, playersById]);
+  }, [numTeams, totalPicks, draftType, teams, pickByNumber, playersById]);
 
   const picksPerTeam = useMemo(() => {
     const map = {};

@@ -100,10 +100,11 @@ export default function DraftPage() {
   const numTeams = settings?.num_teams || teams.length;
   const currentRound = numTeams ? getRound(currentPickNumber, numTeams) : 1;
   const nextRound = numTeams ? getRound(currentPickNumber + 1, numTeams) : 1;
-  const teamOnClock = numTeams ? getTeamOnTheClock(currentPickNumber, numTeams, teams) : null;
-  const teamNextOnClock = numTeams ? getTeamOnTheClock(currentPickNumber + 1, numTeams, teams) : null;
+  const teamOnClock = numTeams ? getTeamOnTheClock(currentPickNumber, numTeams, teams, draftType) : null;
+  const teamNextOnClock = numTeams ? getTeamOnTheClock(currentPickNumber + 1, numTeams, teams, draftType) : null;
 
   const draftStatus = settings?.draft_status || 'not_started';
+  const draftType = settings?.draft_type || 'snake';
   const minRoster = settings?.min_roster_size ?? 9;
   const minFemale = settings?.min_female_players ?? 2;
   const pickClockSeconds = settings?.pick_clock_seconds ?? 120;
@@ -170,11 +171,11 @@ export default function DraftPage() {
       list.push({
         pickNumber: pickNum,
         round: getRound(pickNum, numTeams),
-        team: getTeamOnTheClock(pickNum, numTeams, teams),
+        team: getTeamOnTheClock(pickNum, numTeams, teams, draftType),
       });
     }
     return list;
-  }, [currentPickNumber, numTeams, teams]);
+  }, [currentPickNumber, numTeams, teams, draftType]);
 
   const availablePlayers = useMemo(() => players.filter((p) => !p.team_id), [players]);
 
@@ -186,8 +187,8 @@ export default function DraftPage() {
   const pickByNumber = useMemo(() => Object.fromEntries(picks.map((p) => [p.pick_number, p])), [picks]);
 
   const fullPickOrder = useMemo(
-    () => (numTeams ? buildFullPickOrder(numTeams, totalPicks) : []),
-    [numTeams, totalPicks]
+    () => (numTeams ? buildFullPickOrder(numTeams, totalPicks, draftType) : []),
+    [numTeams, totalPicks, draftType]
   );
   const picksPerTeam = useMemo(() => {
     const map = {};
@@ -213,7 +214,7 @@ export default function DraftPage() {
 
   const roundSlots = useMemo(() => {
     if (!numTeams) return [];
-    return buildFullPickOrder(numTeams, totalPicks)
+    return buildFullPickOrder(numTeams, totalPicks, draftType)
       .filter((s) => s.round === selectedRound)
       .map((slot) => {
         const team = teams.find((t) => t.draft_position === slot.draftPosition);
@@ -226,7 +227,7 @@ export default function DraftPage() {
           player: pick?.player_id ? playersById[pick.player_id] : null,
         };
       });
-  }, [numTeams, totalPicks, selectedRound, teams, pickByNumber, playersById]);
+  }, [numTeams, totalPicks, draftType, selectedRound, teams, pickByNumber, playersById]);
 
   function buildTeamSlots(teamId) {
     const roster = rosterByTeam[teamId]?.players || [];
