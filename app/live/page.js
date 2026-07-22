@@ -49,6 +49,15 @@ export default function LiveDraftPage() {
       if (playerRow?.team_id) {
         setMyTeamId(playerRow.team_id);
         setViewingTeamId(playerRow.team_id);
+        // Arriving via the profile page's "View My Team" button (?focus=team) -
+        // jump straight to their roster instead of leaving the panel collapsed.
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          if (params.get('focus') === 'team') {
+            setViewByTeamOpen(true);
+            setRosterViewMode('team');
+          }
+        }
       }
     }
     checkMyTeam();
@@ -190,16 +199,29 @@ export default function LiveDraftPage() {
   const maxRoster = settings?.max_roster_size ?? 12;
   function buildTeamSlots(teamId) {
     const roster = rosterByTeam[teamId]?.players || [];
-    const rank = (p) => {
+    const gmPlayer = roster.find((p) => {
       const role = roleByEmail[p.email?.toLowerCase()];
-      if (role === 'commissioner' || role === 'gm') return -1; // always anchored first
-      if (p.draft_pick_number) return p.draft_pick_number;
-      return Number.MAX_SAFE_INTEGER;
-    };
-    const sorted = [...roster].sort((a, b) => rank(a) - rank(b));
+      return role === 'commissioner' || role === 'gm';
+    });
+
+    const teamPicks = picks
+      .filter((pk) => pk.team_id === teamId)
+      .sort((a, b) => a.pick_number - b.pick_number);
+
+    const entries = [];
+    if (gmPlayer) entries.push({ kind: 'gm', player: gmPlayer });
+    for (const pk of teamPicks) {
+      if (pk.player_id) {
+        const player = playersById[pk.player_id];
+        if (player) entries.push({ kind: 'player', player, pick: pk });
+      } else {
+        entries.push({ kind: 'skipped', pick: pk });
+      }
+    }
+
     const slots = [];
     for (let i = 0; i < maxRoster; i++) {
-      slots.push(sorted[i] || null);
+      slots.push(entries[i] || null);
     }
     return slots;
   }
@@ -399,51 +421,70 @@ export default function LiveDraftPage() {
                       )}
                     </div>
                     <div className="grid grid-cols-6 gap-1.5">
-                      {buildTeamSlots(viewingTeamId).map((p, i) => (
-                        <div
-                          key={p?.id || `empty-${i}`}
-                          onClick={() => p && openProfile(p.id)}
-                          className="rounded-lg bg-surface flex flex-col items-center text-center px-1 py-2"
-                          style={{ minHeight: 88, cursor: p ? 'pointer' : 'default' }}
-                        >
-                          {p ? (
-                            <>
-                              {p.headshot_url ? (
-                                <img src={p.headshot_url} alt={p.full_name} className="w-8 h-8 rounded-full object-cover" />
-                              ) : (
+                      {buildTeamSlots(viewingTeamId).map((entry, i) => {
+                        const player = entry?.player;
+                        return (
+                          <div
+                            key={player?.id || `${entry?.kind || 'empty'}-${i}`}
+                            onClick={() => player && openProfile(player.id)}
+                            className="rounded-lg bg-surface flex flex-col items-center text-center px-1 py-2"
+                            style={{ minHeight: 88, cursor: player ? 'pointer' : 'default' }}
+                          >
+                            {entry?.kind === 'gm' ? (
+                              <>
+                                {player.headshot_url ? (
+                                  <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                    <i className="ti ti-user text-faint text-base" aria-hidden="true" />
+                                  </div>
+                                )}
+                                <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
+                                  {player.full_name}
+                                </p>
+                                <span className="text-[9px] font-medium mt-0.5" style={{ color: '#185fa5' }}>
+                                  {roleByEmail[player.email?.toLowerCase()] === 'commissioner' ? 'Commish' : 'GM'}
+                                </span>
+                              </>
+                            ) : entry?.kind === 'player' ? (
+                              <>
+                                {player.headshot_url ? (
+                                  <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                    <i className="ti ti-user text-faint text-base" aria-hidden="true" />
+                                  </div>
+                                )}
+                                <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
+                                  {player.full_name}
+                                </p>
+                                <span className="text-[9px] text-muted mt-0.5">
+                                  R{entry.pick.round} &middot; #{entry.pick.pick_number}
+                                </span>
+                              </>
+                            ) : entry?.kind === 'skipped' ? (
+                              <>
                                 <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                  <i className="ti ti-x text-faint text-base" aria-hidden="true" />
+                                </div>
+                                <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
+                                <span className="text-[9px] text-faint mt-0.5">
+                                  R{entry.pick.round} &middot; #{entry.pick.pick_number}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-50">
                                   <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                                 </div>
-                              )}
-                              <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
-                                {p.full_name}
-                              </p>
-                              {roleByEmail[p.email?.toLowerCase()] === 'commissioner' ? (
-                                <span className="text-[9px] font-medium mt-0.5" style={{ color: '#185fa5' }}>
-                                  Commish
-                                </span>
-                              ) : roleByEmail[p.email?.toLowerCase()] === 'gm' ? (
-                                <span className="text-[9px] font-medium mt-0.5" style={{ color: '#185fa5' }}>
-                                  GM
-                                </span>
-                              ) : p.draft_pick_number ? (
-                                <span className="text-[9px] text-muted mt-0.5">
-                                  R{roundByPlayerId[p.id]} &middot; #{p.draft_pick_number}
-                                </span>
-                              ) : null}
-                            </>
-                          ) : (
-                            <>
-                              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-50">
-                                <i className="ti ti-user text-faint text-base" aria-hidden="true" />
-                              </div>
-                              <p className="text-[9px] text-faint m-0 mt-1" style={{ fontStyle: 'italic' }}>
-                                Empty
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      ))}
+                                <p className="text-[9px] text-faint m-0 mt-1" style={{ fontStyle: 'italic' }}>
+                                  Empty
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

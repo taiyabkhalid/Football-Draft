@@ -229,6 +229,12 @@ export default function ProfilePage() {
           </Link>
         )}
 
+        {team && (
+          <Link href="/live?focus=team" className="btn-primary block text-center mb-3">
+            View My Team
+          </Link>
+        )}
+
         <Link href="/live" className="block text-center text-sm font-medium" style={{ color: '#185fa5' }}>
           Watch the live draft <i className="ti ti-arrow-right text-sm" aria-hidden="true" />
         </Link>
