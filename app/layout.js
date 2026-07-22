@@ -20,6 +20,7 @@ export default function RootLayout({ children }) {
           href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
       </head>
       <body
         className="bg-white text-ink font-body min-h-screen"

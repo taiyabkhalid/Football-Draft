@@ -37,6 +37,7 @@ export default function DraftPage() {
   const [actionError, setActionError] = useState(null);
   const [secondsLeft, setSecondsLeft] = useState(null);
   const [viewingTeamId, setViewingTeamId] = useState(null);
+  const [openProfileIds, setOpenProfileIds] = useState([]);
 
   // ---- Auth check ----
   useEffect(() => {
@@ -124,6 +125,15 @@ export default function DraftPage() {
     return `${m}:${String(s).padStart(2, '0')}`;
   }, [secondsLeft]);
 
+  const clockUrgent = secondsLeft !== null && secondsLeft <= 20;
+
+  function openProfile(playerId) {
+    setOpenProfileIds((ids) => (ids.includes(playerId) ? ids : [...ids, playerId]));
+  }
+  function closeProfile(playerId) {
+    setOpenProfileIds((ids) => ids.filter((id) => id !== playerId));
+  }
+
   const playersById = useMemo(() => Object.fromEntries(players.map((p) => [p.id, p])), [players]);
   const teamsById = useMemo(() => Object.fromEntries(teams.map((t) => [t.id, t])), [teams]);
   const playersByEmail = useMemo(() => Object.fromEntries(players.map((p) => [p.email, p])), [players]);
@@ -139,6 +149,13 @@ export default function DraftPage() {
     }
     return map;
   }, [profiles, playersByEmail]);
+  const roleByEmail = useMemo(() => {
+    const map = {};
+    for (const profile of profiles) {
+      if (profile.email) map[profile.email.toLowerCase()] = profile.role;
+    }
+    return map;
+  }, [profiles]);
   const previousPick = picks.length > 0 ? picks[picks.length - 1] : null;
 
   const upcomingPicks = useMemo(() => {
@@ -354,42 +371,48 @@ export default function DraftPage() {
     <main style={{ background: '#ffffff', minHeight: '100vh' }}>
       <BrandHeader pageLabel="Live draft" liveIndicator pickTimer={timerDisplay} />
 
-      {/* Previous / current / next strip */}
-      <div className="flex flex-col sm:flex-row gap-2 px-4 sm:px-5 pt-4">
+      {/* Previous / current / next strip — frozen at top so GMs can always see the clock */}
+      <div
+        className="flex flex-col sm:flex-row gap-2 px-4 sm:px-5 pt-4 pb-3"
+        style={{ position: 'sticky', top: 0, zIndex: 30, background: '#ffffff', boxShadow: '0 2px 6px rgba(12,35,64,0.08)' }}
+      >
         <div className="flex-1 bg-surface rounded-lg p-3">
           <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Previous pick</p>
           {previousPick ? (
-            <div className="flex items-center gap-2">
-              <FootballIcon color={teamsById[previousPick.team_id]?.team_color || '#0074ff'} size={18} />
-              <div className="min-w-0">
+            <>
+              <div className="flex items-center gap-2">
+                <FootballIcon color={teamsById[previousPick.team_id]?.team_color || '#0074ff'} size={16} />
                 <p className="text-xs text-ink m-0 truncate">
                   {previousPick.player_id
                     ? `${playersById[previousPick.player_id]?.full_name || 'Unknown'} — ${teamsById[previousPick.team_id]?.name || ''}`
                     : `Skipped — ${teamsById[previousPick.team_id]?.name || ''}`}
                 </p>
-                <p className="text-[10px] text-muted m-0">
-                  Round {previousPick.round} &middot; Pick {previousPick.pick_number}
-                </p>
               </div>
-            </div>
+              <p className="text-[10px] text-muted m-0 mt-1">
+                Round {previousPick.round} &middot; Pick {previousPick.pick_number}
+              </p>
+            </>
           ) : (
             <p className="text-xs text-faint">None yet</p>
           )}
         </div>
-        <div className="flex-1 rounded-lg p-3 flex items-center justify-between gap-2" style={{ background: '#185fa5' }}>
-          <div className="flex items-center gap-2 min-w-0">
-            <FootballIcon color="#ffffff" size={20} />
-            <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: '#cfe2f5' }}>
-                On the clock
-              </p>
-              <p className="text-[13px] font-semibold truncate" style={{ color: '#ffffff' }}>
+        <div
+          className={`flex-1 rounded-lg p-3 flex items-center justify-between gap-2 ${clockUrgent ? 'animate-pulse' : ''}`}
+          style={{ background: clockUrgent ? '#c0392b' : '#185fa5' }}
+        >
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
+              On the clock
+            </p>
+            <div className="flex items-center gap-2">
+              <FootballIcon color="#ffffff" size={16} />
+              <p className="text-[13px] font-semibold truncate m-0" style={{ color: '#ffffff' }}>
                 {teamOnClock?.name || '—'}
               </p>
-              <p className="text-[10px] m-0" style={{ color: '#cfe2f5' }}>
-                Round {currentRound} &middot; Pick {currentPickNumber}
-              </p>
             </div>
+            <p className="text-[10px] m-0 mt-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
+              Round {currentRound} &middot; Pick {currentPickNumber}
+            </p>
           </div>
           <p className="text-xl font-medium" style={{ color: '#ffffff' }}>
             {timerDisplay}
@@ -398,18 +421,28 @@ export default function DraftPage() {
         <div className="flex-1 bg-surface rounded-lg p-3">
           <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Next up</p>
           <div className="flex items-center gap-2">
-            <FootballIcon color={teamNextOnClock?.team_color || '#0074ff'} size={18} />
-            <div className="min-w-0">
-              <p className="text-xs text-ink m-0 truncate">{teamNextOnClock?.name || '—'}</p>
-              {teamNextOnClock && (
-                <p className="text-[10px] text-muted m-0">
-                  Round {nextRound} &middot; Pick {currentPickNumber + 1}
-                </p>
-              )}
-            </div>
+            <FootballIcon color={teamNextOnClock?.team_color || '#0074ff'} size={16} />
+            <p className="text-xs text-ink m-0 truncate">{teamNextOnClock?.name || '—'}</p>
           </div>
+          {teamNextOnClock && (
+            <p className="text-[10px] text-muted m-0 mt-1">
+              Round {nextRound} &middot; Pick {currentPickNumber + 1}
+            </p>
+          )}
         </div>
       </div>
+
+      {canDraft && (
+        <div
+          className="mx-4 sm:mx-5 mt-3 rounded-lg px-3 py-2.5 flex items-center gap-2 animate-pulse"
+          style={{ background: '#c0392b' }}
+        >
+          <i className="ti ti-alert-triangle text-base flex-shrink-0" style={{ color: '#ffffff' }} aria-hidden="true" />
+          <p className="text-xs font-medium m-0" style={{ color: '#ffffff' }}>
+            You're on the clock! Make your selection before the timer runs out.
+          </p>
+        </div>
+      )}
 
       {/* Upcoming picks strip */}
       <div className="px-4 sm:px-5 pt-3">
@@ -532,8 +565,9 @@ export default function DraftPage() {
                       {buildTeamSlots(viewingTeamId).map((p, i) => (
                         <div
                           key={p?.id || `empty-${i}`}
+                          onClick={() => p && openProfile(p.id)}
                           className="rounded-lg bg-surface flex flex-col items-center text-center px-1 py-2"
-                          style={{ minHeight: 88 }}
+                          style={{ minHeight: 88, cursor: p ? 'pointer' : 'default' }}
                         >
                           {p ? (
                             <>
@@ -547,15 +581,19 @@ export default function DraftPage() {
                               <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
                                 {p.full_name}
                               </p>
-                              {!p.draft_pick_number ? (
+                              {roleByEmail[p.email?.toLowerCase()] === 'commissioner' ? (
+                                <span className="text-[9px] font-medium mt-0.5" style={{ color: '#185fa5' }}>
+                                  Commish
+                                </span>
+                              ) : roleByEmail[p.email?.toLowerCase()] === 'gm' ? (
                                 <span className="text-[9px] font-medium mt-0.5" style={{ color: '#185fa5' }}>
                                   GM
                                 </span>
-                              ) : (
+                              ) : p.draft_pick_number ? (
                                 <span className="text-[9px] text-muted mt-0.5">
                                   R{getRound(p.draft_pick_number, numTeams)} &middot; #{p.draft_pick_number}
                                 </span>
-                              )}
+                              ) : null}
                             </>
                           ) : (
                             <>
@@ -601,10 +639,12 @@ export default function DraftPage() {
                     {roundSlots.map((slot) => (
                       <div
                         key={slot.pickNumber}
+                        onClick={() => slot.player && openProfile(slot.player.id)}
                         className="rounded-lg bg-surface flex flex-col items-center text-center px-1 py-2"
                         style={{
                           minHeight: 100,
                           border: slot.pickNumber === currentPickNumber ? '1.5px solid #185fa5' : '1px solid transparent',
+                          cursor: slot.player ? 'pointer' : 'default',
                         }}
                       >
                         {slot.player ? (
@@ -763,7 +803,11 @@ export default function DraftPage() {
           <p className="text-[10px] uppercase tracking-wide text-muted mb-2">Available ({sortedAvailable.length})</p>
           <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto pr-1">
             {sortedAvailable.map((p) => (
-              <div key={p.id} className="bg-surface rounded-md px-2.5 py-2">
+              <div
+                key={p.id}
+                onClick={() => openProfile(p.id)}
+                className="bg-surface rounded-md px-2.5 py-2 cursor-pointer hover:brightness-95"
+              >
                 <p className="text-xs font-medium text-ink m-0">{p.full_name}</p>
                 <p className="text-[11px] text-muted m-0">
                   {p.height_feet}'{p.height_inches}" &middot; {p.gender}
@@ -784,7 +828,8 @@ export default function DraftPage() {
               return (
                 <div
                   key={p.id}
-                  className="flex-none rounded-xl p-3.5 flex flex-col"
+                  onClick={() => openProfile(p.id)}
+                  className="flex-none rounded-xl p-3.5 flex flex-col cursor-pointer"
                   style={{
                     width: 'calc(33.333% - 8px)',
                     minWidth: 190,
@@ -824,7 +869,10 @@ export default function DraftPage() {
                     Injuries: {p.injury_status === 'None' ? 'None' : `${p.injury_status} (${p.weeks_until_recovered || '?'}w)`}
                   </p>
                   <button
-                    onClick={() => draftPlayer(p)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      draftPlayer(p);
+                    }}
                     disabled={disabled}
                     className="w-full text-xs font-medium rounded-lg py-2 mt-auto"
                     style={{ background: disabled ? '#d8dde2' : '#185fa5', color: '#ffffff', border: 'none' }}
@@ -848,7 +896,11 @@ export default function DraftPage() {
                 </p>
                 <div className="flex flex-col gap-2">
                   {rosterByTeam[profile.team_id].players.map((p) => (
-                    <div key={p.id} className="bg-surface rounded-md px-2.5 py-2">
+                    <div
+                      key={p.id}
+                      onClick={() => openProfile(p.id)}
+                      className="bg-surface rounded-md px-2.5 py-2 cursor-pointer hover:brightness-95"
+                    >
                       <p className="text-xs font-medium text-ink m-0">{p.full_name}</p>
                       <p className="text-[11px] text-muted m-0">
                         {p.height_feet}'{p.height_inches}" &middot; {p.gender}
@@ -865,6 +917,118 @@ export default function DraftPage() {
         )}
         </div>
       </div>
+
+      {/* Read-only player profile popups — multiple can be open at once, stacked */}
+      {openProfileIds.map((id, idx) => {
+        const p = playersById[id];
+        if (!p) return null;
+        const team = p.team_id ? teamsById[p.team_id] : null;
+        const role = roleByEmail[p.email?.toLowerCase()];
+        return (
+          <div
+            key={id}
+            className="fixed rounded-xl bg-white border border-line"
+            style={{
+              width: 290,
+              right: 16 + idx * 20,
+              bottom: 16 + idx * 20,
+              zIndex: 60 + idx,
+              maxHeight: '75vh',
+              overflowY: 'auto',
+              boxShadow: '0 8px 24px rgba(12,35,64,0.25)',
+            }}
+          >
+            <div className="flex items-start justify-between gap-2 px-4 pt-3.5 pb-2 border-b border-line">
+              <div className="flex gap-2.5 items-center min-w-0">
+                {p.headshot_url ? (
+                  <img src={p.headshot_url} alt={p.full_name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center flex-shrink-0">
+                    <i className="ti ti-user text-faint text-xl" aria-hidden="true" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink m-0 truncate">{p.full_name}</p>
+                  <p className="text-[11px] text-muted m-0">{p.gender}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => closeProfile(id)}
+                className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center hover:bg-surface"
+                aria-label="Close"
+              >
+                <i className="ti ti-x text-base text-muted" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="px-4 py-3 flex flex-col gap-2.5">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Status</p>
+                {role === 'commissioner' ? (
+                  <p className="text-xs font-medium m-0" style={{ color: '#185fa5' }}>
+                    Commissioner &middot; {team?.name || 'Unassigned'}
+                  </p>
+                ) : role === 'gm' ? (
+                  <p className="text-xs font-medium m-0" style={{ color: '#185fa5' }}>
+                    GM &middot; {team?.name || 'Unassigned'}
+                  </p>
+                ) : p.draft_pick_number ? (
+                  <p className="text-xs text-ink m-0">
+                    Drafted &middot; Round {getRound(p.draft_pick_number, numTeams)}, Pick {p.draft_pick_number} &middot;{' '}
+                    {team?.name || ''}
+                  </p>
+                ) : (
+                  <p className="text-xs text-faint m-0" style={{ fontStyle: 'italic' }}>
+                    Undrafted
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Position</p>
+                <p className="text-xs text-ink m-0">
+                  Offense: {p.offensive_position} &middot; Defense: {p.defensive_position}
+                </p>
+                <p className="text-[11px] text-muted m-0">Prefers: {p.position_preference}</p>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Bio</p>
+                <p className="text-xs text-ink m-0">
+                  {p.height_feet}'{p.height_inches}" &middot; Previous team: {p.previous_team || 'None'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Injury status</p>
+                <p className="text-xs text-ink m-0">
+                  {p.injury_status === 'None' ? 'None' : `${p.injury_status} (${p.weeks_until_recovered || '?'} weeks)`}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Availability</p>
+                <p className="text-xs text-ink m-0">Unavailable: {p.game_time_unavailable}</p>
+                <p className="text-[11px] text-muted m-0">
+                  {p.unavailable_mondays && p.unavailable_mondays.length > 0
+                    ? `Out: ${p.unavailable_mondays.join(', ')}`
+                    : 'Available all season'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Preferences</p>
+                <p className="text-[11px] text-muted m-0">
+                  {p.call_on_draft_night ? 'Wants a call on draft night' : 'No call needed on draft night'}
+                </p>
+                <p className="text-[11px] text-muted m-0">
+                  {p.enjoys_pub ? 'Up for the post-game pub' : 'Skipping the post-game pub'}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </main>
   );
 }

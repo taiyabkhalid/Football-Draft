@@ -126,6 +126,14 @@ export default function LiveDraftPage() {
     return map;
   }, [profiles, playersByEmail]);
 
+  const roleByEmail = useMemo(() => {
+    const map = {};
+    for (const profile of profiles) {
+      if (profile.email) map[profile.email.toLowerCase()] = profile.role;
+    }
+    return map;
+  }, [profiles]);
+
   const roundByPlayerId = useMemo(() => {
     const map = {};
     for (const pick of picks) {
@@ -225,37 +233,37 @@ export default function LiveDraftPage() {
             <div className="flex-1 bg-surface rounded-lg p-3">
               <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Previous pick</p>
               {previousPick ? (
-                <div className="flex items-center gap-2">
-                  <FootballIcon color={teamsById[previousPick.team_id]?.team_color || '#0074ff'} size={18} />
-                  <div className="min-w-0">
+                <>
+                  <div className="flex items-center gap-2">
+                    <FootballIcon color={teamsById[previousPick.team_id]?.team_color || '#0074ff'} size={16} />
                     <p className="text-xs text-ink m-0 truncate">
                       {previousPick.player_id
                         ? `${playersById[previousPick.player_id]?.full_name || 'Unknown'} — ${teamsById[previousPick.team_id]?.name || ''}`
                         : `Skipped — ${teamsById[previousPick.team_id]?.name || ''}`}
                     </p>
-                    <p className="text-[10px] text-muted m-0">
-                      Round {previousPick.round} &middot; Pick {previousPick.pick_number}
-                    </p>
                   </div>
-                </div>
+                  <p className="text-[10px] text-muted m-0 mt-1">
+                    Round {previousPick.round} &middot; Pick {previousPick.pick_number}
+                  </p>
+                </>
               ) : (
                 <p className="text-xs text-faint">None yet</p>
               )}
             </div>
             <div className="flex-1 rounded-lg p-3 flex items-center justify-between gap-2" style={{ background: '#185fa5' }}>
-              <div className="flex items-center gap-2 min-w-0">
-                <FootballIcon color="#ffffff" size={20} />
-                <div className="min-w-0">
-                  <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: '#cfe2f5' }}>
-                    On the clock
-                  </p>
-                  <p className="text-[13px] font-semibold truncate" style={{ color: '#ffffff' }}>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: '#cfe2f5' }}>
+                  On the clock
+                </p>
+                <div className="flex items-center gap-2">
+                  <FootballIcon color="#ffffff" size={16} />
+                  <p className="text-[13px] font-semibold truncate m-0" style={{ color: '#ffffff' }}>
                     {teamOnClock?.name || '—'}
                   </p>
-                  <p className="text-[10px] m-0" style={{ color: '#cfe2f5' }}>
-                    Round {currentRound} &middot; Pick {currentPickNumber}
-                  </p>
                 </div>
+                <p className="text-[10px] m-0 mt-1" style={{ color: '#cfe2f5' }}>
+                  Round {currentRound} &middot; Pick {currentPickNumber}
+                </p>
               </div>
               <p className="text-xl font-medium" style={{ color: '#ffffff' }}>
                 {timerDisplay}
@@ -264,16 +272,14 @@ export default function LiveDraftPage() {
             <div className="flex-1 bg-surface rounded-lg p-3">
               <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Next up</p>
               <div className="flex items-center gap-2">
-                <FootballIcon color={teamNextOnClock?.team_color || '#0074ff'} size={18} />
-                <div className="min-w-0">
-                  <p className="text-xs text-ink m-0 truncate">{teamNextOnClock?.name || '—'}</p>
-                  {teamNextOnClock && (
-                    <p className="text-[10px] text-muted m-0">
-                      Round {nextRound} &middot; Pick {currentPickNumber + 1}
-                    </p>
-                  )}
-                </div>
+                <FootballIcon color={teamNextOnClock?.team_color || '#0074ff'} size={16} />
+                <p className="text-xs text-ink m-0 truncate">{teamNextOnClock?.name || '—'}</p>
               </div>
+              {teamNextOnClock && (
+                <p className="text-[10px] text-muted m-0 mt-1">
+                  Round {nextRound} &middot; Pick {currentPickNumber + 1}
+                </p>
+              )}
             </div>
           </div>
 
@@ -396,15 +402,19 @@ export default function LiveDraftPage() {
                               <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
                                 {p.full_name}
                               </p>
-                              {!p.draft_pick_number ? (
+                              {roleByEmail[p.email?.toLowerCase()] === 'commissioner' ? (
+                                <span className="text-[9px] font-medium mt-0.5" style={{ color: '#185fa5' }}>
+                                  Commish
+                                </span>
+                              ) : roleByEmail[p.email?.toLowerCase()] === 'gm' ? (
                                 <span className="text-[9px] font-medium mt-0.5" style={{ color: '#185fa5' }}>
                                   GM
                                 </span>
-                              ) : (
+                              ) : p.draft_pick_number ? (
                                 <span className="text-[9px] text-muted mt-0.5">
                                   R{roundByPlayerId[p.id]} &middot; #{p.draft_pick_number}
                                 </span>
-                              )}
+                              ) : null}
                             </>
                           ) : (
                             <>
