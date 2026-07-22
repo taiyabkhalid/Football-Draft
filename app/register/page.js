@@ -284,6 +284,14 @@ export default function RegisterPage() {
       <main>
         <BrandHeader pageLabel="Edit your profile" />
         <div className="max-w-md mx-auto px-4 py-10">
+          <Link
+            href="/profile"
+            className="inline-flex items-center gap-1 text-xs font-medium mb-4"
+            style={{ color: '#185fa5', textDecoration: 'none' }}
+          >
+            <i className="ti ti-chevron-left text-sm" aria-hidden="true" />
+            Back to profile
+          </Link>
           <div className="bg-[#faeeda] rounded-lg p-4 flex gap-2">
             <i className="ti ti-lock text-base flex-shrink-0" style={{ color: '#854f0b', marginTop: 1 }} aria-hidden="true" />
             <p className="text-xs m-0" style={{ color: '#633806' }}>
@@ -324,6 +332,16 @@ export default function RegisterPage() {
     <main>
       <BrandHeader pageLabel={mode === 'edit' ? 'Edit your profile' : 'Player registration'} />
       <div className="max-w-xl mx-auto px-4 py-10">
+        {mode === 'edit' && (
+          <Link
+            href="/profile"
+            className="inline-flex items-center gap-1 text-xs font-medium mb-4"
+            style={{ color: '#185fa5', textDecoration: 'none' }}
+          >
+            <i className="ti ti-chevron-left text-sm" aria-hidden="true" />
+            Back to profile
+          </Link>
+        )}
         <p className="text-muted text-sm mb-6">
           Fields marked <span style={{ color: '#c0392b' }}>*</span> are required.
         </p>

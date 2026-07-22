@@ -21,7 +21,8 @@ export default function LiveDraftPage() {
   const roundInitialized = useRef(false);
   const [openProfileIds, setOpenProfileIds] = useState([]);
 
-  const currentRoundRef = useRef(null);
+  const currentPickRef = useRef(null);
+  const draftedScrollRef = useRef(null);
 
   const fetchAll = useCallback(async () => {
     const [teamsRes, playersRes, picksRes, settingsRes, profilesRes] = await Promise.all([
@@ -227,10 +228,12 @@ export default function LiveDraftPage() {
   }
 
   useEffect(() => {
-    if (currentRoundRef.current) {
-      currentRoundRef.current.scrollIntoView({ inline: 'start', behavior: 'smooth', block: 'nearest' });
+    if (draftStatus === 'completed') {
+      if (draftedScrollRef.current) draftedScrollRef.current.scrollLeft = 0;
+    } else if (currentPickRef.current) {
+      currentPickRef.current.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
     }
-  }, [currentRound]);
+  }, [currentPickNumber, draftStatus]);
 
   if (loading) {
     return (
@@ -418,88 +421,114 @@ export default function LiveDraftPage() {
                   })}
                 </div>
 
-                {viewingTeamId && rosterByTeam[viewingTeamId] && (
-                  <div className="bg-white rounded-lg p-3.5 mb-1">
-                    <div className="flex justify-between items-center mb-2">
-                      <p className="text-sm font-medium text-ink m-0">{teamsById[viewingTeamId]?.name}</p>
-                      {ownerByTeam[viewingTeamId] && (
-                        <p className="text-xs m-0 flex items-center gap-1" style={{ color: '#185fa5' }}>
-                          <i
-                            className={ownerByTeam[viewingTeamId].role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'}
-                            aria-hidden="true"
-                          />
-                          {ownerByTeam[viewingTeamId].name}
-                        </p>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-6 gap-1.5">
-                      {buildTeamSlots(viewingTeamId).map((entry, i) => {
-                        const player = entry?.player;
-                        return (
-                          <div
-                            key={player?.id || `${entry?.kind || 'empty'}-${i}`}
-                            onClick={() => player && openProfile(player.id)}
-                            className="rounded-lg bg-surface flex flex-col items-center text-center px-1 py-2"
-                            style={{ minHeight: 88, cursor: player ? 'pointer' : 'default' }}
-                          >
-                            {entry?.kind === 'gm' ? (
-                              <>
-                                {player.headshot_url ? (
-                                  <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
-                                ) : (
+                {viewingTeamId && rosterByTeam[viewingTeamId] && (() => {
+                  const slots = buildTeamSlots(viewingTeamId);
+                  const firstEmptyIndex = slots.findIndex((s) => !s);
+                  const viewedTeam = teamsById[viewingTeamId];
+                  const teamColor = viewedTeam?.team_color || '#0074ff';
+                  const isTeamOnClock = teamOnClock?.id === viewingTeamId && draftStatus === 'in_progress';
+                  return (
+                    <div className="bg-white rounded-lg p-3.5 mb-1">
+                      <div className="flex justify-between items-center mb-2">
+                        <p className="text-sm font-medium text-ink m-0">{viewedTeam?.name}</p>
+                        {ownerByTeam[viewingTeamId] && (
+                          <p className="text-xs m-0 flex items-center gap-1" style={{ color: '#185fa5' }}>
+                            <i
+                              className={ownerByTeam[viewingTeamId].role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'}
+                              aria-hidden="true"
+                            />
+                            {ownerByTeam[viewingTeamId].name}
+                          </p>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-6 gap-1.5">
+                        {slots.map((entry, i) => {
+                          const player = entry?.player;
+                          const isClockSlot = isTeamOnClock && i === firstEmptyIndex;
+                          return (
+                            <div
+                              key={player?.id || `${entry?.kind || 'empty'}-${i}`}
+                              onClick={() => player && openProfile(player.id)}
+                              className="rounded-lg flex flex-col items-center text-center px-1 py-2"
+                              style={{
+                                minHeight: 88,
+                                cursor: player ? 'pointer' : 'default',
+                                background: isClockSlot ? lightenColor(teamColor, 0.85) : '#f1f3f6',
+                                border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
+                              }}
+                            >
+                              {isClockSlot ? (
+                                <>
+                                  <p className="text-[8px] m-0" style={{ color: '#0c2340' }}>
+                                    On the clock
+                                  </p>
+                                  <FootballIcon color={teamColor} size={16} />
+                                  <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                                    {viewedTeam?.name}
+                                  </p>
+                                  <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
+                                    Rnd {currentRound} . Pick # {currentPickNumber}
+                                  </span>
+                                </>
+                              ) : entry?.kind === 'gm' ? (
+                                <>
+                                  {player.headshot_url ? (
+                                    <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                      <i className="ti ti-user text-faint text-base" aria-hidden="true" />
+                                    </div>
+                                  )}
+                                  <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
+                                    {player.full_name}
+                                  </p>
+                                  <span className="text-[9px] font-medium mt-0.5" style={{ color: '#185fa5' }}>
+                                    {roleByEmail[player.email?.toLowerCase()] === 'commissioner' ? 'Commish' : 'GM'}
+                                  </span>
+                                </>
+                              ) : entry?.kind === 'player' ? (
+                                <>
+                                  {player.headshot_url ? (
+                                    <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                      <i className="ti ti-user text-faint text-base" aria-hidden="true" />
+                                    </div>
+                                  )}
+                                  <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
+                                    {player.full_name}
+                                  </p>
+                                  <span className="text-[9px] text-muted mt-0.5">
+                                    Rnd {entry.pick.round} . Pick # {entry.pick.pick_number}
+                                  </span>
+                                </>
+                              ) : entry?.kind === 'skipped' ? (
+                                <>
                                   <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                    <i className="ti ti-x text-faint text-base" aria-hidden="true" />
+                                  </div>
+                                  <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
+                                  <span className="text-[9px] text-faint mt-0.5">
+                                    Rnd {entry.pick.round} . Pick # {entry.pick.pick_number}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-50">
                                     <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                                   </div>
-                                )}
-                                <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
-                                  {player.full_name}
-                                </p>
-                                <span className="text-[9px] font-medium mt-0.5" style={{ color: '#185fa5' }}>
-                                  {roleByEmail[player.email?.toLowerCase()] === 'commissioner' ? 'Commish' : 'GM'}
-                                </span>
-                              </>
-                            ) : entry?.kind === 'player' ? (
-                              <>
-                                {player.headshot_url ? (
-                                  <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
-                                ) : (
-                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-                                    <i className="ti ti-user text-faint text-base" aria-hidden="true" />
-                                  </div>
-                                )}
-                                <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
-                                  {player.full_name}
-                                </p>
-                                <span className="text-[9px] text-muted mt-0.5">
-                                  R{entry.pick.round} &middot; #{entry.pick.pick_number}
-                                </span>
-                              </>
-                            ) : entry?.kind === 'skipped' ? (
-                              <>
-                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-                                  <i className="ti ti-x text-faint text-base" aria-hidden="true" />
-                                </div>
-                                <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
-                                <span className="text-[9px] text-faint mt-0.5">
-                                  R{entry.pick.round} &middot; #{entry.pick.pick_number}
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-50">
-                                  <i className="ti ti-user text-faint text-base" aria-hidden="true" />
-                                </div>
-                                <p className="text-[9px] text-faint m-0 mt-1" style={{ fontStyle: 'italic' }}>
-                                  Empty
-                                </p>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
+                                  <p className="text-[9px] text-faint m-0 mt-1" style={{ fontStyle: 'italic' }}>
+                                    Empty
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </>
             )}
 
@@ -512,8 +541,8 @@ export default function LiveDraftPage() {
                       onClick={() => setSelectedRound(r)}
                       className="text-xs px-2.5 py-1.5 rounded-md font-medium"
                       style={{
-                        background: selectedRound === r ? '#185fa5' : '#ffffff',
-                        color: selectedRound === r ? '#ffffff' : '#3d4a57',
+                        background: selectedRound === r ? '#185fa5' : '#e6f1fb',
+                        color: selectedRound === r ? '#ffffff' : '#0c447c',
                         border: '2px solid transparent',
                       }}
                     >
@@ -523,66 +552,79 @@ export default function LiveDraftPage() {
                 </div>
                 <div className="bg-white rounded-lg p-3.5">
                   <div className="grid grid-cols-6 gap-1.5">
-                    {roundSlots.map((slot) => (
-                      <div
-                        key={slot.pickNumber}
-                        onClick={() => slot.player && openProfile(slot.player.id)}
-                        className="rounded-lg bg-surface flex flex-col items-center text-center px-1 py-2"
-                        style={{
-                          minHeight: 100,
-                          border: slot.pickNumber === currentPickNumber ? '1.5px solid #185fa5' : '1px solid transparent',
-                          cursor: slot.player ? 'pointer' : 'default',
-                        }}
-                      >
-                        {slot.player ? (
-                          <>
-                            {slot.player.headshot_url ? (
-                              <img
-                                src={slot.player.headshot_url}
-                                alt={slot.player.full_name}
-                                className="w-8 h-8 rounded-full object-cover"
-                              />
-                            ) : (
+                    {roundSlots.map((slot) => {
+                      const isSkippedPick = slot.pick && !slot.pick.player_id;
+                      const isClockSlot = slot.pickNumber === currentPickNumber && !slot.player && !isSkippedPick;
+                      const teamColor = slot.team?.team_color || '#0074ff';
+                      return (
+                        <div
+                          key={slot.pickNumber}
+                          onClick={() => slot.player && openProfile(slot.player.id)}
+                          className="rounded-lg flex flex-col items-center text-center px-1 py-2"
+                          style={{
+                            minHeight: 100,
+                            background: isClockSlot ? lightenColor(teamColor, 0.85) : '#f1f3f6',
+                            border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
+                            cursor: slot.player ? 'pointer' : 'default',
+                          }}
+                        >
+                          {slot.player ? (
+                            <>
+                              {slot.player.headshot_url ? (
+                                <img
+                                  src={slot.player.headshot_url}
+                                  alt={slot.player.full_name}
+                                  className="w-8 h-8 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                  <i className="ti ti-user text-faint text-base" aria-hidden="true" />
+                                </div>
+                              )}
+                              <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
+                                {slot.player.full_name}
+                              </p>
+                              <span className="text-[9px] text-muted mt-0.5">Pick # {slot.pickNumber}</span>
+                            </>
+                          ) : isSkippedPick ? (
+                            <>
                               <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                <i className="ti ti-x text-faint text-base" aria-hidden="true" />
+                              </div>
+                              <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
+                            </>
+                          ) : isClockSlot ? (
+                            <>
+                              <p className="text-[8px] m-0" style={{ color: '#0c2340' }}>
+                                On the clock
+                              </p>
+                              <FootballIcon color={teamColor} size={16} />
+                              <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                                {slot.team?.name}
+                              </p>
+                              <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
+                                Pick # {slot.pickNumber}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-50">
                                 <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                               </div>
-                            )}
-                            <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
-                              {slot.player.full_name}
-                            </p>
-                          </>
-                        ) : slot.pick && !slot.pick.player_id ? (
-                          <>
-                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-                              <i className="ti ti-x text-faint text-base" aria-hidden="true" />
+                              <p className="text-[9px] text-faint m-0 mt-1" style={{ fontStyle: 'italic' }}>
+                                Not yet selected
+                              </p>
+                            </>
+                          )}
+                          {!isClockSlot && (
+                            <div className="mt-auto pt-1 flex items-center gap-1">
+                              <FootballIcon color={teamColor} size={10} />
+                              <span className="text-[9px] text-muted truncate">{slot.team?.name}</span>
                             </div>
-                            <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
-                          </>
-                        ) : slot.pickNumber === currentPickNumber ? (
-                          <>
-                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-                              <i className="ti ti-clock text-base" style={{ color: '#185fa5' }} aria-hidden="true" />
-                            </div>
-                            <p className="text-[10px] font-medium m-0 mt-1" style={{ color: '#185fa5' }}>
-                              On the clock
-                            </p>
-                          </>
-                        ) : (
-                          <>
-                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-50">
-                              <i className="ti ti-user text-faint text-base" aria-hidden="true" />
-                            </div>
-                            <p className="text-[9px] text-faint m-0 mt-1" style={{ fontStyle: 'italic' }}>
-                              Not yet selected
-                            </p>
-                          </>
-                        )}
-                        <div className="mt-auto pt-1 flex items-center gap-1">
-                          <FootballIcon color={slot.team?.team_color || '#0074ff'} size={10} />
-                          <span className="text-[9px] text-muted truncate">{slot.team?.name}</span>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </>
@@ -597,13 +639,12 @@ export default function LiveDraftPage() {
         </p>
         <p className="text-[10px] text-muted mb-3">Scroll to browse other rounds</p>
 
-        <div className="flex gap-2 overflow-x-auto pb-2">
+        <div className="flex gap-2 overflow-x-auto pb-2" ref={draftedScrollRef}>
           {allSlots.map((slot) => {
-            const isFirstOfCurrentRound = slot.round === currentRound && slot.team?.draft_position === 1;
             return (
               <div
                 key={slot.pickNumber}
-                ref={isFirstOfCurrentRound ? currentRoundRef : null}
+                ref={slot.pickNumber === currentPickNumber ? currentPickRef : null}
                 onClick={() => slot.player && openProfile(slot.player.id)}
                 className="flex-none rounded-xl p-3 bg-white flex flex-col"
                 style={{
