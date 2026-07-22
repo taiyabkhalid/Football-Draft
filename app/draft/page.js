@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock, buildFullPickOrder } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
-import FootballIcon from '../../lib/FootballIcon';
+import FootballIcon, { lightenColor } from '../../lib/FootballIcon';
 
 const ALL_POSITIONS = ['QB', 'WR', 'C', 'CB', 'Safety', 'LB', 'Rush'];
 const OFFENSIVE_POSITIONS = ['QB', 'WR', 'C'];
@@ -353,7 +353,7 @@ export default function DraftPage() {
       team_id: teamOnClock.id,
       player_id: player.id,
     });
-    await supabase.from('draft_settings').update({ current_pick_started_at: new Date().toISOString() }).eq('id', 1);
+    await supabase.rpc('advance_pick_clock');
     setDrafting(null);
   }
 
@@ -367,7 +367,7 @@ export default function DraftPage() {
       team_id: teamOnClock.id,
       player_id: null,
     });
-    await supabase.from('draft_settings').update({ current_pick_started_at: new Date().toISOString() }).eq('id', 1);
+    await supabase.rpc('advance_pick_clock');
     setSkipping(false);
   }
 
@@ -473,32 +473,33 @@ export default function DraftPage() {
       <div className="px-4 sm:px-5 pt-3">
         <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Upcoming picks</p>
         <div className="flex gap-2 overflow-x-auto pb-2">
-          {upcomingPicks.map((n) => (
-            <span
-              key={n.pickNumber}
-              className="flex-none text-xs px-2.5 py-1.5 rounded-md bg-surface text-muted whitespace-nowrap flex items-center gap-1.5"
-            >
-              <FootballIcon color={n.team?.team_color || '#0074ff'} size={12} />
-              {n.team?.name || '—'}
-              <span className="text-faint">&middot; R{n.round} &middot; #{n.pickNumber}</span>
-            </span>
-          ))}
+          {upcomingPicks.map((n) => {
+            const color = n.team?.team_color || '#0074ff';
+            return (
+              <span
+                key={n.pickNumber}
+                className="flex-none text-xs px-2.5 py-1.5 rounded-md whitespace-nowrap flex items-center gap-1.5"
+                style={{ background: lightenColor(color, 0.85), color: '#0c2340' }}
+              >
+                <FootballIcon color={color} size={12} />
+                {n.team?.name || '—'}
+                <span style={{ color: '#5a6b7d' }}>&middot; R{n.round} &middot; #{n.pickNumber}</span>
+              </span>
+            );
+          })}
         </div>
       </div>
 
       <div className="border-t border-line mx-4 sm:mx-5 mt-1" />
 
-      {/* Round / pick / skip */}
-      <div className="flex items-center justify-between px-4 sm:px-5 py-2.5 flex-wrap gap-2">
-        <p className="text-xs text-muted">
-          Round {currentRound}, pick {currentPickNumber}
-        </p>
-        {profile?.role === 'commissioner' && (
+      {/* Skip pick (commissioner only) — Round/Pick indicator now lives in the Draft board section */}
+      {profile?.role === 'commissioner' && (
+        <div className="flex items-center justify-end px-4 sm:px-5 py-2.5">
           <button onClick={skipPick} disabled={skipping} className="btn-secondary text-xs">
             {skipping ? 'Skipping…' : 'Skip pick'}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="border-t border-line mx-4 sm:mx-5" />
 
@@ -541,7 +542,10 @@ export default function DraftPage() {
                 View by team
               </button>
               <button
-                onClick={() => setRosterViewMode('round')}
+                onClick={() => {
+                  setRosterViewMode('round');
+                  setSelectedRound(Math.min(currentRound, maxRounds));
+                }}
                 className="text-xs px-2.5 py-1 rounded-md font-medium"
                 style={{
                   background: rosterViewMode === 'round' ? '#185fa5' : '#ffffff',
@@ -557,20 +561,25 @@ export default function DraftPage() {
               <>
                 <p className="text-[10px] text-muted mb-2">Tap a team to view their roster</p>
                 <div className="flex gap-2 flex-wrap mb-2">
-                  {teams.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => setViewingTeamId(viewingTeamId === t.id ? null : t.id)}
-                      className="text-xs px-2.5 py-1.5 rounded-md font-medium flex items-center gap-1.5"
-                      style={{
-                        background: viewingTeamId === t.id ? '#185fa5' : '#ffffff',
-                        color: viewingTeamId === t.id ? '#ffffff' : '#3d4a57',
-                      }}
-                    >
-                      <FootballIcon color={viewingTeamId === t.id ? '#ffffff' : t.team_color || '#0074ff'} size={14} />
-                      {t.name}
-                    </button>
-                  ))}
+                  {teams.map((t) => {
+                    const color = t.team_color || '#0074ff';
+                    const selected = viewingTeamId === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => setViewingTeamId(viewingTeamId === t.id ? null : t.id)}
+                        className="text-xs px-2.5 py-1.5 rounded-md font-medium flex items-center gap-1.5"
+                        style={{
+                          background: lightenColor(color, 0.85),
+                          color: '#0c2340',
+                          border: selected ? `2px solid ${color}` : '2px solid transparent',
+                        }}
+                      >
+                        <FootballIcon color={color} size={14} />
+                        {t.name}
+                      </button>
+                    );
+                  })}
                 </div>
                 {viewingTeamId && rosterByTeam[viewingTeamId] && (
                   <div className="bg-white rounded-lg p-3 mb-1">
@@ -659,24 +668,21 @@ export default function DraftPage() {
 
             {rosterViewMode === 'round' && (
               <>
-                <div className="flex items-center justify-between mb-2">
-                  <button
-                    onClick={() => setSelectedRound((r) => Math.max(1, r - 1))}
-                    disabled={selectedRound <= 1}
-                    className="btn-secondary text-xs px-2 py-1"
-                  >
-                    <i className="ti ti-chevron-left text-sm" aria-hidden="true" />
-                  </button>
-                  <p className="text-xs font-medium text-ink m-0">
-                    Round {selectedRound} of {maxRounds}
-                  </p>
-                  <button
-                    onClick={() => setSelectedRound((r) => Math.min(maxRounds, r + 1))}
-                    disabled={selectedRound >= maxRounds}
-                    className="btn-secondary text-xs px-2 py-1"
-                  >
-                    <i className="ti ti-chevron-right text-sm" aria-hidden="true" />
-                  </button>
+                <div className="flex gap-2 flex-wrap mb-2">
+                  {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setSelectedRound(r)}
+                      className="text-xs px-2.5 py-1.5 rounded-md font-medium"
+                      style={{
+                        background: selectedRound === r ? '#185fa5' : '#ffffff',
+                        color: selectedRound === r ? '#ffffff' : '#3d4a57',
+                        border: '2px solid transparent',
+                      }}
+                    >
+                      Round {r}
+                    </button>
+                  ))}
                 </div>
                 <div className="bg-white rounded-lg p-3">
                   <div className="grid grid-cols-6 gap-1.5">
@@ -844,7 +850,7 @@ export default function DraftPage() {
         {/* Main layout: sidebar / card row / my team */}
         <div className="flex flex-col lg:flex-row pt-3">
         <aside className="w-full lg:w-64 flex-shrink-0 order-2 lg:order-1 lg:pr-3 lg:border-r border-line min-h-0">
-          <p className="text-[10px] uppercase tracking-wide text-muted mb-2">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-2">
             Players ({sortedAvailable.length} available)
           </p>
           <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto pr-1">
@@ -879,6 +885,9 @@ export default function DraftPage() {
         </aside>
 
         <section className="flex-1 min-w-0 order-1 lg:order-2 lg:px-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-2">
+            Round {currentRound}, pick {currentPickNumber}
+          </p>
           <div className="flex gap-3 overflow-x-auto pb-3">
             {boardList.map((p) => {
               const isDrafted = !!p.team_id;
@@ -957,36 +966,44 @@ export default function DraftPage() {
           </div>
         </section>
 
-        {profile?.team_id && (
-          <aside className="w-full lg:w-64 flex-shrink-0 order-3 lg:pl-3 lg:border-l border-line">
-            <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Your team</p>
-            {rosterByTeam[profile.team_id] && (
-              <>
-                <p className="text-xs text-ink mb-2">
-                  {rosterByTeam[profile.team_id].count} of {minRoster}-{maxRoster} &middot; {rosterByTeam[profile.team_id].femaleCount} of{' '}
-                  {minFemale} F
-                </p>
-                <div className="flex flex-col gap-2">
-                  {rosterByTeam[profile.team_id].players.map((p) => (
-                    <div
-                      key={p.id}
-                      onClick={() => openProfile(p.id)}
-                      className="bg-surface rounded-md px-2.5 py-2 cursor-pointer hover:brightness-95"
-                    >
-                      <p className="text-xs font-medium text-ink m-0">{p.full_name}</p>
-                      <p className="text-[11px] text-muted m-0">
-                        {p.height_feet}'{p.height_inches}" &middot; {p.gender}
-                      </p>
-                      <p className="text-[11px] text-muted m-0">
-                        Off: {p.offensive_position} &middot; Def: {p.defensive_position}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </aside>
-        )}
+        {profile?.team_id && (() => {
+          const myTeam = teamsById[profile.team_id];
+          const myColor = myTeam?.team_color || '#0074ff';
+          return (
+            <aside className="w-full lg:w-64 flex-shrink-0 order-3 lg:pl-3 lg:border-l border-line">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1 flex items-center gap-1.5">
+                <FootballIcon color={myColor} size={13} />
+                Your team: {myTeam?.name || '—'}
+              </p>
+              {rosterByTeam[profile.team_id] && (
+                <>
+                  <p className="text-xs text-ink mb-2">
+                    {rosterByTeam[profile.team_id].count} of {minRoster}-{maxRoster} &middot; {rosterByTeam[profile.team_id].femaleCount} of{' '}
+                    {minFemale} F
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {rosterByTeam[profile.team_id].players.map((p) => (
+                      <div
+                        key={p.id}
+                        onClick={() => openProfile(p.id)}
+                        className="rounded-md px-2.5 py-2 cursor-pointer hover:brightness-95"
+                        style={{ background: lightenColor(myColor, 0.85) }}
+                      >
+                        <p className="text-xs font-medium m-0" style={{ color: '#0c2340' }}>{p.full_name}</p>
+                        <p className="text-[11px] m-0" style={{ color: '#5a6b7d' }}>
+                          {p.height_feet}'{p.height_inches}" &middot; {p.gender}
+                        </p>
+                        <p className="text-[11px] m-0" style={{ color: '#5a6b7d' }}>
+                          Off: {p.offensive_position} &middot; Def: {p.defensive_position}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </aside>
+          );
+        })()}
         </div>
       </div>
 

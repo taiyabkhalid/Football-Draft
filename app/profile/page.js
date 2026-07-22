@@ -148,31 +148,68 @@ export default function ProfilePage() {
       )}
 
       <div className="max-w-md mx-auto px-4 py-6">
-        <div className="flex gap-3 items-center mb-4">
-          {player.headshot_url ? (
-            <img src={player.headshot_url} alt={player.full_name} className="w-14 h-14 rounded-full object-cover" />
-          ) : (
-            <div className="w-14 h-14 rounded-full bg-surface flex items-center justify-center flex-shrink-0">
-              <i className="ti ti-user text-faint text-3xl" aria-hidden="true" />
+        {(role === 'gm' || role === 'commissioner') && draftStatus !== 'completed' && (
+          <Link
+            href="/draft"
+            className="block text-center mb-4"
+            style={{
+              background: '#c0392b',
+              color: '#ffffff',
+              fontWeight: 600,
+              borderRadius: 8,
+              padding: '10px 14px',
+              fontSize: 13,
+              textDecoration: 'none',
+            }}
+          >
+            Go to Draft Room
+          </Link>
+        )}
+
+        <div className="flex gap-3 items-start justify-between mb-4">
+          <div className="flex gap-3 items-center min-w-0">
+            {player.headshot_url ? (
+              <img src={player.headshot_url} alt={player.full_name} className="w-14 h-14 rounded-full object-cover flex-shrink-0" />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-surface flex items-center justify-center flex-shrink-0">
+                <i className="ti ti-user text-faint text-3xl" aria-hidden="true" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-base font-medium text-ink m-0">{player.full_name}</p>
+              <p className="text-xs text-muted m-0">
+                {player.offensive_position} / {player.defensive_position} &middot; {player.height_feet}'
+                {player.height_inches}" &middot; {player.gender}
+              </p>
+              {role === 'commissioner' && (
+                <p className="text-[11px] font-medium m-0 mt-1 flex items-center gap-1" style={{ color: '#185fa5' }}>
+                  <i className="ti ti-star-filled text-sm" aria-hidden="true" /> Commish
+                </p>
+              )}
+              {role === 'gm' && (
+                <p className="text-[11px] font-medium m-0 mt-1 flex items-center gap-1" style={{ color: '#185fa5' }}>
+                  <i className="ti ti-star text-sm" aria-hidden="true" /> General Manager
+                </p>
+              )}
             </div>
-          )}
-          <div>
-            <p className="text-base font-medium text-ink m-0">{player.full_name}</p>
-            <p className="text-xs text-muted m-0">
-              {player.offensive_position} / {player.defensive_position} &middot; {player.height_feet}'
-              {player.height_inches}" &middot; {player.gender}
-            </p>
-            {role === 'commissioner' && (
-              <p className="text-[11px] font-medium m-0 mt-1 flex items-center gap-1" style={{ color: '#185fa5' }}>
-                <i className="ti ti-star-filled text-sm" aria-hidden="true" /> Commish
-              </p>
-            )}
-            {role === 'gm' && (
-              <p className="text-[11px] font-medium m-0 mt-1 flex items-center gap-1" style={{ color: '#185fa5' }}>
-                <i className="ti ti-star text-sm" aria-hidden="true" /> General Manager
-              </p>
-            )}
           </div>
+
+          {!locked && (
+            <Link
+              href="/register"
+              className="text-xs font-medium flex-shrink-0"
+              style={{
+                color: '#185fa5',
+                background: '#e6f1fb',
+                borderRadius: 6,
+                padding: '6px 10px',
+                whiteSpace: 'nowrap',
+                textDecoration: 'none',
+              }}
+            >
+              Update profile
+            </Link>
+          )}
         </div>
 
         <div className="bg-surface rounded-lg p-3.5 mb-1.5">
@@ -247,17 +284,13 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {locked ? (
+        {locked && (
           <div className="bg-[#faeeda] rounded-lg p-3.5 mb-4 flex gap-2">
             <i className="ti ti-lock text-base flex-shrink-0" style={{ color: '#854f0b', marginTop: 1 }} aria-hidden="true" />
             <p className="text-xs m-0" style={{ color: '#633806' }}>
               Profile updates are locked 2 hours before the draft. Contact the commissioner for any changes.
             </p>
           </div>
-        ) : (
-          <Link href="/register" className="btn-secondary block text-center mb-3">
-            Update your profile
-          </Link>
         )}
 
         {team && (
