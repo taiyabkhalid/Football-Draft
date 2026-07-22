@@ -20,6 +20,7 @@ export default function LiveDraftPage() {
   const [selectedRound, setSelectedRound] = useState(1);
   const roundInitialized = useRef(false);
   const [secondsLeft, setSecondsLeft] = useState(null);
+  const [openProfileIds, setOpenProfileIds] = useState([]);
 
   const currentRoundRef = useRef(null);
 
@@ -92,6 +93,15 @@ export default function LiveDraftPage() {
     const s = Math.max(secondsLeft, 0) % 60;
     return `${m}:${String(s).padStart(2, '0')}`;
   }, [secondsLeft]);
+
+  const clockUrgent = secondsLeft !== null && secondsLeft <= 20;
+
+  function openProfile(playerId) {
+    setOpenProfileIds((ids) => (ids.includes(playerId) ? ids : [...ids, playerId]));
+  }
+  function closeProfile(playerId) {
+    setOpenProfileIds((ids) => ids.filter((id) => id !== playerId));
+  }
 
   const playersById = useMemo(() => Object.fromEntries(players.map((p) => [p.id, p])), [players]);
   const teamsById = useMemo(() => Object.fromEntries(teams.map((t) => [t.id, t])), [teams]);
@@ -180,11 +190,13 @@ export default function LiveDraftPage() {
   const maxRoster = settings?.max_roster_size ?? 12;
   function buildTeamSlots(teamId) {
     const roster = rosterByTeam[teamId]?.players || [];
-    const sorted = [...roster].sort((a, b) => {
-      const an = a.draft_pick_number ?? -1;
-      const bn = b.draft_pick_number ?? -1;
-      return an - bn;
-    });
+    const rank = (p) => {
+      const role = roleByEmail[p.email?.toLowerCase()];
+      if (role === 'commissioner' || role === 'gm') return -1; // always anchored first
+      if (p.draft_pick_number) return p.draft_pick_number;
+      return Number.MAX_SAFE_INTEGER;
+    };
+    const sorted = [...roster].sort((a, b) => rank(a) - rank(b));
     const slots = [];
     for (let i = 0; i < maxRoster; i++) {
       slots.push(sorted[i] || null);
@@ -250,9 +262,12 @@ export default function LiveDraftPage() {
                 <p className="text-xs text-faint">None yet</p>
               )}
             </div>
-            <div className="flex-1 rounded-lg p-3 flex items-center justify-between gap-2" style={{ background: '#185fa5' }}>
+            <div
+              className={`flex-1 rounded-lg p-3 flex items-center justify-between gap-2 ${clockUrgent ? 'animate-pulse' : ''}`}
+              style={{ background: clockUrgent ? '#c0392b' : '#185fa5' }}
+            >
               <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: '#cfe2f5' }}>
+                <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
                   On the clock
                 </p>
                 <div className="flex items-center gap-2">
@@ -261,7 +276,7 @@ export default function LiveDraftPage() {
                     {teamOnClock?.name || '—'}
                   </p>
                 </div>
-                <p className="text-[10px] m-0 mt-1" style={{ color: '#cfe2f5' }}>
+                <p className="text-[10px] m-0 mt-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
                   Round {currentRound} &middot; Pick {currentPickNumber}
                 </p>
               </div>
@@ -387,8 +402,9 @@ export default function LiveDraftPage() {
                       {buildTeamSlots(viewingTeamId).map((p, i) => (
                         <div
                           key={p?.id || `empty-${i}`}
+                          onClick={() => p && openProfile(p.id)}
                           className="rounded-lg bg-surface flex flex-col items-center text-center px-1 py-2"
-                          style={{ minHeight: 88 }}
+                          style={{ minHeight: 88, cursor: p ? 'pointer' : 'default' }}
                         >
                           {p ? (
                             <>
@@ -460,10 +476,12 @@ export default function LiveDraftPage() {
                     {roundSlots.map((slot) => (
                       <div
                         key={slot.pickNumber}
+                        onClick={() => slot.player && openProfile(slot.player.id)}
                         className="rounded-lg bg-surface flex flex-col items-center text-center px-1 py-2"
                         style={{
                           minHeight: 100,
                           border: slot.pickNumber === currentPickNumber ? '1.5px solid #185fa5' : '1px solid transparent',
+                          cursor: slot.player ? 'pointer' : 'default',
                         }}
                       >
                         {slot.player ? (
@@ -536,11 +554,13 @@ export default function LiveDraftPage() {
               <div
                 key={slot.pickNumber}
                 ref={isFirstOfCurrentRound ? currentRoundRef : null}
+                onClick={() => slot.player && openProfile(slot.player.id)}
                 className="flex-none rounded-xl p-3 bg-white flex flex-col"
                 style={{
                   width: 150,
                   height: 190,
                   border: slot.pickNumber === currentPickNumber ? '1.5px solid #185fa5' : '1px solid #d8dde2',
+                  cursor: slot.player ? 'pointer' : 'default',
                 }}
               >
                 <p className="text-[10px] text-muted m-0 mb-1.5">
@@ -593,6 +613,118 @@ export default function LiveDraftPage() {
           })}
         </div>
       </div>
+
+      {/* Read-only player profile popups — multiple can be open at once, stacked */}
+      {openProfileIds.map((id, idx) => {
+        const p = playersById[id];
+        if (!p) return null;
+        const team = p.team_id ? teamsById[p.team_id] : null;
+        const role = roleByEmail[p.email?.toLowerCase()];
+        return (
+          <div
+            key={id}
+            className="fixed rounded-xl bg-white border border-line"
+            style={{
+              width: 290,
+              right: 16 + idx * 20,
+              bottom: 16 + idx * 20,
+              zIndex: 60 + idx,
+              maxHeight: '75vh',
+              overflowY: 'auto',
+              boxShadow: '0 8px 24px rgba(12,35,64,0.25)',
+            }}
+          >
+            <div className="flex items-start justify-between gap-2 px-4 pt-3.5 pb-2 border-b border-line">
+              <div className="flex gap-2.5 items-center min-w-0">
+                {p.headshot_url ? (
+                  <img src={p.headshot_url} alt={p.full_name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center flex-shrink-0">
+                    <i className="ti ti-user text-faint text-xl" aria-hidden="true" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink m-0 truncate">{p.full_name}</p>
+                  <p className="text-[11px] text-muted m-0">{p.gender}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => closeProfile(id)}
+                className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center hover:bg-surface"
+                aria-label="Close"
+              >
+                <i className="ti ti-x text-base text-muted" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="px-4 py-3 flex flex-col gap-2.5">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Status</p>
+                {role === 'commissioner' ? (
+                  <p className="text-xs font-medium m-0" style={{ color: '#185fa5' }}>
+                    Commissioner &middot; {team?.name || 'Unassigned'}
+                  </p>
+                ) : role === 'gm' ? (
+                  <p className="text-xs font-medium m-0" style={{ color: '#185fa5' }}>
+                    GM &middot; {team?.name || 'Unassigned'}
+                  </p>
+                ) : p.draft_pick_number ? (
+                  <p className="text-xs text-ink m-0">
+                    Drafted &middot; Round {getRound(p.draft_pick_number, numTeams)}, Pick {p.draft_pick_number} &middot;{' '}
+                    {team?.name || ''}
+                  </p>
+                ) : (
+                  <p className="text-xs text-faint m-0" style={{ fontStyle: 'italic' }}>
+                    Undrafted
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Position</p>
+                <p className="text-xs text-ink m-0">
+                  Offense: {p.offensive_position} &middot; Defense: {p.defensive_position}
+                </p>
+                <p className="text-[11px] text-muted m-0">Prefers: {p.position_preference}</p>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Bio</p>
+                <p className="text-xs text-ink m-0">
+                  {p.height_feet}'{p.height_inches}" &middot; Previous team: {p.previous_team || 'None'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Injury status</p>
+                <p className="text-xs text-ink m-0">
+                  {p.injury_status === 'None' ? 'None' : `${p.injury_status} (${p.weeks_until_recovered || '?'} weeks)`}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Availability</p>
+                <p className="text-xs text-ink m-0">Unavailable: {p.game_time_unavailable}</p>
+                <p className="text-[11px] text-muted m-0">
+                  {p.unavailable_mondays && p.unavailable_mondays.length > 0
+                    ? `Out: ${p.unavailable_mondays.join(', ')}`
+                    : 'Available all season'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Preferences</p>
+                <p className="text-[11px] text-muted m-0">
+                  {p.call_on_draft_night ? 'Wants a call on draft night' : 'No call needed on draft night'}
+                </p>
+                <p className="text-[11px] text-muted m-0">
+                  {p.enjoys_pub ? 'Up for the post-game pub' : 'Skipping the post-game pub'}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </main>
   );
 }
