@@ -37,6 +37,8 @@ export default function DraftPage() {
   const [actionError, setActionError] = useState(null);
   const [viewingTeamId, setViewingTeamId] = useState(null);
   const [openProfileIds, setOpenProfileIds] = useState([]);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const prevDraftStatusRef = useRef(null);
 
   // ---- Auth check ----
   useEffect(() => {
@@ -103,7 +105,6 @@ export default function DraftPage() {
 
   const draftStatus = settings?.draft_status || 'not_started';
   const minRoster = settings?.min_roster_size ?? 9;
-  const maxRoster = settings?.max_roster_size ?? 12;
   const minFemale = settings?.min_female_players ?? 2;
   const pickClockSeconds = settings?.pick_clock_seconds ?? 120;
 
@@ -177,8 +178,24 @@ export default function DraftPage() {
 
   const availablePlayers = useMemo(() => players.filter((p) => !p.team_id), [players]);
 
-  const maxRounds = settings?.max_roster_size ?? 12;
+  // The draft runs until the whole player pool is allocated, not a fixed
+  // roster-size cap - so the round count is derived from the pool size and
+  // team count, and the last round is partial if it doesn't divide evenly.
+  const totalPicks = players.length;
+  const maxRounds = numTeams ? Math.ceil(totalPicks / numTeams) : 0;
   const pickByNumber = useMemo(() => Object.fromEntries(picks.map((p) => [p.pick_number, p])), [picks]);
+
+  const fullPickOrder = useMemo(
+    () => (numTeams ? buildFullPickOrder(numTeams, totalPicks) : []),
+    [numTeams, totalPicks]
+  );
+  const picksPerTeam = useMemo(() => {
+    const map = {};
+    for (const t of teams) {
+      map[t.id] = fullPickOrder.filter((s) => s.draftPosition === t.draft_position).length;
+    }
+    return map;
+  }, [fullPickOrder, teams]);
 
   useEffect(() => {
     if (!roundInitialized.current && currentRound) {
@@ -187,9 +204,16 @@ export default function DraftPage() {
     }
   }, [currentRound, maxRounds]);
 
+  useEffect(() => {
+    if (prevDraftStatusRef.current === 'in_progress' && draftStatus === 'completed') {
+      setShowCompleteModal(true);
+    }
+    prevDraftStatusRef.current = draftStatus;
+  }, [draftStatus]);
+
   const roundSlots = useMemo(() => {
     if (!numTeams) return [];
-    return buildFullPickOrder(numTeams, maxRounds)
+    return buildFullPickOrder(numTeams, totalPicks)
       .filter((s) => s.round === selectedRound)
       .map((slot) => {
         const team = teams.find((t) => t.draft_position === slot.draftPosition);
@@ -202,7 +226,7 @@ export default function DraftPage() {
           player: pick?.player_id ? playersById[pick.player_id] : null,
         };
       });
-  }, [numTeams, maxRounds, selectedRound, teams, pickByNumber, playersById]);
+  }, [numTeams, totalPicks, selectedRound, teams, pickByNumber, playersById]);
 
   function buildTeamSlots(teamId) {
     const roster = rosterByTeam[teamId]?.players || [];
@@ -214,6 +238,7 @@ export default function DraftPage() {
     const teamPicks = picks
       .filter((pk) => pk.team_id === teamId)
       .sort((a, b) => a.pick_number - b.pick_number);
+    const pickedPlayerIds = new Set(teamPicks.filter((pk) => pk.player_id).map((pk) => pk.player_id));
 
     const entries = [];
     if (gmPlayer) entries.push({ kind: 'gm', player: gmPlayer });
@@ -225,9 +250,16 @@ export default function DraftPage() {
         entries.push({ kind: 'skipped', pick: pk });
       }
     }
+    // Players added manually (e.g. late registrations after the draft ended)
+    // have no matching draft_picks row, so they're appended at the end.
+    const manualPlayers = roster.filter((p) => p !== gmPlayer && !pickedPlayerIds.has(p.id));
+    for (const p of manualPlayers) {
+      entries.push({ kind: 'manual', player: p });
+    }
 
+    const totalSlots = Math.max(picksPerTeam[teamId] ?? maxRounds, entries.length);
     const slots = [];
-    for (let i = 0; i < maxRoster; i++) {
+    for (let i = 0; i < totalSlots; i++) {
       slots.push(entries[i] || null);
     }
     return slots;
@@ -248,14 +280,20 @@ export default function DraftPage() {
 
   const canDraft = profile && teamOnClock && draftStatus === 'in_progress' && profile.team_id === teamOnClock.id;
 
+  const picksRemainingForClockTeam = useMemo(() => {
+    if (!teamOnClock) return 0;
+    return fullPickOrder.filter(
+      (s) => s.pickNumber >= currentPickNumber && s.draftPosition === teamOnClock.draft_position
+    ).length;
+  }, [fullPickOrder, currentPickNumber, teamOnClock]);
+
   const mustDraftFemale = useMemo(() => {
     if (!teamOnClock) return false;
     const roster = rosterByTeam[teamOnClock.id];
     if (!roster) return false;
     const femaleNeeded = minFemale - roster.femaleCount;
-    const slotsRemaining = maxRoster - roster.count;
-    return femaleNeeded > 0 && femaleNeeded >= slotsRemaining;
-  }, [teamOnClock, rosterByTeam, minFemale, maxRoster]);
+    return femaleNeeded > 0 && femaleNeeded >= picksRemainingForClockTeam;
+  }, [teamOnClock, rosterByTeam, minFemale, picksRemainingForClockTeam]);
 
   const hasActiveSearch =
     searchName.trim() !== '' || searchPosition !== '' || searchGender !== '' || searchPreviousTeam !== '';
@@ -295,13 +333,14 @@ export default function DraftPage() {
     return new Set(availablePlayers.filter(matchesSearch).map((p) => p.id));
   }, [availablePlayers, hasActiveSearch, searchName, searchPosition, searchGender, searchPreviousTeam]);
 
-  // Drafted players stay visible on the board — shown at the end, in the order they were picked —
-  // rather than disappearing, so GMs can see who's gone and still open their profile.
+  // Drafted players stay visible on the board — shown at the end, in the order they were picked
+  // (manually-added players, with no pick number, are sorted to the very end) — rather than
+  // disappearing, so GMs can see who's gone and still open their profile.
   const draftedPlayersInOrder = useMemo(() => {
     return players
-      .filter((p) => p.team_id && p.draft_pick_number)
+      .filter((p) => p.team_id)
       .filter((p) => !hasActiveSearch || matchesSearch(p))
-      .sort((a, b) => a.draft_pick_number - b.draft_pick_number);
+      .sort((a, b) => (a.draft_pick_number ?? Infinity) - (b.draft_pick_number ?? Infinity));
   }, [players, hasActiveSearch, searchName, searchPosition, searchGender, searchPreviousTeam]);
 
   const boardList = useMemo(
@@ -327,8 +366,9 @@ export default function DraftPage() {
       return;
     }
     const roster = rosterByTeam[teamOnClock.id];
-    if (roster.count >= maxRoster) {
-      setActionError(`${teamOnClock.name} has already reached the ${maxRoster}-player roster limit.`);
+    const teamAllocation = picksPerTeam[teamOnClock.id] ?? maxRounds;
+    if (roster.count >= teamAllocation) {
+      setActionError(`${teamOnClock.name} has already used all of its picks in this draft.`);
       return;
     }
     setDrafting(player.id);
@@ -350,6 +390,22 @@ export default function DraftPage() {
       player_id: player.id,
     });
     await supabase.rpc('advance_pick_clock');
+    setDrafting(null);
+  }
+
+  async function addToMyTeam(player) {
+    if (!profile?.team_id || draftStatus !== 'completed') return;
+    setActionError(null);
+    setDrafting(player.id);
+    const { data: updated, error: updateError } = await supabase
+      .from('players')
+      .update({ team_id: profile.team_id })
+      .eq('id', player.id)
+      .is('team_id', null)
+      .select();
+    if (updateError || !updated || updated.length === 0) {
+      setActionError('That player was just added to a team by someone else.');
+    }
     setDrafting(null);
   }
 
@@ -390,124 +446,138 @@ export default function DraftPage() {
 
   return (
     <main style={{ background: '#ffffff', minHeight: '100vh' }}>
-      <BrandHeader pageLabel="Live draft" liveIndicator pickTimer={timerDisplay} />
+      <BrandHeader
+        pageLabel={draftStatus === 'completed' ? 'Draft results' : 'Live draft'}
+        liveIndicator={draftStatus === 'in_progress'}
+        pickTimer={draftStatus === 'in_progress' ? timerDisplay : undefined}
+      />
 
-      {/* Previous / current / next strip — frozen at top so GMs can always see the clock */}
-      <div
-        className="flex flex-col sm:flex-row gap-2 px-4 sm:px-5 pt-4 pb-3"
-        style={{ position: 'sticky', top: 0, zIndex: 30, background: '#ffffff', boxShadow: '0 2px 6px rgba(12,35,64,0.08)' }}
-      >
-        <div className="flex-1 bg-surface rounded-lg p-3">
-          <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Previous pick</p>
-          {previousPick ? (
-            <>
-              <div className="flex items-center gap-2">
-                <FootballIcon color={teamsById[previousPick.team_id]?.team_color || '#0074ff'} size={16} />
-                <p className="text-xs text-ink m-0 truncate">
-                  {previousPick.player_id
-                    ? `${playersById[previousPick.player_id]?.full_name || 'Unknown'} — ${teamsById[previousPick.team_id]?.name || ''}`
-                    : `Skipped — ${teamsById[previousPick.team_id]?.name || ''}`}
+      {draftStatus === 'in_progress' ? (
+        <>
+          {/* Previous / current / next strip — frozen at top so GMs can always see the clock */}
+          <div
+            className="flex flex-col sm:flex-row gap-2 px-4 sm:px-5 pt-4 pb-3"
+            style={{ position: 'sticky', top: 0, zIndex: 30, background: '#ffffff', boxShadow: '0 2px 6px rgba(12,35,64,0.08)' }}
+          >
+            <div className="flex-1 bg-surface rounded-lg p-3">
+              <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Previous pick</p>
+              {previousPick ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <FootballIcon color={teamsById[previousPick.team_id]?.team_color || '#0074ff'} size={16} />
+                    <p className="text-xs text-ink m-0 truncate">
+                      {previousPick.player_id
+                        ? `${playersById[previousPick.player_id]?.full_name || 'Unknown'} — ${teamsById[previousPick.team_id]?.name || ''}`
+                        : `Skipped — ${teamsById[previousPick.team_id]?.name || ''}`}
+                    </p>
+                  </div>
+                  <p className="text-[10px] text-muted m-0 mt-1">
+                    Round {previousPick.round} &middot; Pick {previousPick.pick_number}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-faint">None yet</p>
+              )}
+            </div>
+            <div
+              className={`flex-1 rounded-lg p-3 flex items-center justify-between gap-2 ${clockUrgent ? 'animate-pulse' : ''}`}
+              style={{ background: clockUrgent ? '#c0392b' : '#185fa5' }}
+            >
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                  On the clock
+                </p>
+                <div className="flex items-center gap-2">
+                  <FootballIcon color="#ffffff" size={16} />
+                  <p className="text-[13px] font-semibold truncate m-0" style={{ color: '#ffffff' }}>
+                    {teamOnClock?.name || '—'}
+                  </p>
+                </div>
+                <p className="text-[10px] m-0 mt-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                  Round {currentRound} &middot; Pick {currentPickNumber}
                 </p>
               </div>
-              <p className="text-[10px] text-muted m-0 mt-1">
-                Round {previousPick.round} &middot; Pick {previousPick.pick_number}
-              </p>
-            </>
-          ) : (
-            <p className="text-xs text-faint">None yet</p>
-          )}
-        </div>
-        <div
-          className={`flex-1 rounded-lg p-3 flex items-center justify-between gap-2 ${clockUrgent ? 'animate-pulse' : ''}`}
-          style={{ background: clockUrgent ? '#c0392b' : '#185fa5' }}
-        >
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
-              On the clock
-            </p>
-            <div className="flex items-center gap-2">
-              <FootballIcon color="#ffffff" size={16} />
-              <p className="text-[13px] font-semibold truncate m-0" style={{ color: '#ffffff' }}>
-                {teamOnClock?.name || '—'}
+              <p className="text-xl font-medium" style={{ color: '#ffffff' }}>
+                {timerDisplay}
               </p>
             </div>
-            <p className="text-[10px] m-0 mt-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
-              Round {currentRound} &middot; Pick {currentPickNumber}
-            </p>
+            <div className="flex-1 bg-surface rounded-lg p-3">
+              <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Next up</p>
+              <div className="flex items-center gap-2">
+                <FootballIcon color={teamNextOnClock?.team_color || '#0074ff'} size={16} />
+                <p className="text-xs text-ink m-0 truncate">{teamNextOnClock?.name || '—'}</p>
+              </div>
+              {teamNextOnClock && (
+                <p className="text-[10px] text-muted m-0 mt-1">
+                  Round {nextRound} &middot; Pick {currentPickNumber + 1}
+                </p>
+              )}
+            </div>
           </div>
-          <p className="text-xl font-medium" style={{ color: '#ffffff' }}>
-            {timerDisplay}
-          </p>
-        </div>
-        <div className="flex-1 bg-surface rounded-lg p-3">
-          <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Next up</p>
-          <div className="flex items-center gap-2">
-            <FootballIcon color={teamNextOnClock?.team_color || '#0074ff'} size={16} />
-            <p className="text-xs text-ink m-0 truncate">{teamNextOnClock?.name || '—'}</p>
-          </div>
-          {teamNextOnClock && (
-            <p className="text-[10px] text-muted m-0 mt-1">
-              Round {nextRound} &middot; Pick {currentPickNumber + 1}
-            </p>
+
+          {canDraft && (
+            <div
+              className="mx-4 sm:mx-5 mt-3 rounded-lg px-3 py-2.5 flex items-center gap-2 animate-pulse"
+              style={{ background: '#c0392b' }}
+            >
+              <i className="ti ti-alert-triangle text-base flex-shrink-0" style={{ color: '#ffffff' }} aria-hidden="true" />
+              <p className="text-xs font-medium m-0" style={{ color: '#ffffff' }}>
+                You're on the clock! Make your selection before the timer runs out.
+              </p>
+            </div>
           )}
-        </div>
-      </div>
 
-      {canDraft && (
-        <div
-          className="mx-4 sm:mx-5 mt-3 rounded-lg px-3 py-2.5 flex items-center gap-2 animate-pulse"
-          style={{ background: '#c0392b' }}
-        >
-          <i className="ti ti-alert-triangle text-base flex-shrink-0" style={{ color: '#ffffff' }} aria-hidden="true" />
-          <p className="text-xs font-medium m-0" style={{ color: '#ffffff' }}>
-            You're on the clock! Make your selection before the timer runs out.
-          </p>
-        </div>
-      )}
+          {/* Upcoming picks strip */}
+          <div className="px-4 sm:px-5 pt-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Upcoming picks</p>
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {upcomingPicks.map((n) => {
+                const color = n.team?.team_color || '#0074ff';
+                return (
+                  <span
+                    key={n.pickNumber}
+                    className="flex-none text-xs px-2.5 py-1.5 rounded-md whitespace-nowrap flex items-center gap-1.5"
+                    style={{ background: lightenColor(color, 0.85), color: '#0c2340' }}
+                  >
+                    <FootballIcon color={color} size={12} />
+                    {n.team?.name || '—'}
+                    <span style={{ color: '#5a6b7d' }}>&middot; Rnd {n.round} . Pick # {n.pickNumber}</span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
 
-      {/* Upcoming picks strip */}
-      <div className="px-4 sm:px-5 pt-3">
-        <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Upcoming picks</p>
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          {upcomingPicks.map((n) => {
-            const color = n.team?.team_color || '#0074ff';
-            return (
-              <span
-                key={n.pickNumber}
-                className="flex-none text-xs px-2.5 py-1.5 rounded-md whitespace-nowrap flex items-center gap-1.5"
-                style={{ background: lightenColor(color, 0.85), color: '#0c2340' }}
-              >
-                <FootballIcon color={color} size={12} />
-                {n.team?.name || '—'}
-                <span style={{ color: '#5a6b7d' }}>&middot; R{n.round} &middot; #{n.pickNumber}</span>
-              </span>
-            );
-          })}
-        </div>
-      </div>
+          <div className="border-t border-line mx-4 sm:mx-5 mt-1" />
 
-      <div className="border-t border-line mx-4 sm:mx-5 mt-1" />
+          {/* Skip pick (commissioner only) */}
+          {profile?.role === 'commissioner' && (
+            <div className="flex items-center justify-end px-4 sm:px-5 py-2.5">
+              <button onClick={skipPick} disabled={skipping} className="btn-secondary text-xs">
+                {skipping ? 'Skipping…' : 'Skip pick'}
+              </button>
+            </div>
+          )}
 
-      {/* Skip pick (commissioner only) — Round/Pick indicator now lives in the Draft board section */}
-      {profile?.role === 'commissioner' && (
-        <div className="flex items-center justify-end px-4 sm:px-5 py-2.5">
-          <button onClick={skipPick} disabled={skipping} className="btn-secondary text-xs">
-            {skipping ? 'Skipping…' : 'Skip pick'}
-          </button>
-        </div>
-      )}
+          <div className="border-t border-line mx-4 sm:mx-5" />
 
-      <div className="border-t border-line mx-4 sm:mx-5" />
-
-      {actionError && (
-        <div className="bg-danger/10 mx-4 sm:mx-5 mt-3 rounded-md px-3 py-2">
-          <p className="text-xs text-danger m-0">{actionError}</p>
-        </div>
-      )}
-      {mustDraftFemale && (
-        <div className="bg-[#faeeda] mx-4 sm:mx-5 mt-3 rounded-md px-3 py-2">
-          <p className="text-xs text-[#633806] m-0">
-            {teamOnClock.name} must draft a female player this pick to still reach the {minFemale}-female minimum.
+          {actionError && (
+            <div className="bg-danger/10 mx-4 sm:mx-5 mt-3 rounded-md px-3 py-2">
+              <p className="text-xs text-danger m-0">{actionError}</p>
+            </div>
+          )}
+          {mustDraftFemale && (
+            <div className="bg-[#faeeda] mx-4 sm:mx-5 mt-3 rounded-md px-3 py-2">
+              <p className="text-xs text-[#633806] m-0">
+                {teamOnClock.name} must draft a female player this pick to still reach the {minFemale}-female minimum.
+              </p>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="bg-royal-pale mx-4 sm:mx-5 mt-4 rounded-lg p-3.5">
+          <p className="text-sm m-0" style={{ color: '#0c447c' }}>
+            The draft has ended. Final rosters are below.
           </p>
         </div>
       )}
@@ -615,11 +685,16 @@ export default function DraftPage() {
                             >
                               {isClockSlot ? (
                                 <>
-                                  <p className="text-[8px] m-0" style={{ color: '#0c2340' }}>
+                                  <div
+                                    className="w-8 h-8 rounded-full bg-white flex items-center justify-center"
+                                    style={{ border: `2px solid ${teamColor}` }}
+                                  >
+                                    <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
+                                  </div>
+                                  <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                     On the clock
                                   </p>
-                                  <FootballIcon color={teamColor} size={16} />
-                                  <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                                  <p className="text-[8px] m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                     {viewedTeam?.name}
                                   </p>
                                   <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
@@ -667,6 +742,20 @@ export default function DraftPage() {
                                 <span className="text-[9px] text-faint mt-0.5">
                                   Rnd {entry.pick.round} . Pick # {entry.pick.pick_number}
                                 </span>
+                              </>
+                            ) : entry?.kind === 'manual' ? (
+                              <>
+                                {player.headshot_url ? (
+                                  <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                    <i className="ti ti-user text-faint text-base" aria-hidden="true" />
+                                  </div>
+                                )}
+                                <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
+                                  {player.full_name}
+                                </p>
+                                <span className="text-[9px] text-muted mt-0.5">Added manually</span>
                               </>
                             ) : (
                               <>
@@ -751,11 +840,16 @@ export default function DraftPage() {
                             </>
                           ) : isClockSlot ? (
                             <>
-                              <p className="text-[8px] m-0" style={{ color: '#0c2340' }}>
+                              <div
+                                className="w-8 h-8 rounded-full bg-white flex items-center justify-center"
+                                style={{ border: `2px solid ${teamColor}` }}
+                              >
+                                <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
+                              </div>
+                              <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                 On the clock
                               </p>
-                              <FootballIcon color={teamColor} size={16} />
-                              <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                              <p className="text-[8px] m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                 {slot.team?.name}
                               </p>
                               <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
@@ -789,7 +883,9 @@ export default function DraftPage() {
         )}
       </div>
 
-      {/* Draft board - the main drafting area: search/sort, available players, cards, your team */}
+      {/* Draft board - the main drafting area: search/sort, available players, cards, your team.
+          Stays visible after the draft ends so GMs can still search/reference rosters and use
+          "Add to my team" for leftover or late-registered players. */}
       <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5">
         <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: '#0c447c' }}>
           Draft board
@@ -900,8 +996,12 @@ export default function DraftPage() {
                   <p className="text-xs font-medium text-ink m-0">{p.full_name}</p>
                   {isDrafted ? (
                     <p className="text-[11px] font-medium m-0" style={{ color: '#185fa5' }}>
-                      Drafted &middot; {teamsById[p.team_id]?.name || 'Unknown'} &middot; R
-                      {getRound(p.draft_pick_number, numTeams)} &middot; #{p.draft_pick_number}
+                      {p.draft_pick_number
+                        ? `Drafted \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'} \u00b7 Rnd ${getRound(
+                            p.draft_pick_number,
+                            numTeams
+                          )} . Pick # ${p.draft_pick_number}`
+                        : `Added manually \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'}`}
                     </p>
                   ) : (
                     <>
@@ -921,7 +1021,7 @@ export default function DraftPage() {
 
         <section className="flex-1 min-w-0 order-1 lg:order-2 lg:px-3">
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-2">
-            Round {currentRound}, pick {currentPickNumber}
+            {draftStatus === 'completed' ? 'Available players' : `Round ${currentRound}, pick ${currentPickNumber}`}
           </p>
           <div className="flex gap-3 overflow-x-auto pb-3">
             {boardList.map((p) => {
@@ -978,10 +1078,30 @@ export default function DraftPage() {
                     <div className="w-full rounded-lg py-2 mt-auto flex items-center justify-center gap-1.5" style={{ background: '#d8dde2' }}>
                       <FootballIcon color={teamsById[p.team_id]?.team_color || '#0074ff'} size={13} />
                       <span className="text-[11px] font-medium" style={{ color: '#3d4a57' }}>
-                        Drafted &middot; {teamsById[p.team_id]?.name || 'Unknown'} &middot; R{getRound(p.draft_pick_number, numTeams)} &middot; #
-                        {p.draft_pick_number}
+                        {p.draft_pick_number
+                          ? `Drafted \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'} \u00b7 Rnd ${getRound(
+                              p.draft_pick_number,
+                              numTeams
+                            )} . Pick # ${p.draft_pick_number}`
+                          : `Added manually \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'}`}
                       </span>
                     </div>
+                  ) : draftStatus === 'completed' ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addToMyTeam(p);
+                      }}
+                      disabled={!profile?.team_id || drafting === p.id}
+                      className="w-full text-xs font-medium rounded-lg py-2 mt-auto"
+                      style={{
+                        background: !profile?.team_id ? '#d8dde2' : '#185fa5',
+                        color: '#ffffff',
+                        border: 'none',
+                      }}
+                    >
+                      {drafting === p.id ? 'Adding…' : 'Add to my team'}
+                    </button>
                   ) : (
                     <button
                       onClick={(e) => {
@@ -1013,9 +1133,20 @@ export default function DraftPage() {
               {rosterByTeam[profile.team_id] && (
                 <>
                   <p className="text-xs text-ink mb-2">
-                    {rosterByTeam[profile.team_id].count} of {minRoster}-{maxRoster} &middot; {rosterByTeam[profile.team_id].femaleCount} of{' '}
-                    {minFemale} F
+                    {rosterByTeam[profile.team_id].count} of {picksPerTeam[profile.team_id] ?? maxRounds} &middot;{' '}
+                    {rosterByTeam[profile.team_id].femaleCount} of {minFemale} F
                   </p>
+                  {draftStatus === 'completed' &&
+                    (rosterByTeam[profile.team_id].count < minRoster ||
+                      rosterByTeam[profile.team_id].femaleCount < minFemale) && (
+                      <div className="bg-[#faeeda] rounded-md px-2.5 py-2 mb-2 flex gap-1.5">
+                        <i className="ti ti-alert-triangle text-sm flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
+                        <p className="text-[11px] m-0" style={{ color: '#633806' }}>
+                          Below the {minRoster}-player / {minFemale}-female minimum. Use "Add to my team" on leftover
+                          players below to fill remaining spots.
+                        </p>
+                      </div>
+                    )}
                   <div className="flex flex-col gap-2">
                     {rosterByTeam[profile.team_id].players.map((p) => (
                       <div
@@ -1098,9 +1229,11 @@ export default function DraftPage() {
                   </p>
                 ) : p.draft_pick_number ? (
                   <p className="text-xs text-ink m-0">
-                    Drafted &middot; Round {getRound(p.draft_pick_number, numTeams)}, Pick {p.draft_pick_number} &middot;{' '}
+                    Drafted &middot; Rnd {getRound(p.draft_pick_number, numTeams)} . Pick # {p.draft_pick_number} &middot;{' '}
                     {team?.name || ''}
                   </p>
+                ) : p.team_id ? (
+                  <p className="text-xs text-ink m-0">Added manually &middot; {team?.name || ''}</p>
                 ) : (
                   <p className="text-xs text-faint m-0" style={{ fontStyle: 'italic' }}>
                     Undrafted
@@ -1153,6 +1286,34 @@ export default function DraftPage() {
           </div>
         );
       })}
+      {showCompleteModal && (
+        <div
+          className="fixed inset-0 flex items-center justify-center px-4"
+          style={{ background: 'rgba(12,35,64,0.55)', zIndex: 100 }}
+          onClick={() => setShowCompleteModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-xl p-6 text-center max-w-sm w-full"
+          >
+            <div
+              className="w-14 h-14 rounded-full mx-auto flex items-center justify-center mb-3"
+              style={{ background: '#e6f1fb' }}
+            >
+              <i className="ti ti-confetti text-3xl" style={{ color: '#185fa5' }} aria-hidden="true" />
+            </div>
+            <p className="text-lg font-semibold m-0" style={{ color: '#0c2340' }}>
+              Congratulations — the draft is complete!
+            </p>
+            <p className="text-sm text-muted mt-2 mb-4">
+              Every team has finished building their roster. Final results are ready to view below.
+            </p>
+            <button onClick={() => setShowCompleteModal(false)} className="btn-primary w-full">
+              View final rosters
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

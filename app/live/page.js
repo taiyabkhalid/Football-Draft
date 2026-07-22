@@ -20,6 +20,8 @@ export default function LiveDraftPage() {
   const [selectedRound, setSelectedRound] = useState(1);
   const roundInitialized = useRef(false);
   const [openProfileIds, setOpenProfileIds] = useState([]);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const prevDraftStatusRef = useRef(null);
 
   const currentPickRef = useRef(null);
   const draftedScrollRef = useRef(null);
@@ -84,7 +86,8 @@ export default function LiveDraftPage() {
   const teamNextOnClock = numTeams ? getTeamOnTheClock(currentPickNumber + 1, numTeams, teams) : null;
   const draftStatus = settings?.draft_status || 'not_started';
   const pickClockSeconds = settings?.pick_clock_seconds ?? 120;
-  const maxRounds = settings?.max_roster_size ?? 12;
+  const minRoster = settings?.min_roster_size ?? 9;
+  const minFemale = settings?.min_female_players ?? 2;
 
   // Same shared-timestamp clock as the GM draft page, so both views always agree.
   const [now, setNow] = useState(() => Date.now());
@@ -173,9 +176,13 @@ export default function LiveDraftPage() {
 
   const pickByNumber = useMemo(() => Object.fromEntries(picks.map((p) => [p.pick_number, p])), [picks]);
 
+  // The draft runs until the whole player pool is allocated - see draft/page.js for the same logic.
+  const totalPicks = players.length;
+  const maxRounds = numTeams ? Math.ceil(totalPicks / numTeams) : 0;
+
   const allSlots = useMemo(() => {
     if (!numTeams) return [];
-    return buildFullPickOrder(numTeams, maxRounds).map((slot) => {
+    return buildFullPickOrder(numTeams, totalPicks).map((slot) => {
       const team = teams.find((t) => t.draft_position === slot.draftPosition);
       const pick = pickByNumber[slot.pickNumber];
       return {
@@ -186,7 +193,15 @@ export default function LiveDraftPage() {
         player: pick?.player_id ? playersById[pick.player_id] : null,
       };
     });
-  }, [numTeams, maxRounds, teams, pickByNumber, playersById]);
+  }, [numTeams, totalPicks, teams, pickByNumber, playersById]);
+
+  const picksPerTeam = useMemo(() => {
+    const map = {};
+    for (const t of teams) {
+      map[t.id] = allSlots.filter((s) => s.team?.id === t.id).length;
+    }
+    return map;
+  }, [allSlots, teams]);
 
   useEffect(() => {
     if (!roundInitialized.current && currentRound) {
@@ -197,7 +212,6 @@ export default function LiveDraftPage() {
 
   const roundSlots = useMemo(() => allSlots.filter((s) => s.round === selectedRound), [allSlots, selectedRound]);
 
-  const maxRoster = settings?.max_roster_size ?? 12;
   function buildTeamSlots(teamId) {
     const roster = rosterByTeam[teamId]?.players || [];
     const gmPlayer = roster.find((p) => {
@@ -208,6 +222,7 @@ export default function LiveDraftPage() {
     const teamPicks = picks
       .filter((pk) => pk.team_id === teamId)
       .sort((a, b) => a.pick_number - b.pick_number);
+    const pickedPlayerIds = new Set(teamPicks.filter((pk) => pk.player_id).map((pk) => pk.player_id));
 
     const entries = [];
     if (gmPlayer) entries.push({ kind: 'gm', player: gmPlayer });
@@ -219,9 +234,14 @@ export default function LiveDraftPage() {
         entries.push({ kind: 'skipped', pick: pk });
       }
     }
+    const manualPlayers = roster.filter((p) => p !== gmPlayer && !pickedPlayerIds.has(p.id));
+    for (const p of manualPlayers) {
+      entries.push({ kind: 'manual', player: p });
+    }
 
+    const totalSlots = Math.max(picksPerTeam[teamId] ?? maxRounds, entries.length);
     const slots = [];
-    for (let i = 0; i < maxRoster; i++) {
+    for (let i = 0; i < totalSlots; i++) {
       slots.push(entries[i] || null);
     }
     return slots;
@@ -234,6 +254,13 @@ export default function LiveDraftPage() {
       currentPickRef.current.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
     }
   }, [currentPickNumber, draftStatus]);
+
+  useEffect(() => {
+    if (prevDraftStatusRef.current === 'in_progress' && draftStatus === 'completed') {
+      setShowCompleteModal(true);
+    }
+    prevDraftStatusRef.current = draftStatus;
+  }, [draftStatus]);
 
   if (loading) {
     return (
@@ -336,7 +363,7 @@ export default function LiveDraftPage() {
                   >
                     <FootballIcon color={color} size={12} />
                     {n.team?.name || '—'}
-                    <span style={{ color: '#5a6b7d' }}>&middot; R{n.round} &middot; #{n.pickNumber}</span>
+                    <span style={{ color: '#5a6b7d' }}>&middot; Rnd {n.round} . Pick # {n.pickNumber}</span>
                   </span>
                 );
               })}
@@ -441,6 +468,17 @@ export default function LiveDraftPage() {
                           </p>
                         )}
                       </div>
+                      {draftStatus === 'completed' &&
+                        rosterByTeam[viewingTeamId] &&
+                        (rosterByTeam[viewingTeamId].count < minRoster ||
+                          rosterByTeam[viewingTeamId].femaleCount < minFemale) && (
+                          <div className="bg-[#faeeda] rounded-md px-2.5 py-2 mb-2 flex gap-1.5">
+                            <i className="ti ti-alert-triangle text-sm flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
+                            <p className="text-[11px] m-0" style={{ color: '#633806' }}>
+                              Below the {minRoster}-player / {minFemale}-female minimum.
+                            </p>
+                          </div>
+                        )}
                       <div className="grid grid-cols-6 gap-1.5">
                         {slots.map((entry, i) => {
                           const player = entry?.player;
@@ -459,11 +497,16 @@ export default function LiveDraftPage() {
                             >
                               {isClockSlot ? (
                                 <>
-                                  <p className="text-[8px] m-0" style={{ color: '#0c2340' }}>
+                                  <div
+                                    className="w-8 h-8 rounded-full bg-white flex items-center justify-center"
+                                    style={{ border: `2px solid ${teamColor}` }}
+                                  >
+                                    <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
+                                  </div>
+                                  <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                     On the clock
                                   </p>
-                                  <FootballIcon color={teamColor} size={16} />
-                                  <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                                  <p className="text-[8px] m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                     {viewedTeam?.name}
                                   </p>
                                   <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
@@ -511,6 +554,20 @@ export default function LiveDraftPage() {
                                   <span className="text-[9px] text-faint mt-0.5">
                                     Rnd {entry.pick.round} . Pick # {entry.pick.pick_number}
                                   </span>
+                                </>
+                              ) : entry?.kind === 'manual' ? (
+                                <>
+                                  {player.headshot_url ? (
+                                    <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                      <i className="ti ti-user text-faint text-base" aria-hidden="true" />
+                                    </div>
+                                  )}
+                                  <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
+                                    {player.full_name}
+                                  </p>
+                                  <span className="text-[9px] text-muted mt-0.5">Added manually</span>
                                 </>
                               ) : (
                                 <>
@@ -595,11 +652,16 @@ export default function LiveDraftPage() {
                             </>
                           ) : isClockSlot ? (
                             <>
-                              <p className="text-[8px] m-0" style={{ color: '#0c2340' }}>
+                              <div
+                                className="w-8 h-8 rounded-full bg-white flex items-center justify-center"
+                                style={{ border: `2px solid ${teamColor}` }}
+                              >
+                                <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
+                              </div>
+                              <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                 On the clock
                               </p>
-                              <FootballIcon color={teamColor} size={16} />
-                              <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                              <p className="text-[8px] m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                 {slot.team?.name}
                               </p>
                               <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
@@ -761,9 +823,11 @@ export default function LiveDraftPage() {
                   </p>
                 ) : p.draft_pick_number ? (
                   <p className="text-xs text-ink m-0">
-                    Drafted &middot; Round {getRound(p.draft_pick_number, numTeams)}, Pick {p.draft_pick_number} &middot;{' '}
+                    Drafted &middot; Rnd {getRound(p.draft_pick_number, numTeams)} . Pick # {p.draft_pick_number} &middot;{' '}
                     {team?.name || ''}
                   </p>
+                ) : p.team_id ? (
+                  <p className="text-xs text-ink m-0">Added manually &middot; {team?.name || ''}</p>
                 ) : (
                   <p className="text-xs text-faint m-0" style={{ fontStyle: 'italic' }}>
                     Undrafted
@@ -816,6 +880,32 @@ export default function LiveDraftPage() {
           </div>
         );
       })}
+
+      {showCompleteModal && (
+        <div
+          className="fixed inset-0 flex items-center justify-center px-4"
+          style={{ background: 'rgba(12,35,64,0.55)', zIndex: 100 }}
+          onClick={() => setShowCompleteModal(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-xl p-6 text-center max-w-sm w-full">
+            <div
+              className="w-14 h-14 rounded-full mx-auto flex items-center justify-center mb-3"
+              style={{ background: '#e6f1fb' }}
+            >
+              <i className="ti ti-confetti text-3xl" style={{ color: '#185fa5' }} aria-hidden="true" />
+            </div>
+            <p className="text-lg font-semibold m-0" style={{ color: '#0c2340' }}>
+              Congratulations — the draft is complete!
+            </p>
+            <p className="text-sm text-muted mt-2 mb-4">
+              Every team has finished building their roster. Final results are ready to view below.
+            </p>
+            <button onClick={() => setShowCompleteModal(false)} className="btn-primary w-full">
+              View final rosters
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
