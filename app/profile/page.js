@@ -18,6 +18,12 @@ export default function ProfilePage() {
   const [teamColorDraft, setTeamColorDraft] = useState('#0074ff');
   const [savingTeamName, setSavingTeamName] = useState(false);
 
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState(null);
+
   const loadProfile = useCallback(async () => {
     const {
       data: { user },
@@ -78,6 +84,28 @@ export default function ProfilePage() {
       .eq('id', team.id);
     setTeam((t) => ({ ...t, name: teamNameDraft.trim(), team_color: teamColorDraft }));
     setSavingTeamName(false);
+  }
+
+  async function updatePassword() {
+    setPasswordMessage(null);
+    if (!newPassword || !confirmPassword) {
+      setPasswordMessage({ type: 'error', text: 'Enter your new password twice.' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage({ type: 'error', text: "Those passwords don't match." });
+      return;
+    }
+    setSavingPassword(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      setPasswordMessage({ type: 'error', text: error.message });
+    } else {
+      setPasswordMessage({ type: 'success', text: 'Password updated.' });
+      setNewPassword('');
+      setConfirmPassword('');
+    }
+    setSavingPassword(false);
   }
 
   if (loading || !player) {
@@ -150,7 +178,10 @@ export default function ProfilePage() {
         <div className="bg-surface rounded-lg p-3.5 mb-1.5">
           <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Drafted by</p>
           {team ? (
-            <p className="text-sm font-medium text-ink m-0">{team.name}</p>
+            <div className="flex items-center gap-2">
+              <FootballIcon color={team.team_color || '#0074ff'} size={16} />
+              <p className="text-sm font-medium text-ink m-0">{team.name}</p>
+            </div>
           ) : (
             <p className="text-xs text-faint m-0" style={{ fontStyle: 'italic' }}>
               Not yet drafted
@@ -224,7 +255,7 @@ export default function ProfilePage() {
             </p>
           </div>
         ) : (
-          <Link href="/register" className="btn-secondary block text-center mb-4">
+          <Link href="/register" className="btn-secondary block text-center mb-3">
             Update your profile
           </Link>
         )}
@@ -235,8 +266,61 @@ export default function ProfilePage() {
           </Link>
         )}
 
-        <Link href="/live" className="block text-center text-sm font-medium" style={{ color: '#185fa5' }}>
+        <Link href="/live" className="btn-primary block text-center mb-4">
           Watch the live draft <i className="ti ti-arrow-right text-sm" aria-hidden="true" />
+        </Link>
+
+        <div className="rounded-lg border border-line px-3.5 py-3 mb-4">
+          <button
+            onClick={() => setSecurityOpen((o) => !o)}
+            className="w-full flex items-center justify-between"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
+              Account &amp; security
+            </p>
+            <i className={`ti ti-chevron-${securityOpen ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+          </button>
+
+          {securityOpen && (
+            <div className="mt-3">
+              {passwordMessage && (
+                <div
+                  className="rounded-md px-3 py-2 mb-3 text-xs"
+                  style={{
+                    background: passwordMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
+                    color: passwordMessage.type === 'error' ? '#791f1f' : '#27500a',
+                  }}
+                >
+                  {passwordMessage.text}
+                </div>
+              )}
+              <label className="field-label">New password</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="At least 6 characters"
+                className="mb-3"
+              />
+              <label className="field-label">Confirm new password</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter password"
+                className="mb-3"
+              />
+              <button onClick={updatePassword} disabled={savingPassword} className="btn-primary w-full">
+                {savingPassword ? 'Updating…' : 'Update password'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-line my-3" />
+
+        <Link href="/" className="block text-center text-sm" style={{ color: '#5a6b7d' }}>
+          Not you? <span style={{ color: '#185fa5', fontWeight: 500 }}>Register or log in as someone else</span>
         </Link>
       </div>
     </main>

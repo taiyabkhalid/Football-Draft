@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import HeadshotCapture from '../../lib/HeadshotCapture';
 import MondayPicker from '../../lib/MondayPicker';
@@ -42,6 +43,7 @@ const initialForm = {
 const Req = () => <span style={{ color: '#c0392b' }}> *</span>;
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [mode, setMode] = useState('create'); // 'create' | 'edit'
   const [checkingSession, setCheckingSession] = useState(true);
   const [locked, setLocked] = useState(false);
@@ -55,6 +57,16 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [autoLoggedIn, setAutoLoggedIn] = useState(false);
+
+  // Seamless login: once we're logged in and done, jump straight to the
+  // profile page rather than making them click through - a brief pause so
+  // the confirmation message is still visible for a moment first.
+  useEffect(() => {
+    if (done && autoLoggedIn) {
+      const timer = setTimeout(() => router.push('/profile'), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [done, autoLoggedIn, router]);
 
   // On load: if logged in, switch to edit mode and pre-fill with their data
   useEffect(() => {

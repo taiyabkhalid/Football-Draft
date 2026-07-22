@@ -12,8 +12,14 @@ export default function Home() {
         <Link href="/login" className="btn-primary" style={{ display: 'block', textAlign: 'center', marginBottom: 10 }}>
           Log in
         </Link>
-        <Link href="/live" className="btn-secondary" style={{ display: 'block', textAlign: 'center' }}>
+        <Link href="/live" className="btn-secondary" style={{ display: 'block', textAlign: 'center', marginBottom: 16 }}>
           View live draft / results
+        </Link>
+        <Link
+          href="/login?forgot=1"
+          style={{ display: 'block', textAlign: 'center', fontSize: 12, color: '#185fa5', fontWeight: 500 }}
+        >
+          Forgot your password?
         </Link>
       </div>
     </main>
