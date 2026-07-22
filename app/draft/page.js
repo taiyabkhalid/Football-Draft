@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
-import { getRound, getTeamOnTheClock } from '../../lib/draftLogic';
+import { getRound, getTeamOnTheClock, buildFullPickOrder } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
 import FootballIcon from '../../lib/FootballIcon';
 
@@ -28,6 +28,9 @@ export default function DraftPage() {
   const [searchPreviousTeam, setSearchPreviousTeam] = useState('');
   const [sortBy, setSortBy] = useState('name');
   const [viewByTeamOpen, setViewByTeamOpen] = useState(true);
+  const [rosterViewMode, setRosterViewMode] = useState('team'); // 'team' | 'round'
+  const [selectedRound, setSelectedRound] = useState(1);
+  const roundInitialized = useRef(false);
 
   const [drafting, setDrafting] = useState(null);
   const [skipping, setSkipping] = useState(false);
@@ -94,6 +97,7 @@ export default function DraftPage() {
   const currentPickNumber = picks.length + 1;
   const numTeams = settings?.num_teams || teams.length;
   const currentRound = numTeams ? getRound(currentPickNumber, numTeams) : 1;
+  const nextRound = numTeams ? getRound(currentPickNumber + 1, numTeams) : 1;
   const teamOnClock = numTeams ? getTeamOnTheClock(currentPickNumber, numTeams, teams) : null;
   const teamNextOnClock = numTeams ? getTeamOnTheClock(currentPickNumber + 1, numTeams, teams) : null;
 
@@ -152,6 +156,47 @@ export default function DraftPage() {
   }, [currentPickNumber, numTeams, teams]);
 
   const availablePlayers = useMemo(() => players.filter((p) => !p.team_id), [players]);
+
+  const maxRounds = settings?.max_roster_size ?? 12;
+  const pickByNumber = useMemo(() => Object.fromEntries(picks.map((p) => [p.pick_number, p])), [picks]);
+
+  useEffect(() => {
+    if (!roundInitialized.current && currentRound) {
+      setSelectedRound(Math.min(currentRound, maxRounds));
+      roundInitialized.current = true;
+    }
+  }, [currentRound, maxRounds]);
+
+  const roundSlots = useMemo(() => {
+    if (!numTeams) return [];
+    return buildFullPickOrder(numTeams, maxRounds)
+      .filter((s) => s.round === selectedRound)
+      .map((slot) => {
+        const team = teams.find((t) => t.draft_position === slot.draftPosition);
+        const pick = pickByNumber[slot.pickNumber];
+        return {
+          pickNumber: slot.pickNumber,
+          round: slot.round,
+          team,
+          pick,
+          player: pick?.player_id ? playersById[pick.player_id] : null,
+        };
+      });
+  }, [numTeams, maxRounds, selectedRound, teams, pickByNumber, playersById]);
+
+  function buildTeamSlots(teamId) {
+    const roster = rosterByTeam[teamId]?.players || [];
+    const sorted = [...roster].sort((a, b) => {
+      const an = a.draft_pick_number ?? -1;
+      const bn = b.draft_pick_number ?? -1;
+      return an - bn;
+    });
+    const slots = [];
+    for (let i = 0; i < maxRoster; i++) {
+      slots.push(sorted[i] || null);
+    }
+    return slots;
+  }
 
   const rosterByTeam = useMemo(() => {
     const map = {};
@@ -314,23 +359,37 @@ export default function DraftPage() {
         <div className="flex-1 bg-surface rounded-lg p-3">
           <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Previous pick</p>
           {previousPick ? (
-            <p className="text-xs text-ink">
-              {previousPick.player_id
-                ? `${playersById[previousPick.player_id]?.full_name || 'Unknown'} — ${teamsById[previousPick.team_id]?.name || ''}`
-                : `Skipped — ${teamsById[previousPick.team_id]?.name || ''}`}
-            </p>
+            <div className="flex items-center gap-2">
+              <FootballIcon color={teamsById[previousPick.team_id]?.team_color || '#0074ff'} size={18} />
+              <div className="min-w-0">
+                <p className="text-xs text-ink m-0 truncate">
+                  {previousPick.player_id
+                    ? `${playersById[previousPick.player_id]?.full_name || 'Unknown'} — ${teamsById[previousPick.team_id]?.name || ''}`
+                    : `Skipped — ${teamsById[previousPick.team_id]?.name || ''}`}
+                </p>
+                <p className="text-[10px] text-muted m-0">
+                  Round {previousPick.round} &middot; Pick {previousPick.pick_number}
+                </p>
+              </div>
+            </div>
           ) : (
             <p className="text-xs text-faint">None yet</p>
           )}
         </div>
         <div className="flex-1 rounded-lg p-3 flex items-center justify-between gap-2" style={{ background: '#185fa5' }}>
-          <div>
-            <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: '#cfe2f5' }}>
-              On the clock
-            </p>
-            <p className="text-[13px] font-semibold" style={{ color: '#ffffff' }}>
-              {teamOnClock?.name || '—'}
-            </p>
+          <div className="flex items-center gap-2 min-w-0">
+            <FootballIcon color="#ffffff" size={20} />
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: '#cfe2f5' }}>
+                On the clock
+              </p>
+              <p className="text-[13px] font-semibold truncate" style={{ color: '#ffffff' }}>
+                {teamOnClock?.name || '—'}
+              </p>
+              <p className="text-[10px] m-0" style={{ color: '#cfe2f5' }}>
+                Round {currentRound} &middot; Pick {currentPickNumber}
+              </p>
+            </div>
           </div>
           <p className="text-xl font-medium" style={{ color: '#ffffff' }}>
             {timerDisplay}
@@ -338,7 +397,17 @@ export default function DraftPage() {
         </div>
         <div className="flex-1 bg-surface rounded-lg p-3">
           <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Next up</p>
-          <p className="text-xs text-ink">{teamNextOnClock?.name || '—'}</p>
+          <div className="flex items-center gap-2">
+            <FootballIcon color={teamNextOnClock?.team_color || '#0074ff'} size={18} />
+            <div className="min-w-0">
+              <p className="text-xs text-ink m-0 truncate">{teamNextOnClock?.name || '—'}</p>
+              {teamNextOnClock && (
+                <p className="text-[10px] text-muted m-0">
+                  Round {nextRound} &middot; Pick {currentPickNumber + 1}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -388,65 +457,208 @@ export default function DraftPage() {
         </div>
       )}
 
-      {/* Team roster viewer */}
+      {/* Team / Round roster viewer */}
       <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-surface px-4 py-3">
         <button
           onClick={() => setViewByTeamOpen((o) => !o)}
           className="w-full flex items-center justify-between"
         >
           <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
-            View by team
+            View rosters
           </p>
           <i className={`ti ti-chevron-${viewByTeamOpen ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
         </button>
         {viewByTeamOpen && (
           <>
-            <p className="text-[10px] text-muted mt-2 mb-2">Tap a team to view their picks</p>
-            <div className="flex gap-2 flex-wrap mb-2">
-              {teams.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setViewingTeamId(viewingTeamId === t.id ? null : t.id)}
-                  className="text-xs px-2.5 py-1.5 rounded-md font-medium flex items-center gap-1.5"
-                  style={{
-                    background: viewingTeamId === t.id ? '#185fa5' : '#ffffff',
-                    color: viewingTeamId === t.id ? '#ffffff' : '#3d4a57',
-                  }}
-                >
-                  <FootballIcon color={viewingTeamId === t.id ? '#ffffff' : t.team_color || '#0074ff'} size={14} />
-                  {t.name}
-                </button>
-              ))}
+            <div className="flex gap-1.5 mt-2 mb-2">
+              <button
+                onClick={() => setRosterViewMode('team')}
+                className="text-xs px-2.5 py-1 rounded-md font-medium"
+                style={{
+                  background: rosterViewMode === 'team' ? '#185fa5' : '#ffffff',
+                  color: rosterViewMode === 'team' ? '#ffffff' : '#3d4a57',
+                  border: '1px solid #d8dde2',
+                }}
+              >
+                View by team
+              </button>
+              <button
+                onClick={() => setRosterViewMode('round')}
+                className="text-xs px-2.5 py-1 rounded-md font-medium"
+                style={{
+                  background: rosterViewMode === 'round' ? '#185fa5' : '#ffffff',
+                  color: rosterViewMode === 'round' ? '#ffffff' : '#3d4a57',
+                  border: '1px solid #d8dde2',
+                }}
+              >
+                View by round
+              </button>
             </div>
-            {viewingTeamId && rosterByTeam[viewingTeamId] && (
-              <div className="bg-white rounded-lg p-3 mb-1">
-                <div className="flex justify-between items-center mb-2">
-                  <p className="text-sm font-medium text-ink m-0">{teamsById[viewingTeamId]?.name}</p>
-                  {ownerByTeam[viewingTeamId] && (
-                    <p className="text-xs m-0 flex items-center gap-1" style={{ color: '#185fa5' }}>
-                      <i
-                        className={ownerByTeam[viewingTeamId].role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'}
-                        aria-hidden="true"
-                      />
-                      {ownerByTeam[viewingTeamId].name}
-                    </p>
-                  )}
+
+            {rosterViewMode === 'team' && (
+              <>
+                <p className="text-[10px] text-muted mb-2">Tap a team to view their roster</p>
+                <div className="flex gap-2 flex-wrap mb-2">
+                  {teams.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => setViewingTeamId(viewingTeamId === t.id ? null : t.id)}
+                      className="text-xs px-2.5 py-1.5 rounded-md font-medium flex items-center gap-1.5"
+                      style={{
+                        background: viewingTeamId === t.id ? '#185fa5' : '#ffffff',
+                        color: viewingTeamId === t.id ? '#ffffff' : '#3d4a57',
+                      }}
+                    >
+                      <FootballIcon color={viewingTeamId === t.id ? '#ffffff' : t.team_color || '#0074ff'} size={14} />
+                      {t.name}
+                    </button>
+                  ))}
                 </div>
-                {rosterByTeam[viewingTeamId].players.length === 0 ? (
-                  <p className="text-xs text-muted m-0">No picks yet.</p>
-                ) : (
-                  <div className="flex flex-col gap-1.5">
-                    {rosterByTeam[viewingTeamId].players.map((p) => (
-                      <div key={p.id} className="flex justify-between text-xs bg-surface rounded-md px-2.5 py-2">
-                        <span className="text-ink">{p.full_name}</span>
-                        <span className="text-muted">
-                          {p.offensive_position} &middot; {p.gender}
-                        </span>
+                {viewingTeamId && rosterByTeam[viewingTeamId] && (
+                  <div className="bg-white rounded-lg p-3 mb-1">
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="text-sm font-medium text-ink m-0">{teamsById[viewingTeamId]?.name}</p>
+                      {ownerByTeam[viewingTeamId] && (
+                        <p className="text-xs m-0 flex items-center gap-1" style={{ color: '#185fa5' }}>
+                          <i
+                            className={ownerByTeam[viewingTeamId].role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'}
+                            aria-hidden="true"
+                          />
+                          {ownerByTeam[viewingTeamId].name}
+                        </p>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-6 gap-1.5">
+                      {buildTeamSlots(viewingTeamId).map((p, i) => (
+                        <div
+                          key={p?.id || `empty-${i}`}
+                          className="rounded-lg bg-surface flex flex-col items-center text-center px-1 py-2"
+                          style={{ minHeight: 88 }}
+                        >
+                          {p ? (
+                            <>
+                              {p.headshot_url ? (
+                                <img src={p.headshot_url} alt={p.full_name} className="w-8 h-8 rounded-full object-cover" />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                  <i className="ti ti-user text-faint text-base" aria-hidden="true" />
+                                </div>
+                              )}
+                              <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
+                                {p.full_name}
+                              </p>
+                              {!p.draft_pick_number ? (
+                                <span className="text-[9px] font-medium mt-0.5" style={{ color: '#185fa5' }}>
+                                  GM
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-muted mt-0.5">
+                                  R{getRound(p.draft_pick_number, numTeams)} &middot; #{p.draft_pick_number}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-50">
+                                <i className="ti ti-user text-faint text-base" aria-hidden="true" />
+                              </div>
+                              <p className="text-[9px] text-faint m-0 mt-1" style={{ fontStyle: 'italic' }}>
+                                Empty
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {rosterViewMode === 'round' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <button
+                    onClick={() => setSelectedRound((r) => Math.max(1, r - 1))}
+                    disabled={selectedRound <= 1}
+                    className="btn-secondary text-xs px-2 py-1"
+                  >
+                    <i className="ti ti-chevron-left text-sm" aria-hidden="true" />
+                  </button>
+                  <p className="text-xs font-medium text-ink m-0">
+                    Round {selectedRound} of {maxRounds}
+                  </p>
+                  <button
+                    onClick={() => setSelectedRound((r) => Math.min(maxRounds, r + 1))}
+                    disabled={selectedRound >= maxRounds}
+                    className="btn-secondary text-xs px-2 py-1"
+                  >
+                    <i className="ti ti-chevron-right text-sm" aria-hidden="true" />
+                  </button>
+                </div>
+                <div className="bg-white rounded-lg p-3">
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {roundSlots.map((slot) => (
+                      <div
+                        key={slot.pickNumber}
+                        className="rounded-lg bg-surface flex flex-col items-center text-center px-1 py-2"
+                        style={{
+                          minHeight: 100,
+                          border: slot.pickNumber === currentPickNumber ? '1.5px solid #185fa5' : '1px solid transparent',
+                        }}
+                      >
+                        {slot.player ? (
+                          <>
+                            {slot.player.headshot_url ? (
+                              <img
+                                src={slot.player.headshot_url}
+                                alt={slot.player.full_name}
+                                className="w-8 h-8 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                <i className="ti ti-user text-faint text-base" aria-hidden="true" />
+                              </div>
+                            )}
+                            <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
+                              {slot.player.full_name}
+                            </p>
+                          </>
+                        ) : slot.pick && !slot.pick.player_id ? (
+                          <>
+                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                              <i className="ti ti-x text-faint text-base" aria-hidden="true" />
+                            </div>
+                            <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
+                          </>
+                        ) : slot.pickNumber === currentPickNumber ? (
+                          <>
+                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                              <i className="ti ti-clock text-base" style={{ color: '#185fa5' }} aria-hidden="true" />
+                            </div>
+                            <p className="text-[10px] font-medium m-0 mt-1" style={{ color: '#185fa5' }}>
+                              On the clock
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-50">
+                              <i className="ti ti-user text-faint text-base" aria-hidden="true" />
+                            </div>
+                            <p className="text-[9px] text-faint m-0 mt-1" style={{ fontStyle: 'italic' }}>
+                              Not yet selected
+                            </p>
+                          </>
+                        )}
+                        <div className="mt-auto pt-1 flex items-center gap-1">
+                          <FootballIcon color={slot.team?.team_color || '#0074ff'} size={10} />
+                          <span className="text-[9px] text-muted truncate">{slot.team?.name}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
+              </>
             )}
           </>
         )}
