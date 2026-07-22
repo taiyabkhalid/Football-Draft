@@ -93,12 +93,16 @@ export default function LiveDraftPage() {
   const teamsById = useMemo(() => Object.fromEntries(teams.map((t) => [t.id, t])), [teams]);
   const previousPick = picks.length > 0 ? picks[picks.length - 1] : null;
 
-  const next10 = useMemo(() => {
+  const upcomingPicks = useMemo(() => {
     if (!numTeams) return [];
     const list = [];
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= 8; i++) {
       const pickNum = currentPickNumber + i;
-      list.push({ pickNumber: pickNum, team: getTeamOnTheClock(pickNum, numTeams, teams) });
+      list.push({
+        pickNumber: pickNum,
+        round: getRound(pickNum, numTeams),
+        team: getTeamOnTheClock(pickNum, numTeams, teams),
+      });
     }
     return list;
   }, [currentPickNumber, numTeams, teams]);
@@ -222,11 +226,16 @@ export default function LiveDraftPage() {
           </div>
 
           <div className="px-4 sm:px-5 pt-3">
-            <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Next 10 picks</p>
+            <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Upcoming picks</p>
             <div className="flex gap-2 overflow-x-auto pb-2">
-              {next10.map((n) => (
-                <span key={n.pickNumber} className="flex-none text-xs px-2.5 py-1.5 rounded-md bg-surface text-muted whitespace-nowrap">
+              {upcomingPicks.map((n) => (
+                <span
+                  key={n.pickNumber}
+                  className="flex-none text-xs px-2.5 py-1.5 rounded-md bg-surface text-muted whitespace-nowrap flex items-center gap-1.5"
+                >
+                  <FootballIcon color={n.team?.team_color || '#0074ff'} size={12} />
                   {n.team?.name || '—'}
+                  <span className="text-faint">&middot; R{n.round} &middot; #{n.pickNumber}</span>
                 </span>
               ))}
             </div>

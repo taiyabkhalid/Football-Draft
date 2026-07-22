@@ -8,16 +8,16 @@ import MondayPicker from '../../lib/MondayPicker';
 import BrandHeader from '../../lib/BrandHeader';
 
 const PREVIOUS_TEAMS = [
-  'Warriors',
+  'Water Warriors',
   'Storm',
   'T-Reds',
   'Pink Panthers',
-  'Huskies',
+  'City Huskies',
   'Just Ballers',
-  'Purple Dragons',
+  'Purple Cobras',
+  'Pulling My Leg',
   'Other',
   'Never Played',
-  'None',
 ];
 
 const initialForm = {
@@ -34,7 +34,7 @@ const initialForm = {
   previous_team: '',
   injury_status: '',
   weeks_until_recovered: '',
-  game_time_unavailable: '',
+  game_time_unavailable: 'Available for all',
   call_on_draft_night: false,
   enjoys_pub: false,
 };
@@ -103,10 +103,10 @@ export default function RegisterPage() {
         height_feet: String(playerRow.height_feet ?? ''),
         height_inches: String(playerRow.height_inches ?? ''),
         gender: playerRow.gender || '',
-        previous_team: playerRow.previous_team || 'None',
+        previous_team: playerRow.previous_team || '',
         injury_status: playerRow.injury_status || '',
         weeks_until_recovered: playerRow.weeks_until_recovered ? String(playerRow.weeks_until_recovered) : '',
-        game_time_unavailable: playerRow.game_time_unavailable || '',
+        game_time_unavailable: playerRow.game_time_unavailable || 'Available for all',
         call_on_draft_night: playerRow.call_on_draft_night || false,
         enjoys_pub: playerRow.enjoys_pub || false,
       });
@@ -203,7 +203,7 @@ export default function RegisterPage() {
         height_feet: Number(form.height_feet),
         height_inches: Number(form.height_inches),
         gender: form.gender,
-        previous_team: ['None', 'Never Played'].includes(form.previous_team) ? null : form.previous_team,
+        previous_team: form.previous_team === 'Never Played' ? null : form.previous_team,
         injury_status: form.injury_status,
         weeks_until_recovered: form.injury_status === 'Injured' ? Number(form.weeks_until_recovered) : null,
         game_time_unavailable: form.game_time_unavailable,
@@ -542,10 +542,10 @@ export default function RegisterPage() {
               </label>
               <select value={form.game_time_unavailable} onChange={set('game_time_unavailable')}>
                 <option value="">Select&hellip;</option>
+                <option>Available for all</option>
                 <option>7 PM game</option>
                 <option>8 PM game</option>
                 <option>9 PM game</option>
-                <option>Available for all</option>
               </select>
             </div>
             <label className="flex items-center gap-2 text-sm mb-3 cursor-pointer">

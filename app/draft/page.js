@@ -20,13 +20,14 @@ export default function DraftPage() {
   const [players, setPlayers] = useState([]);
   const [picks, setPicks] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [profiles, setProfiles] = useState([]);
 
   const [searchName, setSearchName] = useState('');
   const [searchPosition, setSearchPosition] = useState('');
   const [searchGender, setSearchGender] = useState('');
   const [searchPreviousTeam, setSearchPreviousTeam] = useState('');
   const [sortBy, setSortBy] = useState('name');
-  const [viewByTeamOpen, setViewByTeamOpen] = useState(false);
+  const [viewByTeamOpen, setViewByTeamOpen] = useState(true);
 
   const [drafting, setDrafting] = useState(null);
   const [skipping, setSkipping] = useState(false);
@@ -61,16 +62,18 @@ export default function DraftPage() {
 
   // ---- Data fetching ----
   const fetchAll = useCallback(async () => {
-    const [teamsRes, playersRes, picksRes, settingsRes] = await Promise.all([
+    const [teamsRes, playersRes, picksRes, settingsRes, profilesRes] = await Promise.all([
       supabase.from('teams').select('*').order('draft_position', { ascending: true }),
       supabase.from('players').select('*').eq('is_active', true),
       supabase.from('draft_picks').select('*').order('pick_number', { ascending: true }),
       supabase.from('draft_settings').select('*').eq('id', 1).single(),
+      supabase.from('profiles').select('role, team_id, email'),
     ]);
     setTeams(teamsRes.data || []);
     setPlayers(playersRes.data || []);
     setPicks(picksRes.data || []);
     setSettings(settingsRes.data || null);
+    setProfiles(profilesRes.data || []);
   }, []);
 
   useEffect(() => {
@@ -82,6 +85,7 @@ export default function DraftPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'draft_picks' }, fetchAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'draft_settings' }, fetchAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, fetchAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, fetchAll)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [authChecked, fetchAll]);
@@ -118,14 +122,31 @@ export default function DraftPage() {
 
   const playersById = useMemo(() => Object.fromEntries(players.map((p) => [p.id, p])), [players]);
   const teamsById = useMemo(() => Object.fromEntries(teams.map((t) => [t.id, t])), [teams]);
+  const playersByEmail = useMemo(() => Object.fromEntries(players.map((p) => [p.email, p])), [players]);
+  const ownerByTeam = useMemo(() => {
+    const map = {};
+    for (const profile of profiles) {
+      if (!profile.team_id) continue;
+      const ownerPlayer = playersByEmail[profile.email];
+      map[profile.team_id] = {
+        name: ownerPlayer?.full_name || profile.email,
+        role: profile.role,
+      };
+    }
+    return map;
+  }, [profiles, playersByEmail]);
   const previousPick = picks.length > 0 ? picks[picks.length - 1] : null;
 
-  const next10 = useMemo(() => {
+  const upcomingPicks = useMemo(() => {
     if (!numTeams) return [];
     const list = [];
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= 8; i++) {
       const pickNum = currentPickNumber + i;
-      list.push({ pickNumber: pickNum, team: getTeamOnTheClock(pickNum, numTeams, teams) });
+      list.push({
+        pickNumber: pickNum,
+        round: getRound(pickNum, numTeams),
+        team: getTeamOnTheClock(pickNum, numTeams, teams),
+      });
     }
     return list;
   }, [currentPickNumber, numTeams, teams]);
@@ -321,13 +342,18 @@ export default function DraftPage() {
         </div>
       </div>
 
-      {/* Next 10 picks strip */}
+      {/* Upcoming picks strip */}
       <div className="px-4 sm:px-5 pt-3">
-        <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Next 10 picks</p>
+        <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Upcoming picks</p>
         <div className="flex gap-2 overflow-x-auto pb-2">
-          {next10.map((n) => (
-            <span key={n.pickNumber} className="flex-none text-xs px-2.5 py-1.5 rounded-md bg-surface text-muted whitespace-nowrap">
+          {upcomingPicks.map((n) => (
+            <span
+              key={n.pickNumber}
+              className="flex-none text-xs px-2.5 py-1.5 rounded-md bg-surface text-muted whitespace-nowrap flex items-center gap-1.5"
+            >
+              <FootballIcon color={n.team?.team_color || '#0074ff'} size={12} />
               {n.team?.name || '—'}
+              <span className="text-faint">&middot; R{n.round} &middot; #{n.pickNumber}</span>
             </span>
           ))}
         </div>
@@ -394,7 +420,18 @@ export default function DraftPage() {
             </div>
             {viewingTeamId && rosterByTeam[viewingTeamId] && (
               <div className="bg-white rounded-lg p-3 mb-1">
-                <p className="text-sm font-medium text-ink mb-2">{teamsById[viewingTeamId]?.name}</p>
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-sm font-medium text-ink m-0">{teamsById[viewingTeamId]?.name}</p>
+                  {ownerByTeam[viewingTeamId] && (
+                    <p className="text-xs m-0 flex items-center gap-1" style={{ color: '#185fa5' }}>
+                      <i
+                        className={ownerByTeam[viewingTeamId].role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'}
+                        aria-hidden="true"
+                      />
+                      {ownerByTeam[viewingTeamId].name}
+                    </p>
+                  )}
+                </div>
                 {rosterByTeam[viewingTeamId].players.length === 0 ? (
                   <p className="text-xs text-muted m-0">No picks yet.</p>
                 ) : (
@@ -422,7 +459,7 @@ export default function DraftPage() {
         </p>
 
         <div className="flex gap-2 flex-wrap items-center">
-          <div className="flex-[2] min-w-[150px] relative">
+          <div className="relative flex-none" style={{ width: 150 }}>
             <i className="ti ti-search absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-faint" aria-hidden="true" />
             <input
               type="text"
@@ -436,8 +473,8 @@ export default function DraftPage() {
           <select
             value={searchPosition}
             onChange={(e) => setSearchPosition(e.target.value)}
-            className="flex-1 min-w-[110px] text-xs"
-            style={{ width: 'auto', borderColor: searchPosition ? '#185fa5' : undefined }}
+            className="flex-none text-xs"
+            style={{ width: 120, borderColor: searchPosition ? '#185fa5' : undefined }}
           >
             <option value="">Position: any</option>
             <optgroup label="Offense">
@@ -458,8 +495,8 @@ export default function DraftPage() {
           <select
             value={searchGender}
             onChange={(e) => setSearchGender(e.target.value)}
-            className="flex-1 min-w-[80px] text-xs"
-            style={{ width: 'auto', borderColor: searchGender ? '#185fa5' : undefined }}
+            className="flex-none text-xs"
+            style={{ width: 84, borderColor: searchGender ? '#185fa5' : undefined }}
           >
             <option value="">M/F: any</option>
             <option value="M">M</option>
@@ -468,8 +505,8 @@ export default function DraftPage() {
           <select
             value={searchPreviousTeam}
             onChange={(e) => setSearchPreviousTeam(e.target.value)}
-            className="flex-1 min-w-[130px] text-xs"
-            style={{ width: 'auto', borderColor: searchPreviousTeam ? '#185fa5' : undefined }}
+            className="flex-none text-xs"
+            style={{ width: 140, borderColor: searchPreviousTeam ? '#185fa5' : undefined }}
           >
             <option value="">Previous team: any</option>
             {previousTeamOptions.map((t) => (
@@ -478,7 +515,12 @@ export default function DraftPage() {
               </option>
             ))}
           </select>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="flex-1 min-w-[100px] text-xs" style={{ width: 'auto' }}>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="flex-none text-xs"
+            style={{ width: 92 }}
+          >
             <option value="name">Sort: name</option>
             <option value="gender">Sort: M/F</option>
             <option value="position">Sort: position</option>
