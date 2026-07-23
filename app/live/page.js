@@ -467,7 +467,7 @@ export default function LiveDraftPage() {
                     teamOnClock?.id === viewingTeamId && (draftStatus === 'in_progress' || draftStatus === 'paused');
                   return (
                     <div className="bg-white rounded-lg p-3.5 mb-1">
-                      <div className="flex justify-between items-center mb-2">
+                      <div className="flex justify-between items-center mb-1">
                         <p className="text-sm font-medium text-ink m-0">{viewedTeam?.name}</p>
                         {ownerByTeam[viewingTeamId] && (
                           <p className="text-xs m-0 flex items-center gap-1" style={{ color: '#185fa5' }}>
@@ -479,6 +479,11 @@ export default function LiveDraftPage() {
                           </p>
                         )}
                       </div>
+                      {viewedTeam?.proxy_email && (
+                        <p className="text-[11px] m-0 mb-2" style={{ color: '#854f0b' }}>
+                          Proxy: {playersByEmail[viewedTeam.proxy_email]?.full_name || viewedTeam.proxy_email}
+                        </p>
+                      )}
                       {draftStatus === 'completed' &&
                         rosterByTeam[viewingTeamId] &&
                         (rosterByTeam[viewingTeamId].count < minRoster ||

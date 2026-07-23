@@ -15,6 +15,7 @@ export default function DraftPage() {
 
   const [authChecked, setAuthChecked] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [myEmail, setMyEmail] = useState('');
 
   const [teams, setTeams] = useState([]);
   const [players, setPlayers] = useState([]);
@@ -55,12 +56,22 @@ export default function DraftPage() {
         .from('profiles')
         .select('role, team_id')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
       if (!profileRow) {
-        router.push('/login');
-        return;
+        // Not a GM/commissioner - check if they're a designated draft-day
+        // proxy for any team before turning them away.
+        const { data: allTeams } = await supabase.from('teams').select('id, proxy_email');
+        const isProxy = (allTeams || []).some(
+          (t) => t.proxy_email?.toLowerCase() === user.email?.toLowerCase()
+        );
+        if (!isProxy) {
+          router.push('/login');
+          return;
+        }
+      } else {
+        setProfile(profileRow);
       }
-      setProfile(profileRow);
+      setMyEmail(user.email?.toLowerCase() || '');
       setAuthChecked(true);
     }
     checkAuth();
@@ -286,7 +297,15 @@ export default function DraftPage() {
     return map;
   }, [teams, players]);
 
-  const canDraft = profile && teamOnClock && draftStatus === 'in_progress' && profile.team_id === teamOnClock.id;
+  const myProxyTeamId = useMemo(
+    () => teams.find((t) => t.proxy_email?.toLowerCase() === myEmail)?.id || null,
+    [teams, myEmail]
+  );
+  const isProxyForClockTeam = Boolean(teamOnClock && myProxyTeamId === teamOnClock.id);
+  const canDraft =
+    teamOnClock &&
+    draftStatus === 'in_progress' &&
+    (profile?.team_id === teamOnClock.id || isProxyForClockTeam);
 
   const picksRemainingForClockTeam = useMemo(() => {
     if (!teamOnClock) return 0;
@@ -373,31 +392,11 @@ export default function DraftPage() {
       );
       return;
     }
-    const roster = rosterByTeam[teamOnClock.id];
-    const teamAllocation = picksPerTeam[teamOnClock.id] ?? maxRounds;
-    if (roster.count >= teamAllocation) {
-      setActionError(`${teamOnClock.name} has already used all of its picks in this draft.`);
-      return;
-    }
     setDrafting(player.id);
-    const { data: updated, error: updateError } = await supabase
-      .from('players')
-      .update({ team_id: teamOnClock.id, draft_pick_number: currentPickNumber })
-      .eq('id', player.id)
-      .is('team_id', null)
-      .select();
-    if (updateError || !updated || updated.length === 0) {
-      setActionError('That player was just drafted by someone else. Pick another player.');
-      setDrafting(null);
-      return;
+    const { error } = await supabase.rpc('make_pick', { target_player_id: player.id });
+    if (error) {
+      setActionError(error.message);
     }
-    await supabase.from('draft_picks').insert({
-      pick_number: currentPickNumber,
-      round: currentRound,
-      team_id: teamOnClock.id,
-      player_id: player.id,
-    });
-    await supabase.rpc('advance_pick_clock');
     setDrafting(null);
   }
 
@@ -421,13 +420,10 @@ export default function DraftPage() {
     if (profile?.role !== 'commissioner' || !teamOnClock || draftStatus !== 'in_progress') return;
     setSkipping(true);
     setActionError(null);
-    await supabase.from('draft_picks').insert({
-      pick_number: currentPickNumber,
-      round: currentRound,
-      team_id: teamOnClock.id,
-      player_id: null,
-    });
-    await supabase.rpc('advance_pick_clock');
+    const { error } = await supabase.rpc('skip_current_pick');
+    if (error) {
+      setActionError(error.message);
+    }
     setSkipping(false);
   }
 
@@ -583,7 +579,9 @@ export default function DraftPage() {
             >
               <i className="ti ti-alert-triangle text-base flex-shrink-0" style={{ color: '#ffffff' }} aria-hidden="true" />
               <p className="text-xs font-medium m-0" style={{ color: '#ffffff' }}>
-                You're on the clock! Make your selection before the timer runs out.
+                {isProxyForClockTeam
+                  ? `You're picking for ${teamOnClock?.name} as their draft-day proxy! Make your selection before the timer runs out.`
+                  : "You're on the clock! Make your selection before the timer runs out."}
               </p>
             </div>
           )}
@@ -717,7 +715,7 @@ export default function DraftPage() {
                     teamOnClock?.id === viewingTeamId && (draftStatus === 'in_progress' || draftStatus === 'paused');
                   return (
                     <div className="bg-white rounded-lg p-3 mb-1">
-                      <div className="flex justify-between items-center mb-2">
+                      <div className="flex justify-between items-center mb-1">
                         <p className="text-sm font-medium text-ink m-0">{viewedTeam?.name}</p>
                         {ownerByTeam[viewingTeamId] && (
                           <p className="text-xs m-0 flex items-center gap-1" style={{ color: '#185fa5' }}>
@@ -729,6 +727,11 @@ export default function DraftPage() {
                           </p>
                         )}
                       </div>
+                      {viewedTeam?.proxy_email && (
+                        <p className="text-[11px] m-0 mb-2" style={{ color: '#854f0b' }}>
+                          Proxy: {playersByEmail[viewedTeam.proxy_email]?.full_name || viewedTeam.proxy_email}
+                        </p>
+                      )}
                       <div className="grid grid-cols-6 gap-1.5">
                         {slots.map((entry, i) => {
                           const player = entry?.player;
