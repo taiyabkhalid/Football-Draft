@@ -321,16 +321,32 @@ export default function CommissionerToolsPage() {
   async function handlePauseResume() {
     setPausing(true);
     setStartMessage(null);
-    const nextStatus = draftStatus === 'paused' ? 'in_progress' : 'paused';
-    const updates = { draft_status: nextStatus };
-    if (nextStatus === 'in_progress') updates.current_pick_started_at = new Date().toISOString();
+    const pickClockSeconds = settings?.pick_clock_seconds ?? 120;
+    let updates;
+    if (draftStatus === 'paused') {
+      // Resume: back-date current_pick_started_at so the clock continues
+      // from exactly where it was when paused, instead of restarting.
+      const remaining = settings?.paused_seconds_remaining ?? pickClockSeconds;
+      const elapsedMs = (pickClockSeconds - remaining) * 1000;
+      updates = {
+        draft_status: 'in_progress',
+        current_pick_started_at: new Date(Date.now() - elapsedMs).toISOString(),
+        paused_seconds_remaining: null,
+      };
+    } else {
+      const startedAt = settings?.current_pick_started_at ? new Date(settings.current_pick_started_at).getTime() : null;
+      const remaining = startedAt
+        ? Math.max(pickClockSeconds - Math.floor((Date.now() - startedAt) / 1000), 0)
+        : pickClockSeconds;
+      updates = { draft_status: 'paused', paused_seconds_remaining: remaining };
+    }
     const { error } = await supabase.from('draft_settings').update(updates).eq('id', 1);
     if (error) {
       setStartMessage({ type: 'error', text: error.message });
     } else {
       setStartMessage({
         type: 'success',
-        text: nextStatus === 'paused' ? 'Draft paused.' : 'Draft resumed.',
+        text: draftStatus === 'paused' ? 'Draft resumed.' : 'Draft paused.',
       });
       fetchData();
     }

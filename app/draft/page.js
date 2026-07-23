@@ -34,6 +34,7 @@ export default function DraftPage() {
 
   const [drafting, setDrafting] = useState(null);
   const [skipping, setSkipping] = useState(false);
+  const [togglingPause, setTogglingPause] = useState(false);
   const [actionError, setActionError] = useState(null);
   const [viewingTeamId, setViewingTeamId] = useState(null);
   const [openProfileIds, setOpenProfileIds] = useState([]);
@@ -120,9 +121,15 @@ export default function DraftPage() {
   }, []);
 
   const pickStartedAt = settings?.current_pick_started_at ? new Date(settings.current_pick_started_at).getTime() : null;
-  const secondsLeft = pickStartedAt
+  const liveSecondsLeft = pickStartedAt
     ? Math.max(pickClockSeconds - Math.floor((now - pickStartedAt) / 1000), 0)
     : pickClockSeconds;
+  // While paused, the clock is frozen at whatever was left the moment it was paused,
+  // rather than continuing to tick down against the wall clock.
+  const secondsLeft =
+    draftStatus === 'paused' && settings?.paused_seconds_remaining != null
+      ? settings.paused_seconds_remaining
+      : liveSecondsLeft;
 
   const timerDisplay = useMemo(() => {
     const m = Math.floor(secondsLeft / 60);
@@ -130,7 +137,7 @@ export default function DraftPage() {
     return `${m}:${String(s).padStart(2, '0')}`;
   }, [secondsLeft]);
 
-  const clockUrgent = secondsLeft <= 20;
+  const clockUrgent = draftStatus === 'in_progress' && secondsLeft <= 20;
 
   function openProfile(playerId) {
     setOpenProfileIds((ids) => (ids.includes(playerId) ? ids : [...ids, playerId]));
@@ -411,7 +418,7 @@ export default function DraftPage() {
   }
 
   async function skipPick() {
-    if (profile?.role !== 'commissioner' || !teamOnClock) return;
+    if (profile?.role !== 'commissioner' || !teamOnClock || draftStatus !== 'in_progress') return;
     setSkipping(true);
     setActionError(null);
     await supabase.from('draft_picks').insert({
@@ -422,6 +429,31 @@ export default function DraftPage() {
     });
     await supabase.rpc('advance_pick_clock');
     setSkipping(false);
+  }
+
+  async function handleTogglePause() {
+    if (profile?.role !== 'commissioner') return;
+    setTogglingPause(true);
+    if (draftStatus === 'paused') {
+      // Resume: back-date current_pick_started_at so the clock continues
+      // from exactly where it was when paused, instead of restarting.
+      const remaining = settings?.paused_seconds_remaining ?? pickClockSeconds;
+      const elapsedMs = (pickClockSeconds - remaining) * 1000;
+      await supabase
+        .from('draft_settings')
+        .update({
+          draft_status: 'in_progress',
+          current_pick_started_at: new Date(Date.now() - elapsedMs).toISOString(),
+          paused_seconds_remaining: null,
+        })
+        .eq('id', 1);
+    } else {
+      await supabase
+        .from('draft_settings')
+        .update({ draft_status: 'paused', paused_seconds_remaining: secondsLeft })
+        .eq('id', 1);
+    }
+    setTogglingPause(false);
   }
 
   if (!authChecked || !settings) {
@@ -450,10 +482,10 @@ export default function DraftPage() {
       <BrandHeader
         pageLabel={draftStatus === 'completed' ? 'Draft results' : draftStatus === 'paused' ? 'Draft paused' : 'Live draft'}
         liveIndicator={draftStatus === 'in_progress'}
-        pickTimer={draftStatus === 'in_progress' ? timerDisplay : undefined}
+        pickTimer={draftStatus === 'in_progress' || draftStatus === 'paused' ? timerDisplay : undefined}
       />
 
-      {draftStatus === 'in_progress' ? (
+      {draftStatus === 'in_progress' || draftStatus === 'paused' ? (
         <>
           {/* Previous / current / next strip — frozen at top so GMs can always see the clock */}
           <div
@@ -482,11 +514,11 @@ export default function DraftPage() {
             </div>
             <div
               className={`flex-1 rounded-lg p-3 flex items-center justify-between gap-2 ${clockUrgent ? 'animate-pulse' : ''}`}
-              style={{ background: clockUrgent ? '#c0392b' : '#185fa5' }}
+              style={{ background: draftStatus === 'paused' ? '#854f0b' : clockUrgent ? '#c0392b' : '#185fa5' }}
             >
               <div className="min-w-0">
                 <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
-                  On the clock
+                  {draftStatus === 'paused' ? 'On the clock \u00b7 paused' : 'On the clock'}
                 </p>
                 <div className="flex items-center gap-2">
                   <FootballIcon color="#ffffff" size={16} />
@@ -498,9 +530,26 @@ export default function DraftPage() {
                   Round {currentRound} &middot; Pick {currentPickNumber}
                 </p>
               </div>
-              <p className="text-xl font-medium" style={{ color: '#ffffff' }}>
-                {timerDisplay}
-              </p>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {profile?.role === 'commissioner' && (
+                  <button
+                    onClick={handleTogglePause}
+                    disabled={togglingPause}
+                    aria-label={draftStatus === 'paused' ? 'Resume draft' : 'Pause draft'}
+                    className="rounded-md flex items-center justify-center"
+                    style={{ width: 28, height: 28, background: 'rgba(255,255,255,0.2)', border: 'none' }}
+                  >
+                    <i
+                      className={`ti ${draftStatus === 'paused' ? 'ti-player-play' : 'ti-player-pause'} text-base`}
+                      style={{ color: '#ffffff' }}
+                      aria-hidden="true"
+                    />
+                  </button>
+                )}
+                <p className="text-xl font-medium" style={{ color: '#ffffff' }}>
+                  {timerDisplay}
+                </p>
+              </div>
             </div>
             <div className="flex-1 bg-surface rounded-lg p-3">
               <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Next up</p>
@@ -554,8 +603,8 @@ export default function DraftPage() {
           {/* Skip pick (commissioner only) */}
           {profile?.role === 'commissioner' && (
             <div className="flex items-center justify-end px-4 sm:px-5 py-2.5">
-              <button onClick={skipPick} disabled={skipping} className="btn-secondary text-xs">
-                {skipping ? 'Skipping…' : 'Skip pick'}
+              <button onClick={skipPick} disabled={skipping || draftStatus === 'paused'} className="btn-secondary text-xs">
+                {skipping ? 'Skipping…' : draftStatus === 'paused' ? 'Skip pick (paused)' : 'Skip pick'}
               </button>
             </div>
           )}
@@ -575,13 +624,6 @@ export default function DraftPage() {
             </div>
           )}
         </>
-      ) : draftStatus === 'paused' ? (
-        <div className="bg-[#faeeda] mx-4 sm:mx-5 mt-4 rounded-lg p-3.5 flex gap-2">
-          <i className="ti ti-player-pause text-base flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
-          <p className="text-sm m-0" style={{ color: '#633806' }}>
-            The commissioner has paused the draft. It'll pick back up from where it left off.
-          </p>
-        </div>
       ) : (
         <div className="bg-royal-pale mx-4 sm:mx-5 mt-4 rounded-lg p-3.5">
           <p className="text-sm m-0" style={{ color: '#0c447c' }}>
