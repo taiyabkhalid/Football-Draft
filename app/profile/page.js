@@ -194,22 +194,44 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {!locked && (
-            <Link
-              href="/register"
-              className="text-xs font-medium flex-shrink-0"
-              style={{
-                color: '#185fa5',
-                background: '#e6f1fb',
-                borderRadius: 6,
-                padding: '6px 10px',
-                whiteSpace: 'nowrap',
-                textDecoration: 'none',
-              }}
-            >
-              Update profile
-            </Link>
-          )}
+          <div className="flex flex-col gap-1.5 flex-shrink-0 items-stretch">
+            {!locked && (
+              <Link
+                href="/register"
+                className="text-xs font-medium"
+                style={{
+                  color: '#185fa5',
+                  background: '#e6f1fb',
+                  borderRadius: 6,
+                  padding: '6px 10px',
+                  whiteSpace: 'nowrap',
+                  textDecoration: 'none',
+                  width: 108,
+                  textAlign: 'center',
+                }}
+              >
+                Update profile
+              </Link>
+            )}
+            {role === 'commissioner' && (
+              <Link
+                href="/commissioner"
+                className="text-xs font-medium"
+                style={{
+                  color: '#ffffff',
+                  background: '#185fa5',
+                  borderRadius: 6,
+                  padding: '6px 10px',
+                  whiteSpace: 'nowrap',
+                  textDecoration: 'none',
+                  width: 108,
+                  textAlign: 'center',
+                }}
+              >
+                Commish tools
+              </Link>
+            )}
+          </div>
         </div>
 
         <div className="bg-surface rounded-lg p-3.5 mb-1.5">

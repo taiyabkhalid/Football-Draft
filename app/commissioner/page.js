@@ -16,6 +16,7 @@ export default function CommissionerToolsPage() {
     setOpenSections((s) => ({ ...s, [key]: !s[key] }));
   }
   const [myEmail, setMyEmail] = useState('');
+  const [myIsPrimary, setMyIsPrimary] = useState(false);
 
   const [players, setPlayers] = useState([]);
   const [teams, setTeams] = useState([]);
@@ -89,11 +90,12 @@ export default function CommissionerToolsPage() {
         return;
       }
       setMyEmail(user.email?.toLowerCase() || '');
-      const { data: profileRow } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+      const { data: profileRow } = await supabase.from('profiles').select('role, is_primary').eq('id', user.id).single();
       if (profileRow?.role !== 'commissioner') {
         router.push('/profile');
         return;
       }
+      setMyIsPrimary(!!profileRow.is_primary);
       setChecked(true);
     }
     checkAccess();
@@ -103,7 +105,7 @@ export default function CommissionerToolsPage() {
     const [playersRes, teamsRes, profilesRes, settingsRes] = await Promise.all([
       supabase.from('players').select('*'),
       supabase.from('teams').select('*').order('draft_position', { ascending: true }),
-      supabase.from('profiles').select('role, team_id, email'),
+      supabase.from('profiles').select('role, team_id, email, is_primary'),
       supabase.from('draft_settings').select('*').eq('id', 1).single(),
     ]);
     setPlayers(playersRes.data || []);
@@ -734,7 +736,10 @@ export default function CommissionerToolsPage() {
           )}
 
           <div className="flex flex-col gap-2 mb-3">
-            {teams.map((t) => {
+            {teams
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((t) => {
               const owner = ownerByTeamId[t.id];
               const proxyPlayer = t.proxy_email ? players.find((p) => p.email?.toLowerCase() === t.proxy_email.toLowerCase()) : null;
               return (
@@ -762,8 +767,8 @@ export default function CommissionerToolsPage() {
                           setReassigningTeamId(reassigningTeamId === t.id ? null : t.id);
                           setReassignEmail('');
                         }}
-                        className="text-[11px] font-medium rounded-md px-2 py-1"
-                        style={{ background: '#e6f1fb', color: '#0c447c' }}
+                        className="text-[11px] font-medium rounded-md py-1"
+                        style={{ background: '#e6f1fb', color: '#0c447c', width: 92, textAlign: 'center' }}
                       >
                         Change GM
                       </button>
@@ -773,8 +778,8 @@ export default function CommissionerToolsPage() {
                           setReassigningTeamId(reassigningTeamId === t.id ? null : t.id);
                           setReassignEmail('');
                         }}
-                        className="text-[11px] font-medium rounded-md px-2.5 py-1"
-                        style={{ background: '#185fa5', color: '#ffffff' }}
+                        className="text-[11px] font-medium rounded-md py-1"
+                        style={{ background: '#185fa5', color: '#ffffff', width: 92, textAlign: 'center' }}
                       >
                         Assign GM
                       </button>
@@ -783,16 +788,16 @@ export default function CommissionerToolsPage() {
                       <button
                         onClick={() => handleClearProxy(t.id)}
                         disabled={clearingProxyTeamId === t.id}
-                        className="text-[11px] font-medium rounded-md px-2 py-1"
-                        style={{ background: '#faeeda', color: '#854f0b' }}
+                        className="text-[11px] font-medium rounded-md py-1"
+                        style={{ background: '#faeeda', color: '#854f0b', width: 92, textAlign: 'center' }}
                       >
                         {clearingProxyTeamId === t.id ? '…' : 'Remove proxy'}
                       </button>
                     ) : (
                       <button
                         onClick={() => setExpandedProxyTeamId(expandedProxyTeamId === t.id ? null : t.id)}
-                        className="text-[11px] font-medium rounded-md px-2 py-1"
-                        style={{ background: '#faeeda', color: '#854f0b' }}
+                        className="text-[11px] font-medium rounded-md py-1"
+                        style={{ background: '#faeeda', color: '#854f0b', width: 92, textAlign: 'center' }}
                       >
                         Add proxy
                       </button>
@@ -801,8 +806,8 @@ export default function CommissionerToolsPage() {
                       <button
                         onClick={() => handleClearGm(t.id, t.name)}
                         disabled={clearingGmTeamId === t.id}
-                        className="text-[11px] font-medium rounded-md px-2 py-1"
-                        style={{ background: '#fcebeb', color: '#791f1f' }}
+                        className="text-[11px] font-medium rounded-md py-1"
+                        style={{ background: '#fcebeb', color: '#791f1f', width: 92, textAlign: 'center' }}
                       >
                         {clearingGmTeamId === t.id ? '…' : 'Remove GM'}
                       </button>
@@ -819,8 +824,8 @@ export default function CommissionerToolsPage() {
                         }
                       }}
                       disabled={draftLocked || deletingTeamId === t.id}
-                      className="text-[11px] font-medium rounded-md px-2 py-1"
-                      style={{ background: '#fcebeb', color: '#791f1f' }}
+                      className="text-[11px] font-medium rounded-md py-1"
+                      style={{ background: '#fcebeb', color: '#791f1f', width: 92, textAlign: 'center' }}
                     >
                       {deletingTeamId === t.id ? '…' : 'Delete team'}
                     </button>
@@ -917,6 +922,7 @@ export default function CommissionerToolsPage() {
           </>
           )}
         </div>
+        {myIsPrimary && (
         <div className="bg-surface rounded-xl p-4 mb-5">
           <button onClick={() => toggleSection('assign-a-commissioner')} className="w-full flex items-center justify-between">
             <p className="text-sm font-medium text-ink m-0">Assign a commissioner</p>
@@ -925,8 +931,10 @@ export default function CommissionerToolsPage() {
           {openSections['assign-a-commissioner'] && (
           <>
           <p className="text-xs text-muted mb-3">
-            Give another registered player commissioner access — useful for a co-commissioner. There's no limit on how
-            many you can add. Optionally tie them to a team that doesn't have a GM yet, or leave it as admin-only.
+            Give another registered player commissioner access as a co-commissioner. Only you, the primary
+            commissioner, can do this — co-commissioners can't assign others. If they're already a GM, leaving the
+            team dropdown on admin-only keeps them on their own team; only pick a different team if you want to move
+            them.
           </p>
 
           {commissionerMessage && (
@@ -988,8 +996,16 @@ export default function CommissionerToolsPage() {
                     <span className="text-xs text-muted flex items-center gap-1 flex-shrink-0">
                       <i className="ti ti-star-filled" aria-hidden="true" />
                       {g.playerName || g.email}
+                      {g.is_primary && (
+                        <span
+                          className="text-[10px] font-medium rounded px-1.5 py-0.5"
+                          style={{ background: '#e6f1fb', color: '#0c447c' }}
+                        >
+                          Primary
+                        </span>
+                      )}
                     </span>
-                    {g.email?.toLowerCase() !== myEmail && (
+                    {!g.is_primary && g.email?.toLowerCase() !== myEmail && (
                       <button
                         onClick={() => handleRevokeCommissioner(g.email)}
                         disabled={revokingEmail === g.email}
@@ -1006,9 +1022,10 @@ export default function CommissionerToolsPage() {
           </>
           )}
         </div>
+        )}
         <div className="bg-surface rounded-xl p-4 mb-5">
           <button onClick={() => toggleSection('player-pool')} className="w-full flex items-center justify-between">
-            <p className="text-sm font-medium text-ink m-0">Player pool</p>
+            <p className="text-sm font-medium text-ink m-0">Activate / inactivate players</p>
             <i className={`ti ti-chevron-${openSections['player-pool'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
           </button>
           {openSections['player-pool'] && (
@@ -1114,7 +1131,8 @@ export default function CommissionerToolsPage() {
           <>
           <p className="text-xs text-muted mb-3">
             Resets their password back to the default (draft2026). They'll need to log in and set a new one from their
-            profile.
+            profile. Players can also reset their own password from the login page's "forgot password" link — use
+            this here only as a backup if that isn't working for them (e.g. they can't access their email).
           </p>
 
           {resetMessage && (
