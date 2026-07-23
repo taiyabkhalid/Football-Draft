@@ -52,6 +52,7 @@ export default function CommissionerToolsPage() {
   const [resetMessage, setResetMessage] = useState(null);
 
   const [playerPoolFilter, setPlayerPoolFilter] = useState('active');
+  const [playerPoolSearch, setPlayerPoolSearch] = useState('');
   const [togglingPlayerId, setTogglingPlayerId] = useState(null);
 
   // Team management
@@ -145,7 +146,11 @@ export default function CommissionerToolsPage() {
   }
 
   const assignedEmails = new Set(profiles.filter((p) => p.role === 'gm' || p.role === 'commissioner').map((p) => p.email));
-  const availableToPromote = players.filter((p) => p.is_active && !p.team_id && !assignedEmails.has(p.email));
+  const commissionerEmails = new Set(profiles.filter((p) => p.role === 'commissioner').map((p) => p.email?.toLowerCase()));
+  const sortedActivePlayers = players.filter((p) => p.is_active).slice().sort((a, b) => a.full_name.localeCompare(b.full_name));
+  const availableToPromote = players
+    .filter((p) => p.is_active && !p.team_id && !assignedEmails.has(p.email))
+    .sort((a, b) => a.full_name.localeCompare(b.full_name));
 
   const teamsById = Object.fromEntries(teams.map((t) => [t.id, t]));
   const playersByEmail = Object.fromEntries(players.map((p) => [p.email, p]));
@@ -157,15 +162,19 @@ export default function CommissionerToolsPage() {
       playerName: playersByEmail[p.email]?.full_name,
     }));
   const ownerByTeamId = Object.fromEntries(currentGMs.filter((g) => g.team_id).map((g) => [g.team_id, g]));
-  const teamsWithoutGM = teams.filter((t) => !ownerByTeamId[t.id]);
+  const teamsWithoutGM = teams.filter((t) => !ownerByTeamId[t.id]).sort((a, b) => a.name.localeCompare(b.name));
 
   const draftStatus = settings?.draft_status || 'not_started';
   const draftLocked = draftStatus !== 'not_started';
 
   const playerPool = useMemo(() => {
     const list = playerPoolFilter === 'active' ? players.filter((p) => p.is_active) : players.filter((p) => !p.is_active);
-    return list.slice().sort((a, b) => a.full_name.localeCompare(b.full_name));
-  }, [players, playerPoolFilter]);
+    const q = playerPoolSearch.trim().toLowerCase();
+    const filtered = q
+      ? list.filter((p) => p.full_name.toLowerCase().split(/\s+/).some((word) => word.startsWith(q)))
+      : list;
+    return filtered.slice().sort((a, b) => a.full_name.localeCompare(b.full_name));
+  }, [players, playerPoolFilter, playerPoolSearch]);
 
   async function handlePromote() {
     if (!selectedEmail || !selectedTeamId) return;
@@ -562,8 +571,6 @@ export default function CommissionerToolsPage() {
           </>
           )}
         </div>
-
-        {/* Draft order */}
         <div className="bg-surface rounded-xl p-4 mb-5">
           <button onClick={() => toggleSection('draft-order')} className="w-full flex items-center justify-between">
             <p className="text-sm font-medium text-ink m-0">Draft order</p>
@@ -621,8 +628,6 @@ export default function CommissionerToolsPage() {
           </>
           )}
         </div>
-
-        {/* Start / pause / reset controls */}
         <div className="bg-surface rounded-xl p-4 mb-5">
           <button onClick={() => toggleSection('draft-controls')} className="w-full flex items-center justify-between">
             <p className="text-sm font-medium text-ink m-0">Draft controls</p>
@@ -706,8 +711,6 @@ export default function CommissionerToolsPage() {
           </>
           )}
         </div>
-
-        {/* Team management */}
         <div className="bg-surface rounded-xl p-4 mb-5">
           <button onClick={() => toggleSection('teams')} className="w-full flex items-center justify-between">
             <p className="text-sm font-medium text-ink m-0">Teams</p>
@@ -802,76 +805,6 @@ export default function CommissionerToolsPage() {
           </>
           )}
         </div>
-
-        {/* Player pool management */}
-        <div className="bg-surface rounded-xl p-4 mb-5">
-          <button onClick={() => toggleSection('player-pool')} className="w-full flex items-center justify-between">
-            <p className="text-sm font-medium text-ink m-0">Player pool</p>
-            <i className={`ti ti-chevron-${openSections['player-pool'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
-          </button>
-          {openSections['player-pool'] && (
-          <>
-          <p className="text-xs text-muted mb-3">
-            Inactivate a player to take them out of the draft pool without deleting them — for injury, a season off, or
-            similar. Inactive players can't be drafted or registered against, and can be reactivated any time.
-          </p>
-
-          <div className="flex gap-1.5 mb-3">
-            <button
-              onClick={() => setPlayerPoolFilter('active')}
-              className="text-xs px-2.5 py-1 rounded-md font-medium"
-              style={{
-                background: playerPoolFilter === 'active' ? '#185fa5' : '#ffffff',
-                color: playerPoolFilter === 'active' ? '#ffffff' : '#3d4a57',
-                border: '1px solid #d8dde2',
-              }}
-            >
-              Active ({players.filter((p) => p.is_active).length})
-            </button>
-            <button
-              onClick={() => setPlayerPoolFilter('inactive')}
-              className="text-xs px-2.5 py-1 rounded-md font-medium"
-              style={{
-                background: playerPoolFilter === 'inactive' ? '#185fa5' : '#ffffff',
-                color: playerPoolFilter === 'inactive' ? '#ffffff' : '#3d4a57',
-                border: '1px solid #d8dde2',
-              }}
-            >
-              Inactive ({players.filter((p) => !p.is_active).length})
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-2 max-h-80 overflow-y-auto">
-            {playerPool.length === 0 && (
-              <p className="text-xs text-muted">No {playerPoolFilter} players.</p>
-            )}
-            {playerPool.map((p) => (
-              <div key={p.id} className="flex items-center justify-between bg-white rounded-md px-3 py-2">
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-ink m-0 truncate">{p.full_name}</p>
-                  <p className="text-[11px] text-muted m-0">
-                    {p.team_id ? `On ${teamsById[p.team_id]?.name || 'a team'}` : 'Unassigned'}
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleTogglePlayerActive(p)}
-                  disabled={togglingPlayerId === p.id}
-                  className="text-xs font-medium rounded-md px-2.5 py-1.5 flex-shrink-0"
-                  style={{
-                    background: p.is_active ? '#fcebeb' : '#eaf3de',
-                    color: p.is_active ? '#791f1f' : '#27500a',
-                  }}
-                >
-                  {togglingPlayerId === p.id ? '…' : p.is_active ? 'Inactivate' : 'Reactivate'}
-                </button>
-              </div>
-            ))}
-          </div>
-          </>
-          )}
-        </div>
-
-        {/* Assign a GM */}
         <div className="bg-surface rounded-xl p-4 mb-5">
           <button onClick={() => toggleSection('assign-a-gm')} className="w-full flex items-center justify-between">
             <p className="text-sm font-medium text-ink m-0">Assign a GM</p>
@@ -934,7 +867,6 @@ export default function CommissionerToolsPage() {
           </>
           )}
         </div>
-
         <div className="bg-surface rounded-xl p-4 mb-5">
           <button onClick={() => toggleSection('current-gm-commissioner-assignments')} className="w-full flex items-center justify-between">
             <p className="text-sm font-medium text-ink m-0">Current GM / commissioner assignments</p>
@@ -1011,8 +943,8 @@ export default function CommissionerToolsPage() {
                     <div className="flex gap-2 mt-2 pt-2 border-t border-line">
                       <select value={reassignEmail} onChange={(e) => setReassignEmail(e.target.value)} className="flex-1 text-xs">
                         <option value="">Select a new GM…</option>
-                        {players
-                          .filter((p) => p.is_active && p.email !== g.email)
+                        {sortedActivePlayers
+                          .filter((p) => p.email !== g.email)
                           .map((p) => (
                             <option key={p.email} value={p.email}>
                               {p.full_name} ({p.email})
@@ -1035,8 +967,6 @@ export default function CommissionerToolsPage() {
           </>
           )}
         </div>
-
-        {/* Assign a commissioner */}
         <div className="bg-surface rounded-xl p-4 mb-5">
           <button onClick={() => toggleSection('assign-a-commissioner')} className="w-full flex items-center justify-between">
             <p className="text-sm font-medium text-ink m-0">Assign a commissioner</p>
@@ -1045,15 +975,16 @@ export default function CommissionerToolsPage() {
           {openSections['assign-a-commissioner'] && (
           <>
           <p className="text-xs text-muted mb-3">
-            Give another registered player commissioner access — useful for a co-commissioner. Optionally tie them to a
-            team, or leave it as admin-only.
+            Give another registered player commissioner access — useful for a co-commissioner. There's no limit on how
+            many you can add. Optionally tie them to a team, or leave it as admin-only. Only shows players who aren't
+            already a commissioner.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-2 mb-3">
             <select value={commissionerEmail} onChange={(e) => setCommissionerEmail(e.target.value)} className="flex-1 text-xs">
               <option value="">Select a player…</option>
-              {players
-                .filter((p) => p.is_active)
+              {sortedActivePlayers
+                .filter((p) => !commissionerEmails.has(p.email?.toLowerCase()))
                 .map((p) => (
                   <option key={p.email} value={p.email}>
                     {p.full_name} ({p.email})
@@ -1062,11 +993,14 @@ export default function CommissionerToolsPage() {
             </select>
             <select value={commissionerTeamId} onChange={(e) => setCommissionerTeamId(e.target.value)} className="flex-1 text-xs">
               <option value="">No team (admin only)</option>
-              {teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
+              {teams
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
             </select>
           </div>
 
@@ -1080,8 +1014,84 @@ export default function CommissionerToolsPage() {
           </>
           )}
         </div>
+        <div className="bg-surface rounded-xl p-4 mb-5">
+          <button onClick={() => toggleSection('player-pool')} className="w-full flex items-center justify-between">
+            <p className="text-sm font-medium text-ink m-0">Player pool</p>
+            <i className={`ti ti-chevron-${openSections['player-pool'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+          </button>
+          {openSections['player-pool'] && (
+          <>
+          <p className="text-xs text-muted mb-3">
+            Inactivate a player to take them out of the draft pool without deleting them — for injury, a season off, or
+            similar. Inactive players can't be drafted or registered against, and can be reactivated any time.
+          </p>
 
-        {/* Draft-day proxy */}
+          <div className="flex gap-1.5 mb-3">
+            <button
+              onClick={() => setPlayerPoolFilter('active')}
+              className="text-xs px-2.5 py-1 rounded-md font-medium"
+              style={{
+                background: playerPoolFilter === 'active' ? '#185fa5' : '#ffffff',
+                color: playerPoolFilter === 'active' ? '#ffffff' : '#3d4a57',
+                border: '1px solid #d8dde2',
+              }}
+            >
+              Active ({players.filter((p) => p.is_active).length})
+            </button>
+            <button
+              onClick={() => setPlayerPoolFilter('inactive')}
+              className="text-xs px-2.5 py-1 rounded-md font-medium"
+              style={{
+                background: playerPoolFilter === 'inactive' ? '#185fa5' : '#ffffff',
+                color: playerPoolFilter === 'inactive' ? '#ffffff' : '#3d4a57',
+                border: '1px solid #d8dde2',
+              }}
+            >
+              Inactive ({players.filter((p) => !p.is_active).length})
+            </button>
+          </div>
+
+          <div className="relative mb-3">
+            <i className="ti ti-search absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-faint" aria-hidden="true" />
+            <input
+              type="text"
+              value={playerPoolSearch}
+              onChange={(e) => setPlayerPoolSearch(e.target.value)}
+              placeholder="Search by name"
+              className="w-full text-xs"
+              style={{ paddingLeft: 30 }}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2 max-h-80 overflow-y-auto">
+            {playerPool.length === 0 && (
+              <p className="text-xs text-muted">No {playerPoolFilter} players match.</p>
+            )}
+            {playerPool.map((p) => (
+              <div key={p.id} className="flex items-center justify-between bg-white rounded-md px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-ink m-0 truncate">{p.full_name}</p>
+                  <p className="text-[11px] text-muted m-0">
+                    {p.team_id ? `On ${teamsById[p.team_id]?.name || 'a team'}` : 'Unassigned'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleTogglePlayerActive(p)}
+                  disabled={togglingPlayerId === p.id}
+                  className="text-xs font-medium rounded-md px-2.5 py-1.5 flex-shrink-0"
+                  style={{
+                    background: p.is_active ? '#fcebeb' : '#eaf3de',
+                    color: p.is_active ? '#791f1f' : '#27500a',
+                  }}
+                >
+                  {togglingPlayerId === p.id ? '…' : p.is_active ? 'Inactivate' : 'Reactivate'}
+                </button>
+              </div>
+            ))}
+          </div>
+          </>
+          )}
+        </div>
         <div className="bg-surface rounded-xl p-4 mb-5">
           <button onClick={() => toggleSection('draft-day-proxy')} className="w-full flex items-center justify-between">
             <p className="text-sm font-medium text-ink m-0">Draft-day proxy</p>
@@ -1143,8 +1153,8 @@ export default function CommissionerToolsPage() {
                         className="flex-1 text-xs"
                       >
                         <option value="">Set a proxy…</option>
-                        {players
-                          .filter((p) => p.is_active && p.email?.toLowerCase() !== owner?.email?.toLowerCase())
+                        {sortedActivePlayers
+                          .filter((p) => p.email?.toLowerCase() !== owner?.email?.toLowerCase())
                           .map((p) => (
                             <option key={p.email} value={p.email}>
                               {p.full_name}
@@ -1168,8 +1178,6 @@ export default function CommissionerToolsPage() {
           </>
           )}
         </div>
-
-        {/* Profile edit unlock */}
         <div className="bg-surface rounded-xl p-4 mb-5">
           <button onClick={() => toggleSection('profile-edit-lock')} className="w-full flex items-center justify-between">
             <p className="text-sm font-medium text-ink m-0">Profile edit lock</p>
@@ -1191,8 +1199,6 @@ export default function CommissionerToolsPage() {
           </>
           )}
         </div>
-
-        {/* Reset a player's password */}
         <div className="bg-surface rounded-xl p-4">
           <button onClick={() => toggleSection('reset-a-player-s-password')} className="w-full flex items-center justify-between">
             <p className="text-sm font-medium text-ink m-0">Reset a player's password</p>
