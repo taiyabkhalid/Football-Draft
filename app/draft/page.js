@@ -351,9 +351,17 @@ export default function DraftPage() {
 
   // Combined AND-filtering: a player must satisfy every active filter to be shown at all
   const sortedAvailable = useMemo(() => {
-    if (!hasActiveSearch) return sortList(availablePlayers, sortBy);
-    return sortList(availablePlayers.filter(matchesSearch), searchName.trim() ? 'name' : sortBy);
-  }, [availablePlayers, hasActiveSearch, searchName, searchPosition, searchGender, searchPreviousTeam, sortBy]);
+    const base = hasActiveSearch
+      ? sortList(availablePlayers.filter(matchesSearch), searchName.trim() ? 'name' : sortBy)
+      : sortList(availablePlayers, sortBy);
+    // When the team on the clock must draft a female player to still hit the
+    // female minimum, put the players who actually satisfy that requirement
+    // at the front, so it's obvious at a glance who's actually pickable.
+    if (!mustDraftFemale) return base;
+    const eligible = base.filter((p) => p.gender === 'F');
+    const ineligible = base.filter((p) => p.gender !== 'F');
+    return [...eligible, ...ineligible];
+  }, [availablePlayers, hasActiveSearch, searchName, searchPosition, searchGender, searchPreviousTeam, sortBy, mustDraftFemale]);
 
   const matchIdSet = useMemo(() => {
     if (!hasActiveSearch) return new Set();
@@ -1041,6 +1049,16 @@ export default function DraftPage() {
               .filter(Boolean)
               .join(', ')}
           </p>
+        )}
+
+        {mustDraftFemale && (
+          <div className="rounded-md px-3 py-2 mt-2" style={{ background: '#faeeda' }}>
+            <p className="text-xs m-0" style={{ color: '#633806' }}>
+              <i className="ti ti-info-circle text-sm" aria-hidden="true" style={{ verticalAlign: -2, marginRight: 4 }} />
+              {teamOnClock?.name} must draft a female player this pick to reach the {minFemale}-female minimum —
+              female players are sorted to the front below.
+            </p>
+          </div>
         )}
 
         {/* Main layout: sidebar / card row / my team */}
