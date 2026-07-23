@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import BrandHeader from '../../lib/BrandHeader';
 import FootballIcon from '../../lib/FootballIcon';
@@ -462,6 +463,14 @@ export default function CommissionerToolsPage() {
     <main style={{ background: '#ffffff', minHeight: '100vh' }}>
       <BrandHeader pageLabel="Commissioner tools" />
       <div className="max-w-xl mx-auto px-4 py-8">
+        <Link
+          href="/profile"
+          className="inline-flex items-center gap-1 text-xs font-medium mb-4"
+          style={{ color: '#185fa5', textDecoration: 'none' }}
+        >
+          <i className="ti ti-chevron-left text-sm" aria-hidden="true" />
+          Back to profile
+        </Link>
 
         {/* Draft format & schedule */}
         <div className="bg-surface rounded-xl p-4 mb-5">
@@ -473,7 +482,7 @@ export default function CommissionerToolsPage() {
           <>
           <p className="text-xs text-muted mb-3">
             {draftLocked
-              ? "The draft has already started, so format changes here won't affect what's already happened."
+              ? 'Draft type and the scheduled date/time are locked once the draft has started. The pick clock and roster minimums can still be changed any time.'
               : 'Set these before the draft starts.'}
           </p>
 
@@ -492,7 +501,12 @@ export default function CommissionerToolsPage() {
           <div className="flex flex-col gap-2.5">
             <label className="text-xs text-muted">
               Draft type
-              <select value={draftType} onChange={(e) => setDraftType(e.target.value)} className="w-full text-xs mt-1">
+              <select
+                value={draftType}
+                onChange={(e) => setDraftType(e.target.value)}
+                disabled={draftLocked}
+                className="w-full text-xs mt-1"
+              >
                 <option value="snake">Snake (order reverses each round)</option>
                 <option value="repeat">Repeat (same order every round)</option>
               </select>
@@ -504,6 +518,7 @@ export default function CommissionerToolsPage() {
                 type="datetime-local"
                 value={draftDatetime}
                 onChange={(e) => setDraftDatetime(e.target.value)}
+                disabled={draftLocked}
                 className="w-full text-xs mt-1"
               />
             </label>

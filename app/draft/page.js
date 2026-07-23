@@ -297,11 +297,11 @@ export default function DraftPage() {
     return map;
   }, [teams, players]);
 
-  const myProxyTeamId = useMemo(
-    () => teams.find((t) => t.proxy_email?.toLowerCase() === myEmail)?.id || null,
+  const myProxyTeamIds = useMemo(
+    () => new Set(teams.filter((t) => t.proxy_email?.toLowerCase() === myEmail).map((t) => t.id)),
     [teams, myEmail]
   );
-  const isProxyForClockTeam = Boolean(teamOnClock && myProxyTeamId === teamOnClock.id);
+  const isProxyForClockTeam = Boolean(teamOnClock && myProxyTeamIds.has(teamOnClock.id));
   const canDraft =
     teamOnClock &&
     draftStatus === 'in_progress' &&
