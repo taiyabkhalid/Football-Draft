@@ -530,20 +530,22 @@ export default function DraftPage() {
                   Round {currentRound} &middot; Pick {currentPickNumber}
                 </p>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-3 flex-shrink-0">
                 {profile?.role === 'commissioner' && (
                   <button
                     onClick={handleTogglePause}
                     disabled={togglingPause}
-                    aria-label={draftStatus === 'paused' ? 'Resume draft' : 'Pause draft'}
-                    className="rounded-md flex items-center justify-center"
-                    style={{ width: 28, height: 28, background: 'rgba(255,255,255,0.2)', border: 'none' }}
+                    className="rounded-md flex items-center gap-1.5 px-2 py-1.5"
+                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none' }}
                   >
                     <i
-                      className={`ti ${draftStatus === 'paused' ? 'ti-player-play' : 'ti-player-pause'} text-base`}
+                      className={`ti ${draftStatus === 'paused' ? 'ti-player-play' : 'ti-player-pause'} text-sm`}
                       style={{ color: '#ffffff' }}
                       aria-hidden="true"
                     />
+                    <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: '#ffffff' }}>
+                      {draftStatus === 'paused' ? 'Resume Draft' : 'Pause Draft'}
+                    </span>
                   </button>
                 )}
                 <p className="text-xl font-medium" style={{ color: '#ffffff' }}>
@@ -564,6 +566,15 @@ export default function DraftPage() {
               )}
             </div>
           </div>
+
+          {draftStatus === 'paused' && profile?.role !== 'commissioner' && (
+            <div className="mx-4 sm:mx-5 mt-3 rounded-lg px-3 py-2.5 flex gap-2" style={{ background: '#faeeda' }}>
+              <i className="ti ti-player-pause text-base flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
+              <p className="text-xs m-0" style={{ color: '#633806' }}>
+                The commissioner has paused the draft. Grab a beer, have a smoke, we'll pick back up where we left off!
+              </p>
+            </div>
+          )}
 
           {canDraft && (
             <div

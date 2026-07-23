@@ -381,7 +381,7 @@ export default function LiveDraftPage() {
         <div className="bg-[#faeeda] mx-4 sm:mx-5 mt-4 rounded-lg p-3.5 flex gap-2">
           <i className="ti ti-player-pause text-base flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
           <p className="text-sm m-0" style={{ color: '#633806' }}>
-            The commissioner has paused the draft. It'll pick back up from where it left off.
+            The commissioner has paused the draft. Grab a beer, have a smoke, we'll pick back up where we left off!
           </p>
         </div>
       )}
@@ -713,16 +713,26 @@ export default function LiveDraftPage() {
 
         <div className="flex gap-2 overflow-x-auto pb-2" ref={draftedScrollRef}>
           {allSlots.map((slot) => {
+            const isSkippedPick = slot.pick && !slot.pick.player_id;
+            const isClockSlot =
+              slot.pickNumber === currentPickNumber && !slot.player && !isSkippedPick && draftStatus === 'in_progress';
+            const teamColor = slot.team?.team_color || '#0074ff';
+            const owner = ownerByTeam[slot.team?.id];
             return (
               <div
                 key={slot.pickNumber}
                 ref={slot.pickNumber === currentPickNumber ? currentPickRef : null}
                 onClick={() => slot.player && openProfile(slot.player.id)}
-                className="flex-none rounded-xl p-3 bg-white flex flex-col"
+                className="flex-none rounded-xl p-3 flex flex-col items-center text-center"
                 style={{
                   width: 150,
-                  height: 190,
-                  border: slot.pickNumber === currentPickNumber ? '1.5px solid #185fa5' : '1px solid #d8dde2',
+                  height: 210,
+                  background: isClockSlot ? lightenColor(teamColor, 0.85) : '#ffffff',
+                  border: isClockSlot
+                    ? `2px solid ${teamColor}`
+                    : slot.pickNumber === currentPickNumber
+                    ? '1.5px solid #185fa5'
+                    : '1px solid #d8dde2',
                   cursor: slot.player ? 'pointer' : 'default',
                 }}
               >
@@ -747,12 +757,24 @@ export default function LiveDraftPage() {
                       {slot.player.offensive_position} / {slot.player.defensive_position}
                     </p>
                   </>
-                ) : slot.pick && !slot.pick.player_id ? (
+                ) : isSkippedPick ? (
                   <>
                     <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
                       <i className="ti ti-x text-faint text-xl" aria-hidden="true" />
                     </div>
                     <p className="text-xs text-muted m-0 leading-snug">Skipped</p>
+                  </>
+                ) : isClockSlot ? (
+                  <>
+                    <div
+                      className="w-10 h-10 rounded-full bg-white flex items-center justify-center mb-1.5"
+                      style={{ border: `2px solid ${teamColor}` }}
+                    >
+                      <i className="ti ti-clock text-xl" style={{ color: teamColor }} aria-hidden="true" />
+                    </div>
+                    <p className="text-xs font-medium m-0 leading-snug" style={{ color: '#0c2340' }}>
+                      On the clock
+                    </p>
                   </>
                 ) : (
                   <>
@@ -764,12 +786,26 @@ export default function LiveDraftPage() {
                     </p>
                   </>
                 )}
-                <div className="mt-auto pt-1.5 flex items-center gap-1.5">
-                  <FootballIcon color={slot.team?.team_color || '#0074ff'} size={12} />
-                  <span className="text-[10px] text-muted truncate">
-                    {slot.team?.name}
-                    {ownerByTeam[slot.team?.id] ? ` · ${ownerByTeam[slot.team.id].name}` : ''}
-                  </span>
+                <div className="mt-auto pt-1.5 flex flex-col items-center gap-0.5">
+                  {slot.player ? (
+                    <>
+                      <div className="flex items-center gap-1.5 justify-center">
+                        <FootballIcon color={teamColor} size={15} />
+                        <span className="text-[12px] font-semibold" style={{ color: '#0c2340' }}>
+                          Drafted by: {slot.team?.name}
+                        </span>
+                      </div>
+                      {owner && <span className="text-[10px] text-muted">({owner.name})</span>}
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-1.5 justify-center">
+                      <FootballIcon color={teamColor} size={12} />
+                      <span className="text-[10px] text-muted truncate">
+                        {slot.team?.name}
+                        {owner ? ` \u00b7 ${owner.name}` : ''}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
