@@ -463,7 +463,8 @@ export default function LiveDraftPage() {
                   const firstEmptyIndex = slots.findIndex((s) => !s);
                   const viewedTeam = teamsById[viewingTeamId];
                   const teamColor = viewedTeam?.team_color || '#0074ff';
-                  const isTeamOnClock = teamOnClock?.id === viewingTeamId && draftStatus === 'in_progress';
+                  const isTeamOnClock =
+                    teamOnClock?.id === viewingTeamId && (draftStatus === 'in_progress' || draftStatus === 'paused');
                   return (
                     <div className="bg-white rounded-lg p-3.5 mb-1">
                       <div className="flex justify-between items-center mb-2">
@@ -516,7 +517,7 @@ export default function LiveDraftPage() {
                                   <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                     On the clock
                                   </p>
-                                  <p className="text-[8px] m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                                  <p className="text-[9px] font-medium m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                     {viewedTeam?.name}
                                   </p>
                                   <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
@@ -671,7 +672,7 @@ export default function LiveDraftPage() {
                               <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                 On the clock
                               </p>
-                              <p className="text-[8px] m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                              <p className="text-[9px] font-medium m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                 {slot.team?.name}
                               </p>
                               <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
@@ -715,7 +716,10 @@ export default function LiveDraftPage() {
           {allSlots.map((slot) => {
             const isSkippedPick = slot.pick && !slot.pick.player_id;
             const isClockSlot =
-              slot.pickNumber === currentPickNumber && !slot.player && !isSkippedPick && draftStatus === 'in_progress';
+              slot.pickNumber === currentPickNumber &&
+              !slot.player &&
+              !isSkippedPick &&
+              (draftStatus === 'in_progress' || draftStatus === 'paused');
             const teamColor = slot.team?.team_color || '#0074ff';
             const owner = ownerByTeam[slot.team?.id];
             return (
@@ -790,17 +794,17 @@ export default function LiveDraftPage() {
                   {slot.player ? (
                     <>
                       <div className="flex items-center gap-1.5 justify-center">
-                        <FootballIcon color={teamColor} size={15} />
-                        <span className="text-[12px] font-semibold" style={{ color: '#0c2340' }}>
+                        <FootballIcon color={teamColor} size={16} />
+                        <span className="text-[13px] font-semibold leading-none" style={{ color: '#0c2340' }}>
                           Drafted by: {slot.team?.name}
                         </span>
                       </div>
                       {owner && <span className="text-[10px] text-muted">({owner.name})</span>}
                     </>
                   ) : (
-                    <div className="flex items-center gap-1.5 justify-center">
+                    <div className="flex items-center gap-1.5 justify-center min-w-0">
                       <FootballIcon color={teamColor} size={12} />
-                      <span className="text-[10px] text-muted truncate">
+                      <span className="text-[10px] text-muted truncate leading-none">
                         {slot.team?.name}
                         {owner ? ` \u00b7 ${owner.name}` : ''}
                       </span>

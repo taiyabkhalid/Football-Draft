@@ -713,7 +713,8 @@ export default function DraftPage() {
                   const firstEmptyIndex = slots.findIndex((s) => !s);
                   const viewedTeam = teamsById[viewingTeamId];
                   const teamColor = viewedTeam?.team_color || '#0074ff';
-                  const isTeamOnClock = teamOnClock?.id === viewingTeamId && draftStatus === 'in_progress';
+                  const isTeamOnClock =
+                    teamOnClock?.id === viewingTeamId && (draftStatus === 'in_progress' || draftStatus === 'paused');
                   return (
                     <div className="bg-white rounded-lg p-3 mb-1">
                       <div className="flex justify-between items-center mb-2">
@@ -755,7 +756,7 @@ export default function DraftPage() {
                                   <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                     On the clock
                                   </p>
-                                  <p className="text-[8px] m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                                  <p className="text-[9px] font-medium m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                     {viewedTeam?.name}
                                   </p>
                                   <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
@@ -910,7 +911,7 @@ export default function DraftPage() {
                               <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                 On the clock
                               </p>
-                              <p className="text-[8px] m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                              <p className="text-[9px] font-medium m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
                                 {slot.team?.name}
                               </p>
                               <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>

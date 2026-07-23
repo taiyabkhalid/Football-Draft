@@ -10,6 +10,11 @@ import { randomizeDraftOrder } from '../../lib/draftLogic';
 export default function CommissionerToolsPage() {
   const router = useRouter();
   const [checked, setChecked] = useState(false);
+  // All sections start collapsed - user taps a header to expand it.
+  const [openSections, setOpenSections] = useState({});
+  function toggleSection(key) {
+    setOpenSections((s) => ({ ...s, [key]: !s[key] }));
+  }
   const [myEmail, setMyEmail] = useState('');
 
   const [players, setPlayers] = useState([]);
@@ -419,7 +424,12 @@ export default function CommissionerToolsPage() {
 
         {/* Draft format & schedule */}
         <div className="bg-surface rounded-xl p-4 mb-5">
-          <p className="text-sm font-medium text-ink mb-1">Draft format and schedule</p>
+          <button onClick={() => toggleSection('draft-format-and-schedule')} className="w-full flex items-center justify-between">
+            <p className="text-sm font-medium text-ink m-0">Draft format and schedule</p>
+            <i className={`ti ti-chevron-${openSections['draft-format-and-schedule'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+          </button>
+          {openSections['draft-format-and-schedule'] && (
+          <>
           <p className="text-xs text-muted mb-3">
             {draftLocked
               ? "The draft has already started, so format changes here won't affect what's already happened."
@@ -494,11 +504,18 @@ export default function CommissionerToolsPage() {
           <button onClick={handleSaveSettings} disabled={savingSettings} className="btn-primary text-xs w-full mt-3">
             {savingSettings ? 'Saving…' : 'Save draft settings'}
           </button>
+          </>
+          )}
         </div>
 
         {/* Draft order */}
         <div className="bg-surface rounded-xl p-4 mb-5">
-          <p className="text-sm font-medium text-ink mb-1">Draft order</p>
+          <button onClick={() => toggleSection('draft-order')} className="w-full flex items-center justify-between">
+            <p className="text-sm font-medium text-ink m-0">Draft order</p>
+            <i className={`ti ti-chevron-${openSections['draft-order'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+          </button>
+          {openSections['draft-order'] && (
+          <>
           <p className="text-xs text-muted mb-3">
             {draftLocked
               ? 'The draft order is locked once the draft has started.'
@@ -546,11 +563,18 @@ export default function CommissionerToolsPage() {
               {savingOrder ? 'Saving…' : 'Save order'}
             </button>
           </div>
+          </>
+          )}
         </div>
 
         {/* Start / pause / reset controls */}
         <div className="bg-surface rounded-xl p-4 mb-5">
-          <p className="text-sm font-medium text-ink mb-1">Draft controls</p>
+          <button onClick={() => toggleSection('draft-controls')} className="w-full flex items-center justify-between">
+            <p className="text-sm font-medium text-ink m-0">Draft controls</p>
+            <i className={`ti ti-chevron-${openSections['draft-controls'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+          </button>
+          {openSections['draft-controls'] && (
+          <>
           <p className="text-xs text-muted mb-3">
             {draftStatus === 'not_started' && 'The draft will start automatically at the scheduled time above, or you can start it early.'}
             {draftStatus === 'in_progress' && 'The draft is currently live.'}
@@ -614,11 +638,18 @@ export default function CommissionerToolsPage() {
               </button>
             )}
           </div>
+          </>
+          )}
         </div>
 
         {/* Team management */}
         <div className="bg-surface rounded-xl p-4 mb-5">
-          <p className="text-sm font-medium text-ink mb-1">Teams</p>
+          <button onClick={() => toggleSection('teams')} className="w-full flex items-center justify-between">
+            <p className="text-sm font-medium text-ink m-0">Teams</p>
+            <i className={`ti ti-chevron-${openSections['teams'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+          </button>
+          {openSections['teams'] && (
+          <>
           <p className="text-xs text-muted mb-3">
             {draftLocked
               ? 'Teams are locked once the draft has started.'
@@ -677,11 +708,18 @@ export default function CommissionerToolsPage() {
               </button>
             </div>
           )}
+          </>
+          )}
         </div>
 
         {/* Player pool management */}
         <div className="bg-surface rounded-xl p-4 mb-5">
-          <p className="text-sm font-medium text-ink mb-1">Player pool</p>
+          <button onClick={() => toggleSection('player-pool')} className="w-full flex items-center justify-between">
+            <p className="text-sm font-medium text-ink m-0">Player pool</p>
+            <i className={`ti ti-chevron-${openSections['player-pool'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+          </button>
+          {openSections['player-pool'] && (
+          <>
           <p className="text-xs text-muted mb-3">
             Inactivate a player to take them out of the draft pool without deleting them — for injury, a season off, or
             similar. Inactive players can't be drafted or registered against, and can be reactivated any time.
@@ -738,11 +776,18 @@ export default function CommissionerToolsPage() {
               </div>
             ))}
           </div>
+          </>
+          )}
         </div>
 
         {/* Assign a GM */}
         <div className="bg-surface rounded-xl p-4 mb-5">
-          <p className="text-sm font-medium text-ink mb-1">Assign a GM</p>
+          <button onClick={() => toggleSection('assign-a-gm')} className="w-full flex items-center justify-between">
+            <p className="text-sm font-medium text-ink m-0">Assign a GM</p>
+            <i className={`ti ti-chevron-${openSections['assign-a-gm'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+          </button>
+          {openSections['assign-a-gm'] && (
+          <>
           <p className="text-xs text-muted mb-3">
             Choose a registered player and a team. They'll be removed from the draft pool and placed directly on that
             team's roster.
@@ -792,10 +837,17 @@ export default function CommissionerToolsPage() {
               No unassigned registered players available right now — they'll appear here once they register.
             </p>
           )}
+          </>
+          )}
         </div>
 
         <div className="bg-surface rounded-xl p-4 mb-5">
-          <p className="text-sm font-medium text-ink mb-3">Current GM / commissioner assignments</p>
+          <button onClick={() => toggleSection('current-gm-commissioner-assignments')} className="w-full flex items-center justify-between">
+            <p className="text-sm font-medium text-ink m-0">Current GM / commissioner assignments</p>
+            <i className={`ti ti-chevron-${openSections['current-gm-commissioner-assignments'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+          </button>
+          {openSections['current-gm-commissioner-assignments'] && (
+          <>
 
           {commissionerMessage && (
             <div
@@ -841,11 +893,18 @@ export default function CommissionerToolsPage() {
               ))}
             </div>
           )}
+          </>
+          )}
         </div>
 
         {/* Assign a commissioner */}
         <div className="bg-surface rounded-xl p-4 mb-5">
-          <p className="text-sm font-medium text-ink mb-1">Assign a commissioner</p>
+          <button onClick={() => toggleSection('assign-a-commissioner')} className="w-full flex items-center justify-between">
+            <p className="text-sm font-medium text-ink m-0">Assign a commissioner</p>
+            <i className={`ti ti-chevron-${openSections['assign-a-commissioner'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+          </button>
+          {openSections['assign-a-commissioner'] && (
+          <>
           <p className="text-xs text-muted mb-3">
             Give another registered player commissioner access — useful for a co-commissioner. Optionally tie them to a
             team, or leave it as admin-only.
@@ -879,11 +938,18 @@ export default function CommissionerToolsPage() {
           >
             {assigningCommissioner ? 'Assigning…' : 'Grant commissioner access'}
           </button>
+          </>
+          )}
         </div>
 
         {/* Profile edit unlock */}
         <div className="bg-surface rounded-xl p-4 mb-5">
-          <p className="text-sm font-medium text-ink mb-1">Profile edit lock</p>
+          <button onClick={() => toggleSection('profile-edit-lock')} className="w-full flex items-center justify-between">
+            <p className="text-sm font-medium text-ink m-0">Profile edit lock</p>
+            <i className={`ti ti-chevron-${openSections['profile-edit-lock'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+          </button>
+          {openSections['profile-edit-lock'] && (
+          <>
           <p className="text-xs text-muted mb-3">
             Profiles normally lock 2 hours before the draft and stay locked once it's complete. Override this to let
             everyone edit their profile again.
@@ -895,11 +961,18 @@ export default function CommissionerToolsPage() {
               ? 'Re-lock profile edits'
               : 'Unlock profile edits'}
           </button>
+          </>
+          )}
         </div>
 
         {/* Reset a player's password */}
         <div className="bg-surface rounded-xl p-4">
-          <p className="text-sm font-medium text-ink mb-1">Reset a player's password</p>
+          <button onClick={() => toggleSection('reset-a-player-s-password')} className="w-full flex items-center justify-between">
+            <p className="text-sm font-medium text-ink m-0">Reset a player's password</p>
+            <i className={`ti ti-chevron-${openSections['reset-a-player-s-password'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+          </button>
+          {openSections['reset-a-player-s-password'] && (
+          <>
           <p className="text-xs text-muted mb-3">
             Resets their password back to the default (draft2026). They'll need to log in and set a new one from their
             profile.
@@ -933,6 +1006,8 @@ export default function CommissionerToolsPage() {
               {resettingPassword ? 'Resetting…' : 'Reset password'}
             </button>
           </div>
+          </>
+          )}
         </div>
       </div>
     </main>
