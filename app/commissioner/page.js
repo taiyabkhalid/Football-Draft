@@ -22,9 +22,6 @@ export default function CommissionerToolsPage() {
   const [profiles, setProfiles] = useState([]);
   const [settings, setSettings] = useState(null);
 
-  const [selectedEmail, setSelectedEmail] = useState('');
-  const [selectedTeamId, setSelectedTeamId] = useState('');
-  const [promoting, setPromoting] = useState(false);
   const [message, setMessage] = useState(null);
 
   // Draft format & schedule form state
@@ -77,6 +74,7 @@ export default function CommissionerToolsPage() {
   const [reassigning, setReassigning] = useState(false);
   const [clearingGmTeamId, setClearingGmTeamId] = useState(null);
   const [proxySelections, setProxySelections] = useState({});
+  const [expandedProxyTeamId, setExpandedProxyTeamId] = useState(null);
   const [settingProxyTeamId, setSettingProxyTeamId] = useState(null);
   const [clearingProxyTeamId, setClearingProxyTeamId] = useState(null);
   const [proxyMessage, setProxyMessage] = useState(null);
@@ -145,12 +143,8 @@ export default function CommissionerToolsPage() {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
-  const assignedEmails = new Set(profiles.filter((p) => p.role === 'gm' || p.role === 'commissioner').map((p) => p.email));
   const commissionerEmails = new Set(profiles.filter((p) => p.role === 'commissioner').map((p) => p.email?.toLowerCase()));
   const sortedActivePlayers = players.filter((p) => p.is_active).slice().sort((a, b) => a.full_name.localeCompare(b.full_name));
-  const availableToPromote = players
-    .filter((p) => p.is_active && !p.team_id && !assignedEmails.has(p.email))
-    .sort((a, b) => a.full_name.localeCompare(b.full_name));
 
   const teamsById = Object.fromEntries(teams.map((t) => [t.id, t]));
   const playersByEmail = Object.fromEntries(players.map((p) => [p.email, p]));
@@ -175,25 +169,6 @@ export default function CommissionerToolsPage() {
       : list;
     return filtered.slice().sort((a, b) => a.full_name.localeCompare(b.full_name));
   }, [players, playerPoolFilter, playerPoolSearch]);
-
-  async function handlePromote() {
-    if (!selectedEmail || !selectedTeamId) return;
-    setPromoting(true);
-    setMessage(null);
-    const { error } = await supabase.rpc('promote_to_gm', {
-      player_email: selectedEmail,
-      target_team_id: selectedTeamId,
-    });
-    if (error) {
-      setMessage({ type: 'error', text: error.message });
-    } else {
-      setMessage({ type: 'success', text: 'Player promoted to GM and assigned to their team.' });
-      setSelectedEmail('');
-      setSelectedTeamId('');
-      fetchData();
-    }
-    setPromoting(false);
-  }
 
   async function handleSaveSettings() {
     setSavingSettings(true);
@@ -712,16 +687,16 @@ export default function CommissionerToolsPage() {
           )}
         </div>
         <div className="bg-surface rounded-xl p-4 mb-5">
-          <button onClick={() => toggleSection('teams')} className="w-full flex items-center justify-between">
-            <p className="text-sm font-medium text-ink m-0">Teams</p>
-            <i className={`ti ti-chevron-${openSections['teams'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+          <button onClick={() => toggleSection('teams-and-gms')} className="w-full flex items-center justify-between">
+            <p className="text-sm font-medium text-ink m-0">Teams and GM's</p>
+            <i className={`ti ti-chevron-${openSections['teams-and-gms'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
           </button>
-          {openSections['teams'] && (
+          {openSections['teams-and-gms'] && (
           <>
           <p className="text-xs text-muted mb-3">
             {draftLocked
-              ? 'Teams are locked once the draft has started.'
-              : `Add or remove teams (4-12 total). GMs name their own team and pick their color from their profile page \u2014 what you set here is just a placeholder until they do. Removing a team only works before it has any drafted roster or picks; if it has a GM but no roster yet, removing it releases that GM back into the player pool.`}
+              ? 'Teams and GMs are locked once the draft has started.'
+              : `Manage each team's GM and draft-day proxy in one place. GMs name their own team and pick their color from their profile page \u2014 what's shown here is just a placeholder until they do.`}
           </p>
 
           {teamMgmtMessage && (
@@ -735,36 +710,173 @@ export default function CommissionerToolsPage() {
               {teamMgmtMessage.text}
             </div>
           )}
+          {message && (
+            <div
+              className="rounded-md px-3 py-2 mb-3 text-xs"
+              style={{
+                background: message.type === 'error' ? '#fcebeb' : '#eaf3de',
+                color: message.type === 'error' ? '#791f1f' : '#27500a',
+              }}
+            >
+              {message.text}
+            </div>
+          )}
+          {proxyMessage && (
+            <div
+              className="rounded-md px-3 py-2 mb-3 text-xs"
+              style={{
+                background: proxyMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
+                color: proxyMessage.type === 'error' ? '#791f1f' : '#27500a',
+              }}
+            >
+              {proxyMessage.text}
+            </div>
+          )}
 
           <div className="flex flex-col gap-2 mb-3">
             {teams.map((t) => {
               const owner = ownerByTeamId[t.id];
+              const proxyPlayer = t.proxy_email ? players.find((p) => p.email?.toLowerCase() === t.proxy_email.toLowerCase()) : null;
               return (
-                <div key={t.id} className="flex items-center gap-2 bg-white rounded-md px-3 py-2">
-                  <FootballIcon color={t.team_color || '#0074ff'} size={14} />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs text-ink block truncate">{t.name}</span>
-                    <span className="text-[10px] text-muted block truncate">
-                      {owner ? `GM: ${owner.playerName || owner.email}` : 'No GM assigned yet'}
-                    </span>
+                <div key={t.id} className="bg-white rounded-md px-3 py-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <FootballIcon color={t.team_color || '#0074ff'} size={14} />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs text-ink block truncate">{t.name}</span>
+                      <span className="text-[10px] text-muted block truncate">
+                        {owner ? `GM: ${owner.playerName || owner.email}` : 'No GM assigned yet'}
+                      </span>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (
-                        !owner ||
-                        window.confirm(
-                          `Remove ${t.name}? This will release ${owner.playerName || owner.email} back into the player pool as a regular player.`
-                        )
-                      ) {
-                        handleDeleteTeam(t);
-                      }
-                    }}
-                    disabled={draftLocked || deletingTeamId === t.id}
-                    className="text-[11px] font-medium rounded-md px-2 py-1 flex-shrink-0"
-                    style={{ background: '#fcebeb', color: '#791f1f' }}
-                  >
-                    {deletingTeamId === t.id ? '…' : 'Remove'}
-                  </button>
+                  {t.proxy_email && (
+                    <p className="text-[11px] m-0 mb-1.5" style={{ color: '#854f0b' }}>
+                      Proxy: {proxyPlayer?.full_name || t.proxy_email}
+                      {proxyPlayer?.team_id && proxyPlayer.team_id !== t.id ? ` (drafted on ${teamsById[proxyPlayer.team_id]?.name})` : ''}
+                    </p>
+                  )}
+
+                  <div className="flex gap-1.5 flex-wrap">
+                    {owner ? (
+                      <button
+                        onClick={() => {
+                          setReassigningTeamId(reassigningTeamId === t.id ? null : t.id);
+                          setReassignEmail('');
+                        }}
+                        className="text-[11px] font-medium rounded-md px-2 py-1"
+                        style={{ background: '#e6f1fb', color: '#0c447c' }}
+                      >
+                        Change GM
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setReassigningTeamId(reassigningTeamId === t.id ? null : t.id);
+                          setReassignEmail('');
+                        }}
+                        className="text-[11px] font-medium rounded-md px-2.5 py-1"
+                        style={{ background: '#185fa5', color: '#ffffff' }}
+                      >
+                        Assign GM
+                      </button>
+                    )}
+                    {t.proxy_email ? (
+                      <button
+                        onClick={() => handleClearProxy(t.id)}
+                        disabled={clearingProxyTeamId === t.id}
+                        className="text-[11px] font-medium rounded-md px-2 py-1"
+                        style={{ background: '#faeeda', color: '#854f0b' }}
+                      >
+                        {clearingProxyTeamId === t.id ? '…' : 'Remove proxy'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setExpandedProxyTeamId(expandedProxyTeamId === t.id ? null : t.id)}
+                        className="text-[11px] font-medium rounded-md px-2 py-1"
+                        style={{ background: '#faeeda', color: '#854f0b' }}
+                      >
+                        Add proxy
+                      </button>
+                    )}
+                    {owner && (
+                      <button
+                        onClick={() => handleClearGm(t.id, t.name)}
+                        disabled={clearingGmTeamId === t.id}
+                        className="text-[11px] font-medium rounded-md px-2 py-1"
+                        style={{ background: '#fcebeb', color: '#791f1f' }}
+                      >
+                        {clearingGmTeamId === t.id ? '…' : 'Remove GM'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (
+                          !owner ||
+                          window.confirm(
+                            `Remove ${t.name}? This will release ${owner.playerName || owner.email} back into the player pool as a regular player.`
+                          )
+                        ) {
+                          handleDeleteTeam(t);
+                        }
+                      }}
+                      disabled={draftLocked || deletingTeamId === t.id}
+                      className="text-[11px] font-medium rounded-md px-2 py-1"
+                      style={{ background: '#fcebeb', color: '#791f1f' }}
+                    >
+                      {deletingTeamId === t.id ? '…' : 'Delete team'}
+                    </button>
+                  </div>
+
+                  {reassigningTeamId === t.id && (
+                    <div className="flex gap-2 mt-2 pt-2 border-t border-line">
+                      <select value={reassignEmail} onChange={(e) => setReassignEmail(e.target.value)} className="flex-1 text-xs">
+                        <option value="">{owner ? 'Select a new GM…' : 'Select a GM…'}</option>
+                        {sortedActivePlayers
+                          .filter((p) => p.email !== owner?.email)
+                          .map((p) => (
+                            <option key={p.email} value={p.email}>
+                              {p.full_name} ({p.email})
+                            </option>
+                          ))}
+                      </select>
+                      <button
+                        onClick={() => handleReassign(t.id)}
+                        disabled={!reassignEmail || reassigning}
+                        className="btn-primary text-xs flex-shrink-0"
+                      >
+                        {reassigning ? 'Saving…' : 'Confirm'}
+                      </button>
+                    </div>
+                  )}
+
+                  {expandedProxyTeamId === t.id && (
+                    <div className="flex gap-2 mt-2 pt-2 border-t border-line">
+                      <select
+                        value={proxySelections[t.id] || ''}
+                        onChange={(e) => setProxySelections((s) => ({ ...s, [t.id]: e.target.value }))}
+                        className="flex-1 text-xs"
+                      >
+                        <option value="">Set a proxy…</option>
+                        {sortedActivePlayers
+                          .filter((p) => p.email?.toLowerCase() !== owner?.email?.toLowerCase())
+                          .map((p) => (
+                            <option key={p.email} value={p.email}>
+                              {p.full_name}
+                              {p.team_id && p.team_id !== t.id ? ` (${teamsById[p.team_id]?.name})` : ''}
+                            </option>
+                          ))}
+                      </select>
+                      <button
+                        onClick={async () => {
+                          await handleSetProxy(t.id);
+                          setExpandedProxyTeamId(null);
+                        }}
+                        disabled={!proxySelections[t.id] || settingProxyTeamId === t.id}
+                        className="btn-primary text-xs flex-shrink-0"
+                      >
+                        {settingProxyTeamId === t.id ? '…' : 'Set'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -799,171 +911,9 @@ export default function CommissionerToolsPage() {
           )}
           <p className="text-[11px] text-faint mt-1.5">
             Raising the count adds placeholder teams with a temporary name and a random color \u2014 assign each a GM
-            below, and they'll rename their team and pick their own color from their profile. Lowering the count only
+            above, and they'll rename their team and pick their own color from their profile. Lowering the count only
             removes teams that don't have a GM yet.
           </p>
-          </>
-          )}
-        </div>
-        <div className="bg-surface rounded-xl p-4 mb-5">
-          <button onClick={() => toggleSection('assign-a-gm')} className="w-full flex items-center justify-between">
-            <p className="text-sm font-medium text-ink m-0">Assign a GM</p>
-            <i className={`ti ti-chevron-${openSections['assign-a-gm'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
-          </button>
-          {openSections['assign-a-gm'] && (
-          <>
-          <p className="text-xs text-muted mb-3">
-            Choose a registered player and a team. They'll be removed from the draft pool and placed directly on that
-            team's roster.
-          </p>
-
-          {message && (
-            <div
-              className="rounded-md px-3 py-2 mb-3 text-xs"
-              style={{
-                background: message.type === 'error' ? '#fcebeb' : '#eaf3de',
-                color: message.type === 'error' ? '#791f1f' : '#27500a',
-              }}
-            >
-              {message.text}
-            </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row gap-2 mb-3">
-            <select value={selectedEmail} onChange={(e) => setSelectedEmail(e.target.value)} className="flex-1 text-xs">
-              <option value="">Select a player…</option>
-              {availableToPromote.map((p) => (
-                <option key={p.email} value={p.email}>
-                  {p.full_name} ({p.email})
-                </option>
-              ))}
-            </select>
-            <select value={selectedTeamId} onChange={(e) => setSelectedTeamId(e.target.value)} className="flex-1 text-xs">
-              <option value="">Select a team…</option>
-              {teamsWithoutGM.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            onClick={handlePromote}
-            disabled={!selectedEmail || !selectedTeamId || promoting}
-            className="btn-primary text-xs w-full"
-          >
-            {promoting ? 'Assigning…' : 'Assign as GM'}
-          </button>
-
-          {teamsWithoutGM.length === 0 && (
-            <p className="text-[11px] text-faint mt-2">Every team already has a GM assigned.</p>
-          )}
-          {availableToPromote.length === 0 && teamsWithoutGM.length > 0 && (
-            <p className="text-[11px] text-faint mt-2">
-              No unassigned registered players available right now — they'll appear here once they register.
-            </p>
-          )}
-          </>
-          )}
-        </div>
-        <div className="bg-surface rounded-xl p-4 mb-5">
-          <button onClick={() => toggleSection('current-gm-commissioner-assignments')} className="w-full flex items-center justify-between">
-            <p className="text-sm font-medium text-ink m-0">Current GM / commissioner assignments</p>
-            <i className={`ti ti-chevron-${openSections['current-gm-commissioner-assignments'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
-          </button>
-          {openSections['current-gm-commissioner-assignments'] && (
-          <>
-
-          {commissionerMessage && (
-            <div
-              className="rounded-md px-3 py-2 mb-3 text-xs"
-              style={{
-                background: commissionerMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
-                color: commissionerMessage.type === 'error' ? '#791f1f' : '#27500a',
-              }}
-            >
-              {commissionerMessage.text}
-            </div>
-          )}
-
-          {currentGMs.length === 0 ? (
-            <p className="text-xs text-muted">No one assigned yet.</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {currentGMs.map((g) => (
-                <div key={g.email} className="bg-white rounded-md px-3 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {g.team_id ? (
-                        <FootballIcon color={teamsById[g.team_id]?.team_color || '#0074ff'} size={14} />
-                      ) : (
-                        <i className="ti ti-shield text-sm text-muted" aria-hidden="true" />
-                      )}
-                      <span className="text-xs text-ink truncate">{teamsById[g.team_id]?.name || 'No team (admin only)'}</span>
-                    </div>
-                    <span className="text-xs text-muted flex items-center gap-1 flex-shrink-0">
-                      <i className={g.role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'} aria-hidden="true" />
-                      {g.playerName || g.email}
-                    </span>
-                    {g.role === 'commissioner' && g.email?.toLowerCase() !== myEmail && (
-                      <button
-                        onClick={() => handleRevokeCommissioner(g.email)}
-                        disabled={revokingEmail === g.email}
-                        className="text-[11px] font-medium rounded-md px-2 py-1 flex-shrink-0"
-                        style={{ background: '#fcebeb', color: '#791f1f' }}
-                      >
-                        {revokingEmail === g.email ? '…' : 'Revoke'}
-                      </button>
-                    )}
-                    {g.role === 'gm' && g.team_id && (
-                      <div className="flex gap-1.5 flex-shrink-0">
-                        <button
-                          onClick={() => {
-                            setReassigningTeamId(reassigningTeamId === g.team_id ? null : g.team_id);
-                            setReassignEmail('');
-                          }}
-                          className="text-[11px] font-medium rounded-md px-2 py-1"
-                          style={{ background: '#e6f1fb', color: '#0c447c' }}
-                        >
-                          Reassign
-                        </button>
-                        <button
-                          onClick={() => handleClearGm(g.team_id, teamsById[g.team_id]?.name || 'this team')}
-                          disabled={clearingGmTeamId === g.team_id}
-                          className="text-[11px] font-medium rounded-md px-2 py-1"
-                          style={{ background: '#fcebeb', color: '#791f1f' }}
-                        >
-                          {clearingGmTeamId === g.team_id ? '…' : 'Clear GM'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  {reassigningTeamId === g.team_id && (
-                    <div className="flex gap-2 mt-2 pt-2 border-t border-line">
-                      <select value={reassignEmail} onChange={(e) => setReassignEmail(e.target.value)} className="flex-1 text-xs">
-                        <option value="">Select a new GM…</option>
-                        {sortedActivePlayers
-                          .filter((p) => p.email !== g.email)
-                          .map((p) => (
-                            <option key={p.email} value={p.email}>
-                              {p.full_name} ({p.email})
-                            </option>
-                          ))}
-                      </select>
-                      <button
-                        onClick={() => handleReassign(g.team_id)}
-                        disabled={!reassignEmail || reassigning}
-                        className="btn-primary text-xs flex-shrink-0"
-                      >
-                        {reassigning ? 'Saving…' : 'Confirm'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
           </>
           )}
         </div>
@@ -976,9 +926,20 @@ export default function CommissionerToolsPage() {
           <>
           <p className="text-xs text-muted mb-3">
             Give another registered player commissioner access — useful for a co-commissioner. There's no limit on how
-            many you can add. Optionally tie them to a team, or leave it as admin-only. Only shows players who aren't
-            already a commissioner.
+            many you can add. Optionally tie them to a team that doesn't have a GM yet, or leave it as admin-only.
           </p>
+
+          {commissionerMessage && (
+            <div
+              className="rounded-md px-3 py-2 mb-3 text-xs"
+              style={{
+                background: commissionerMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
+                color: commissionerMessage.type === 'error' ? '#791f1f' : '#27500a',
+              }}
+            >
+              {commissionerMessage.text}
+            </div>
+          )}
 
           <div className="flex flex-col sm:flex-row gap-2 mb-3">
             <select value={commissionerEmail} onChange={(e) => setCommissionerEmail(e.target.value)} className="flex-1 text-xs">
@@ -993,24 +954,55 @@ export default function CommissionerToolsPage() {
             </select>
             <select value={commissionerTeamId} onChange={(e) => setCommissionerTeamId(e.target.value)} className="flex-1 text-xs">
               <option value="">No team (admin only)</option>
-              {teams
-                .slice()
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
+              {teamsWithoutGM.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
             </select>
           </div>
 
           <button
             onClick={handleAssignCommissioner}
             disabled={!commissionerEmail || assigningCommissioner}
-            className="btn-primary text-xs w-full"
+            className="btn-primary text-xs w-full mb-3"
           >
             {assigningCommissioner ? 'Assigning…' : 'Grant commissioner access'}
           </button>
+
+          <div className="border-t border-line pt-3">
+            <p className="text-[11px] font-medium text-muted uppercase tracking-wide mb-2">Current commissioners</p>
+            <div className="flex flex-col gap-2">
+              {currentGMs
+                .filter((g) => g.role === 'commissioner')
+                .map((g) => (
+                  <div key={g.email} className="flex items-center justify-between bg-white rounded-md px-3 py-2 gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {g.team_id ? (
+                        <FootballIcon color={teamsById[g.team_id]?.team_color || '#0074ff'} size={14} />
+                      ) : (
+                        <i className="ti ti-shield text-sm text-muted" aria-hidden="true" />
+                      )}
+                      <span className="text-xs text-ink truncate">{teamsById[g.team_id]?.name || 'No team (admin only)'}</span>
+                    </div>
+                    <span className="text-xs text-muted flex items-center gap-1 flex-shrink-0">
+                      <i className="ti ti-star-filled" aria-hidden="true" />
+                      {g.playerName || g.email}
+                    </span>
+                    {g.email?.toLowerCase() !== myEmail && (
+                      <button
+                        onClick={() => handleRevokeCommissioner(g.email)}
+                        disabled={revokingEmail === g.email}
+                        className="text-[11px] font-medium rounded-md px-2 py-1 flex-shrink-0"
+                        style={{ background: '#fcebeb', color: '#791f1f' }}
+                      >
+                        {revokingEmail === g.email ? '…' : 'Revoke'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+            </div>
+          </div>
           </>
           )}
         </div>
@@ -1088,92 +1080,6 @@ export default function CommissionerToolsPage() {
                 </button>
               </div>
             ))}
-          </div>
-          </>
-          )}
-        </div>
-        <div className="bg-surface rounded-xl p-4 mb-5">
-          <button onClick={() => toggleSection('draft-day-proxy')} className="w-full flex items-center justify-between">
-            <p className="text-sm font-medium text-ink m-0">Draft-day proxy</p>
-            <i className={`ti ti-chevron-${openSections['draft-day-proxy'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
-          </button>
-          {openSections['draft-day-proxy'] && (
-          <>
-          <p className="text-xs text-muted mb-3">
-            Let someone else pick for a team if its GM can't make it. Anyone active is eligible, even someone already
-            drafted onto another roster. The GM keeps their own access too — this is a backup, not a replacement. Set
-            or clear it any time, before or during the draft.
-          </p>
-
-          {proxyMessage && (
-            <div
-              className="rounded-md px-3 py-2 mb-3 text-xs"
-              style={{
-                background: proxyMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
-                color: proxyMessage.type === 'error' ? '#791f1f' : '#27500a',
-              }}
-            >
-              {proxyMessage.text}
-            </div>
-          )}
-
-          <div className="flex flex-col gap-2">
-            {teams.map((t) => {
-              const owner = ownerByTeamId[t.id];
-              const proxyPlayer = t.proxy_email ? players.find((p) => p.email?.toLowerCase() === t.proxy_email.toLowerCase()) : null;
-              return (
-                <div key={t.id} className="bg-white rounded-md px-3 py-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <FootballIcon color={t.team_color || '#0074ff'} size={14} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-ink m-0 truncate">{t.name}</p>
-                      <p className="text-[11px] text-muted m-0">{owner ? `GM: ${owner.playerName || owner.email}` : 'No GM assigned yet'}</p>
-                    </div>
-                  </div>
-                  {t.proxy_email ? (
-                    <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-line mt-1.5">
-                      <p className="text-[11px] m-0" style={{ color: '#0c447c' }}>
-                        Proxy: {proxyPlayer?.full_name || t.proxy_email}
-                        {proxyPlayer?.team_id && proxyPlayer.team_id !== t.id ? ` (drafted on ${teamsById[proxyPlayer.team_id]?.name})` : ''}
-                      </p>
-                      <button
-                        onClick={() => handleClearProxy(t.id)}
-                        disabled={clearingProxyTeamId === t.id}
-                        className="text-[11px] font-medium rounded-md px-2 py-1 flex-shrink-0"
-                        style={{ background: '#fcebeb', color: '#791f1f' }}
-                      >
-                        {clearingProxyTeamId === t.id ? '…' : 'Clear proxy'}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 pt-1.5 border-t border-line mt-1.5">
-                      <select
-                        value={proxySelections[t.id] || ''}
-                        onChange={(e) => setProxySelections((s) => ({ ...s, [t.id]: e.target.value }))}
-                        className="flex-1 text-xs"
-                      >
-                        <option value="">Set a proxy…</option>
-                        {sortedActivePlayers
-                          .filter((p) => p.email?.toLowerCase() !== owner?.email?.toLowerCase())
-                          .map((p) => (
-                            <option key={p.email} value={p.email}>
-                              {p.full_name}
-                              {p.team_id && p.team_id !== t.id ? ` (${teamsById[p.team_id]?.name})` : ''}
-                            </option>
-                          ))}
-                      </select>
-                      <button
-                        onClick={() => handleSetProxy(t.id)}
-                        disabled={!proxySelections[t.id] || settingProxyTeamId === t.id}
-                        className="btn-primary text-xs flex-shrink-0"
-                      >
-                        {settingProxyTeamId === t.id ? '…' : 'Set'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
           </div>
           </>
           )}
