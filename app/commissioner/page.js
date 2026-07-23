@@ -294,6 +294,7 @@ export default function CommissionerToolsPage() {
     const { error } = await supabase.rpc('set_team_count', { target_count: teamCountInput });
     if (error) {
       setTeamMgmtMessage({ type: 'error', text: error.message });
+      setTeamCountInput(teams.length);
     } else {
       setTeamMgmtMessage({ type: 'success', text: `League set to ${teamCountInput} teams.` });
       fetchData();
@@ -768,7 +769,10 @@ export default function CommissionerToolsPage() {
 
           {!draftLocked && (
             <div className="flex items-center gap-2 bg-white rounded-md px-3 py-2.5">
-              <span className="text-xs text-ink flex-1">Number of teams in the league</span>
+              <span className="text-xs text-ink flex-1">
+                Number of teams in the league
+                <span className="block text-[11px] text-muted">Currently {teams.length}</span>
+              </span>
               <select
                 value={teamCountInput}
                 onChange={(e) => setTeamCountInput(Number(e.target.value))}
