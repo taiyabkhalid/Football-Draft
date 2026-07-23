@@ -98,13 +98,13 @@ export default function DraftPage() {
   // ---- Derived draft state ----
   const currentPickNumber = picks.length + 1;
   const numTeams = settings?.num_teams || teams.length;
+  const draftStatus = settings?.draft_status || 'not_started';
+  const draftType = settings?.draft_type || 'snake';
   const currentRound = numTeams ? getRound(currentPickNumber, numTeams) : 1;
   const nextRound = numTeams ? getRound(currentPickNumber + 1, numTeams) : 1;
   const teamOnClock = numTeams ? getTeamOnTheClock(currentPickNumber, numTeams, teams, draftType) : null;
   const teamNextOnClock = numTeams ? getTeamOnTheClock(currentPickNumber + 1, numTeams, teams, draftType) : null;
 
-  const draftStatus = settings?.draft_status || 'not_started';
-  const draftType = settings?.draft_type || 'snake';
   const minRoster = settings?.min_roster_size ?? 9;
   const minFemale = settings?.min_female_players ?? 2;
   const pickClockSeconds = settings?.pick_clock_seconds ?? 120;
@@ -448,7 +448,7 @@ export default function DraftPage() {
   return (
     <main style={{ background: '#ffffff', minHeight: '100vh' }}>
       <BrandHeader
-        pageLabel={draftStatus === 'completed' ? 'Draft results' : 'Live draft'}
+        pageLabel={draftStatus === 'completed' ? 'Draft results' : draftStatus === 'paused' ? 'Draft paused' : 'Live draft'}
         liveIndicator={draftStatus === 'in_progress'}
         pickTimer={draftStatus === 'in_progress' ? timerDisplay : undefined}
       />
@@ -575,6 +575,13 @@ export default function DraftPage() {
             </div>
           )}
         </>
+      ) : draftStatus === 'paused' ? (
+        <div className="bg-[#faeeda] mx-4 sm:mx-5 mt-4 rounded-lg p-3.5 flex gap-2">
+          <i className="ti ti-player-pause text-base flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
+          <p className="text-sm m-0" style={{ color: '#633806' }}>
+            The commissioner has paused the draft. It'll pick back up from where it left off.
+          </p>
+        </div>
       ) : (
         <div className="bg-royal-pale mx-4 sm:mx-5 mt-4 rounded-lg p-3.5">
           <p className="text-sm m-0" style={{ color: '#0c447c' }}>

@@ -4,12 +4,13 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import BrandHeader from '../../lib/BrandHeader';
-import FootballIcon from '../../lib/FootballIcon';
+import FootballIcon, { TEAM_COLORS } from '../../lib/FootballIcon';
 import { randomizeDraftOrder } from '../../lib/draftLogic';
 
 export default function CommissionerToolsPage() {
   const router = useRouter();
   const [checked, setChecked] = useState(false);
+  const [myEmail, setMyEmail] = useState('');
 
   const [players, setPlayers] = useState([]);
   const [teams, setTeams] = useState([]);
@@ -37,6 +38,7 @@ export default function CommissionerToolsPage() {
 
   const [startingNow, setStartingNow] = useState(false);
   const [startMessage, setStartMessage] = useState(null);
+  const [pausing, setPausing] = useState(false);
 
   const [savingUnlock, setSavingUnlock] = useState(false);
 
@@ -47,6 +49,25 @@ export default function CommissionerToolsPage() {
   const [playerPoolFilter, setPlayerPoolFilter] = useState('active');
   const [togglingPlayerId, setTogglingPlayerId] = useState(null);
 
+  // Team management
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamColor, setNewTeamColor] = useState(TEAM_COLORS[0].hex);
+  const [addingTeam, setAddingTeam] = useState(false);
+  const [teamMgmtMessage, setTeamMgmtMessage] = useState(null);
+  const [deletingTeamId, setDeletingTeamId] = useState(null);
+
+  // Reset draft
+  const [resetDraftConfirming, setResetDraftConfirming] = useState(false);
+  const [resettingDraft, setResettingDraft] = useState(false);
+  const [resetDraftMessage, setResetDraftMessage] = useState(null);
+
+  // Assign / revoke commissioner
+  const [commissionerEmail, setCommissionerEmail] = useState('');
+  const [commissionerTeamId, setCommissionerTeamId] = useState('');
+  const [assigningCommissioner, setAssigningCommissioner] = useState(false);
+  const [commissionerMessage, setCommissionerMessage] = useState(null);
+  const [revokingEmail, setRevokingEmail] = useState(null);
+
   useEffect(() => {
     async function checkAccess() {
       const {
@@ -56,6 +77,7 @@ export default function CommissionerToolsPage() {
         router.push('/login');
         return;
       }
+      setMyEmail(user.email?.toLowerCase() || '');
       const { data: profileRow } = await supabase.from('profiles').select('role').eq('id', user.id).single();
       if (profileRow?.role !== 'commissioner') {
         router.push('/profile');
@@ -109,13 +131,13 @@ export default function CommissionerToolsPage() {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
-  const gmEmails = new Set(profiles.filter((p) => p.team_id).map((p) => p.email));
-  const availableToPromote = players.filter((p) => p.is_active && !p.team_id && !gmEmails.has(p.email));
+  const assignedEmails = new Set(profiles.filter((p) => p.role === 'gm' || p.role === 'commissioner').map((p) => p.email));
+  const availableToPromote = players.filter((p) => p.is_active && !p.team_id && !assignedEmails.has(p.email));
 
   const teamsById = Object.fromEntries(teams.map((t) => [t.id, t]));
   const playersByEmail = Object.fromEntries(players.map((p) => [p.email, p]));
   const currentGMs = profiles
-    .filter((p) => p.team_id)
+    .filter((p) => p.role === 'gm' || p.role === 'commissioner')
     .map((p) => ({
       ...p,
       teamName: teamsById[p.team_id]?.name,
@@ -252,6 +274,117 @@ export default function CommissionerToolsPage() {
     await supabase.from('players').update({ is_active: !player.is_active }).eq('id', player.id);
     await fetchData();
     setTogglingPlayerId(null);
+  }
+
+  async function handleAddTeam() {
+    if (!newTeamName.trim() || teams.length >= 8) return;
+    setAddingTeam(true);
+    setTeamMgmtMessage(null);
+    const nextPosition = teams.length > 0 ? Math.max(...teams.map((t) => t.draft_position || 0)) + 1 : 1;
+    const { error } = await supabase
+      .from('teams')
+      .insert({ name: newTeamName.trim(), team_color: newTeamColor, draft_position: nextPosition });
+    if (error) {
+      setTeamMgmtMessage({ type: 'error', text: error.message });
+    } else {
+      await supabase.from('draft_settings').update({ num_teams: teams.length + 1 }).eq('id', 1);
+      setTeamMgmtMessage({ type: 'success', text: `${newTeamName.trim()} added.` });
+      setNewTeamName('');
+      fetchData();
+    }
+    setAddingTeam(false);
+  }
+
+  async function handleDeleteTeam(team) {
+    if (teams.length <= 4) {
+      setTeamMgmtMessage({ type: 'error', text: 'At least 4 teams are required.' });
+      return;
+    }
+    const hasRoster = players.some((p) => p.team_id === team.id);
+    if (hasRoster) {
+      setTeamMgmtMessage({ type: 'error', text: `${team.name} still has players on its roster — reassign them first.` });
+      return;
+    }
+    setDeletingTeamId(team.id);
+    setTeamMgmtMessage(null);
+    const { error } = await supabase.from('teams').delete().eq('id', team.id);
+    if (error) {
+      setTeamMgmtMessage({ type: 'error', text: error.message });
+    } else {
+      await supabase.from('draft_settings').update({ num_teams: teams.length - 1 }).eq('id', 1);
+      setTeamMgmtMessage({ type: 'success', text: `${team.name} removed.` });
+      fetchData();
+    }
+    setDeletingTeamId(null);
+  }
+
+  async function handlePauseResume() {
+    setPausing(true);
+    setStartMessage(null);
+    const nextStatus = draftStatus === 'paused' ? 'in_progress' : 'paused';
+    const updates = { draft_status: nextStatus };
+    if (nextStatus === 'in_progress') updates.current_pick_started_at = new Date().toISOString();
+    const { error } = await supabase.from('draft_settings').update(updates).eq('id', 1);
+    if (error) {
+      setStartMessage({ type: 'error', text: error.message });
+    } else {
+      setStartMessage({
+        type: 'success',
+        text: nextStatus === 'paused' ? 'Draft paused.' : 'Draft resumed.',
+      });
+      fetchData();
+    }
+    setPausing(false);
+  }
+
+  async function handleResetDraft() {
+    if (!resetDraftConfirming) {
+      setResetDraftConfirming(true);
+      return;
+    }
+    setResettingDraft(true);
+    setResetDraftMessage(null);
+    const { error } = await supabase.rpc('reset_draft');
+    if (error) {
+      setResetDraftMessage({ type: 'error', text: error.message });
+    } else {
+      setResetDraftMessage({ type: 'success', text: 'Draft reset — every pick has been cleared.' });
+      fetchData();
+    }
+    setResettingDraft(false);
+    setResetDraftConfirming(false);
+  }
+
+  async function handleAssignCommissioner() {
+    if (!commissionerEmail) return;
+    setAssigningCommissioner(true);
+    setCommissionerMessage(null);
+    const { error } = await supabase.rpc('promote_to_commissioner', {
+      player_email: commissionerEmail,
+      target_team_id: commissionerTeamId || null,
+    });
+    if (error) {
+      setCommissionerMessage({ type: 'error', text: error.message });
+    } else {
+      setCommissionerMessage({ type: 'success', text: 'Commissioner access granted.' });
+      setCommissionerEmail('');
+      setCommissionerTeamId('');
+      fetchData();
+    }
+    setAssigningCommissioner(false);
+  }
+
+  async function handleRevokeCommissioner(email) {
+    setRevokingEmail(email);
+    setCommissionerMessage(null);
+    const { error } = await supabase.rpc('demote_commissioner', { target_email: email });
+    if (error) {
+      setCommissionerMessage({ type: 'error', text: error.message });
+    } else {
+      setCommissionerMessage({ type: 'success', text: 'Commissioner access removed.' });
+      fetchData();
+    }
+    setRevokingEmail(null);
   }
 
   if (!checked) {
@@ -399,12 +532,13 @@ export default function CommissionerToolsPage() {
           </div>
         </div>
 
-        {/* Start controls */}
+        {/* Start / pause / reset controls */}
         <div className="bg-surface rounded-xl p-4 mb-5">
-          <p className="text-sm font-medium text-ink mb-1">Start the draft</p>
+          <p className="text-sm font-medium text-ink mb-1">Draft controls</p>
           <p className="text-xs text-muted mb-3">
             {draftStatus === 'not_started' && 'The draft will start automatically at the scheduled time above, or you can start it early.'}
             {draftStatus === 'in_progress' && 'The draft is currently live.'}
+            {draftStatus === 'paused' && 'The draft is paused.'}
             {draftStatus === 'completed' && 'The draft has finished.'}
           </p>
 
@@ -424,6 +558,108 @@ export default function CommissionerToolsPage() {
             <button onClick={handleStartNow} disabled={startingNow} className="btn-primary text-xs w-full">
               {startingNow ? 'Starting…' : 'Start draft now'}
             </button>
+          )}
+
+          {(draftStatus === 'in_progress' || draftStatus === 'paused') && (
+            <button onClick={handlePauseResume} disabled={pausing} className="btn-secondary text-xs w-full">
+              {pausing ? 'Saving…' : draftStatus === 'paused' ? 'Resume draft' : 'Pause draft'}
+            </button>
+          )}
+
+          <div className="border-t border-line mt-3 pt-3">
+            <p className="text-xs text-muted mb-2">
+              Clears every pick and puts the draft back to not-started. Teams that are already assigned as GM/commissioner
+              stay put — everyone else goes back into the pool. This can't be undone.
+            </p>
+
+            {resetDraftMessage && (
+              <div
+                className="rounded-md px-3 py-2 mb-2 text-xs"
+                style={{
+                  background: resetDraftMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
+                  color: resetDraftMessage.type === 'error' ? '#791f1f' : '#27500a',
+                }}
+              >
+                {resetDraftMessage.text}
+              </div>
+            )}
+
+            <button
+              onClick={handleResetDraft}
+              disabled={resettingDraft}
+              className="text-xs w-full rounded-md py-2 font-medium"
+              style={{ background: resetDraftConfirming ? '#c0392b' : '#fcebeb', color: resetDraftConfirming ? '#ffffff' : '#791f1f' }}
+            >
+              {resettingDraft ? 'Resetting…' : resetDraftConfirming ? 'Click again to confirm reset' : 'Reset the draft'}
+            </button>
+            {resetDraftConfirming && (
+              <button onClick={() => setResetDraftConfirming(false)} className="text-[11px] text-muted mt-1.5 underline">
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Team management */}
+        <div className="bg-surface rounded-xl p-4 mb-5">
+          <p className="text-sm font-medium text-ink mb-1">Teams</p>
+          <p className="text-xs text-muted mb-3">
+            {draftLocked
+              ? 'Teams are locked once the draft has started.'
+              : `Add or remove teams (4\u20138 total). Adding or removing a team updates the draft order automatically.`}
+          </p>
+
+          {teamMgmtMessage && (
+            <div
+              className="rounded-md px-3 py-2 mb-3 text-xs"
+              style={{
+                background: teamMgmtMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
+                color: teamMgmtMessage.type === 'error' ? '#791f1f' : '#27500a',
+              }}
+            >
+              {teamMgmtMessage.text}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 mb-3">
+            {teams.map((t) => (
+              <div key={t.id} className="flex items-center gap-2 bg-white rounded-md px-3 py-2">
+                <FootballIcon color={t.team_color || '#0074ff'} size={14} />
+                <span className="text-xs text-ink flex-1">{t.name}</span>
+                <button
+                  onClick={() => handleDeleteTeam(t)}
+                  disabled={draftLocked || deletingTeamId === t.id}
+                  className="text-[11px] font-medium rounded-md px-2 py-1"
+                  style={{ background: '#fcebeb', color: '#791f1f' }}
+                >
+                  {deletingTeamId === t.id ? '…' : 'Remove'}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {!draftLocked && teams.length < 8 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newTeamName}
+                  onChange={(e) => setNewTeamName(e.target.value)}
+                  placeholder="New team name"
+                  className="flex-1 text-xs"
+                />
+                <select value={newTeamColor} onChange={(e) => setNewTeamColor(e.target.value)} className="text-xs" style={{ width: 110 }}>
+                  {TEAM_COLORS.map((c) => (
+                    <option key={c.hex} value={c.hex}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button onClick={handleAddTeam} disabled={!newTeamName.trim() || addingTeam} className="btn-primary text-xs w-full">
+                {addingTeam ? 'Adding…' : 'Add team'}
+              </button>
+            </div>
           )}
         </div>
 
@@ -544,24 +780,89 @@ export default function CommissionerToolsPage() {
 
         <div className="bg-surface rounded-xl p-4 mb-5">
           <p className="text-sm font-medium text-ink mb-3">Current GM / commissioner assignments</p>
+
+          {commissionerMessage && (
+            <div
+              className="rounded-md px-3 py-2 mb-3 text-xs"
+              style={{
+                background: commissionerMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
+                color: commissionerMessage.type === 'error' ? '#791f1f' : '#27500a',
+              }}
+            >
+              {commissionerMessage.text}
+            </div>
+          )}
+
           {currentGMs.length === 0 ? (
             <p className="text-xs text-muted">No one assigned yet.</p>
           ) : (
             <div className="flex flex-col gap-2">
               {currentGMs.map((g) => (
-                <div key={g.email} className="flex items-center justify-between bg-white rounded-md px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <FootballIcon color={teamsById[g.team_id]?.team_color || '#0074ff'} size={14} />
-                    <span className="text-xs text-ink">{teamsById[g.team_id]?.name}</span>
+                <div key={g.email} className="flex items-center justify-between bg-white rounded-md px-3 py-2 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {g.team_id ? (
+                      <FootballIcon color={teamsById[g.team_id]?.team_color || '#0074ff'} size={14} />
+                    ) : (
+                      <i className="ti ti-shield text-sm text-muted" aria-hidden="true" />
+                    )}
+                    <span className="text-xs text-ink truncate">{teamsById[g.team_id]?.name || 'No team (admin only)'}</span>
                   </div>
-                  <span className="text-xs text-muted flex items-center gap-1">
+                  <span className="text-xs text-muted flex items-center gap-1 flex-shrink-0">
                     <i className={g.role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'} aria-hidden="true" />
                     {g.playerName || g.email}
                   </span>
+                  {g.role === 'commissioner' && g.email?.toLowerCase() !== myEmail && (
+                    <button
+                      onClick={() => handleRevokeCommissioner(g.email)}
+                      disabled={revokingEmail === g.email}
+                      className="text-[11px] font-medium rounded-md px-2 py-1 flex-shrink-0"
+                      style={{ background: '#fcebeb', color: '#791f1f' }}
+                    >
+                      {revokingEmail === g.email ? '…' : 'Revoke'}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
           )}
+        </div>
+
+        {/* Assign a commissioner */}
+        <div className="bg-surface rounded-xl p-4 mb-5">
+          <p className="text-sm font-medium text-ink mb-1">Assign a commissioner</p>
+          <p className="text-xs text-muted mb-3">
+            Give another registered player commissioner access — useful for a co-commissioner. Optionally tie them to a
+            team, or leave it as admin-only.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-2 mb-3">
+            <select value={commissionerEmail} onChange={(e) => setCommissionerEmail(e.target.value)} className="flex-1 text-xs">
+              <option value="">Select a player…</option>
+              {players
+                .filter((p) => p.is_active)
+                .map((p) => (
+                  <option key={p.email} value={p.email}>
+                    {p.full_name} ({p.email})
+                  </option>
+                ))}
+            </select>
+            <select value={commissionerTeamId} onChange={(e) => setCommissionerTeamId(e.target.value)} className="flex-1 text-xs">
+              <option value="">No team (admin only)</option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={handleAssignCommissioner}
+            disabled={!commissionerEmail || assigningCommissioner}
+            className="btn-primary text-xs w-full"
+          >
+            {assigningCommissioner ? 'Assigning…' : 'Grant commissioner access'}
+          </button>
         </div>
 
         {/* Profile edit unlock */}
