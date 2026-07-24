@@ -197,10 +197,12 @@ export default function DraftPage() {
 
   const availablePlayers = useMemo(() => players.filter((p) => !p.team_id), [players]);
 
-  // The draft runs until the whole player pool is allocated, not a fixed
+  // The draft runs until the whole DRAFTABLE pool is allocated, not a fixed
   // roster-size cap - so the round count is derived from the pool size and
   // team count, and the last round is partial if it doesn't divide evenly.
-  const totalPicks = players.length;
+  // Each team's GM/commissioner already occupies one roster slot before the
+  // draft even starts, so they're excluded from the count of picks needed.
+  const totalPicks = Math.max(players.length - numTeams, 0);
   const maxRounds = numTeams ? Math.ceil(totalPicks / numTeams) : 0;
   const pickByNumber = useMemo(() => Object.fromEntries(picks.map((p) => [p.pick_number, p])), [picks]);
 

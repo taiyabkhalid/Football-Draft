@@ -177,8 +177,11 @@ export default function LiveDraftPage() {
 
   const pickByNumber = useMemo(() => Object.fromEntries(picks.map((p) => [p.pick_number, p])), [picks]);
 
-  // The draft runs until the whole player pool is allocated - see draft/page.js for the same logic.
-  const totalPicks = players.length;
+  // The draft runs until the whole DRAFTABLE pool is allocated - each team's
+  // GM/commissioner already occupies one roster slot before the draft even
+  // starts, so they're excluded from the count of picks needed. See
+  // draft/page.js for the same logic.
+  const totalPicks = Math.max(players.length - numTeams, 0);
   const maxRounds = numTeams ? Math.ceil(totalPicks / numTeams) : 0;
 
   const allSlots = useMemo(() => {
