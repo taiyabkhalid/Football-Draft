@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
 import FootballIcon, { lightenColor } from '../../lib/FootballIcon';
+import PrintRosterButton from '../../lib/PrintRosterButton';
 
 const PUB_LINES_YES = [
   'Already planning the post-game pint.',
@@ -154,10 +155,14 @@ export default function LiveDraftPage() {
   const [showPopout, setShowPopout] = useState(false);
   const audioRef = useRef(null);
   const processingRef = useRef(false);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    if (revealedCount === null) setRevealedCount(picks.length);
-  }, [picks, revealedCount]);
+    if (!loading && !initializedRef.current) {
+      initializedRef.current = true;
+      setRevealedCount(picks.length);
+    }
+  }, [loading, picks]);
 
   useEffect(() => {
     if (revealedCount === null) return;
@@ -190,13 +195,17 @@ export default function LiveDraftPage() {
         }
         await new Promise((resolve) => setTimeout(resolve, chimeMs * 0.75));
         setShowPopout(true);
+        setRevealedCount((c) => (c ?? 0) + 1);
+        // Hold at least 5 seconds before considering the next queued pick -
+        // if nothing else is queued when that ends, this pick just stays
+        // featured (persistently) until a genuinely new one arrives.
         await new Promise((resolve) => setTimeout(resolve, 5000));
-        setShowPopout(false);
-        setActiveReveal(null);
       } else {
         await new Promise((resolve) => setTimeout(resolve, 400));
+        setActiveReveal(null);
+        setShowPopout(false);
+        setRevealedCount((c) => (c ?? 0) + 1);
       }
-      setRevealedCount((c) => (c ?? 0) + 1);
       setQueue((q) => q.slice(1));
       processingRef.current = false;
     }
@@ -383,12 +392,15 @@ export default function LiveDraftPage() {
   }
 
   useEffect(() => {
-    if (draftStatus === 'completed') {
-      if (draftedScrollRef.current) draftedScrollRef.current.scrollLeft = 0;
-    } else if (currentPickRef.current) {
-      currentPickRef.current.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
-    }
-  }, [currentPickNumber, draftStatus]);
+    const timer = setTimeout(() => {
+      if (draftStatus === 'completed') {
+        if (draftedScrollRef.current) draftedScrollRef.current.scrollLeft = 0;
+      } else if (currentPickRef.current) {
+        currentPickRef.current.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+      }
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [currentPickNumber, draftStatus, activeReveal]);
 
   const pendingCompletionRef = useRef(false);
 
@@ -445,15 +457,19 @@ export default function LiveDraftPage() {
               {upcomingPicks.map((n) => {
                 const color = n.team?.team_color || '#0074ff';
                 return (
-                  <span
+                  <div
                     key={n.pickNumber}
-                    className="flex-none text-xs px-2.5 py-1.5 rounded-md whitespace-nowrap flex items-center gap-1.5"
-                    style={{ background: lightenColor(color, 0.85), color: '#0c2340' }}
+                    className="flex-none rounded-md flex flex-col items-center justify-center text-center px-1.5"
+                    style={{ width: 100, height: 44, background: lightenColor(color, 0.85), color: '#0c2340' }}
                   >
-                    <FootballIcon color={color} size={12} />
-                    {n.team?.name || '—'}
-                    <span style={{ color: '#5a6b7d' }}>&middot; Rnd {n.round} . Pick # {n.pickNumber}</span>
-                  </span>
+                    <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
+                      <FootballIcon color={color} size={11} />
+                      <span className="truncate">{n.team?.name || '—'}</span>
+                    </span>
+                    <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
+                      Rnd {n.round} . Pick {pickInRound(n.pickNumber, numTeams)}
+                    </span>
+                  </div>
                 );
               })}
             </div>
@@ -561,7 +577,7 @@ export default function LiveDraftPage() {
             return (
               <div
                 key={slot.pickNumber}
-                ref={slot.pickNumber === currentPickNumber ? currentPickRef : null}
+                ref={!activeReveal && slot.pickNumber === currentPickNumber ? currentPickRef : null}
                 onClick={() => slot.player && openProfile(slot.player.id)}
                 className={`flex-none rounded-xl p-3 flex flex-col items-center text-center ${
                   isClockSlot && timeExpired ? 'animate-subtle-flash' : ''
@@ -674,6 +690,11 @@ export default function LiveDraftPage() {
         </button>
         {viewByTeamOpen && (
           <>
+            {draftStatus === 'completed' && (
+              <div className="mt-2 mb-2" style={{ maxWidth: 220 }}>
+                <PrintRosterButton teams={teams} />
+              </div>
+            )}
             <div className="flex gap-1.5 mt-2 mb-2">
               <button
                 onClick={() => setRosterViewMode('team')}
@@ -725,16 +746,19 @@ export default function LiveDraftPage() {
                       <button
                         key={t.id}
                         onClick={() => setViewingTeamId(viewingTeamId === t.id ? null : t.id)}
-                        className="text-xs px-2.5 py-1.5 rounded-md font-medium flex items-center gap-1.5"
+                        className="text-xs px-2 py-1.5 rounded-md font-medium flex items-center gap-1.5 justify-center"
                         style={{
+                          width: 140,
                           background: lightenColor(color, 0.85),
                           color: '#0c2340',
                           border: selected ? `2px solid ${color}` : isMine ? '2px solid #185fa5' : '2px solid transparent',
                         }}
                       >
                         <FootballIcon color={color} size={14} />
-                        {t.name}
-                        {isMine ? ' (you)' : ''}
+                        <span className="truncate">
+                          {t.name}
+                          {isMine ? ' (you)' : ''}
+                        </span>
                       </button>
                     );
                   })}
@@ -1134,10 +1158,15 @@ export default function LiveDraftPage() {
                     GM &middot; {team?.name || 'Unassigned'}
                   </p>
                 ) : p.draft_pick_number ? (
-                  <p className="text-xs text-ink m-0">
-                    Drafted &middot; Rnd {getRound(p.draft_pick_number, numTeams)} . Pick # {p.draft_pick_number} &middot;{' '}
-                    {team?.name || ''}
-                  </p>
+                  <>
+                    <p className="text-xs text-ink m-0">
+                      Drafted &middot; Rnd {getRound(p.draft_pick_number, numTeams)} . Overall Pick# {p.draft_pick_number}
+                    </p>
+                    <p className="text-xs font-medium text-ink m-0 mt-1">{team?.name || ''}</p>
+                    {team && ownerByTeam[team.id] && (
+                      <p className="text-[11px] text-muted m-0">{ownerByTeam[team.id].name}</p>
+                    )}
+                  </>
                 ) : p.team_id ? (
                   <p className="text-xs text-ink m-0">Added manually &middot; {team?.name || ''}</p>
                 ) : (

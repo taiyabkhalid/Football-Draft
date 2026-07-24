@@ -6,12 +6,14 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import BrandHeader from '../../lib/BrandHeader';
 import FootballIcon, { TEAM_COLORS } from '../../lib/FootballIcon';
+import PrintRosterButton from '../../lib/PrintRosterButton';
 
 export default function ProfilePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [player, setPlayer] = useState(null);
   const [team, setTeam] = useState(null);
+  const [allTeams, setAllTeams] = useState([]);
   const [settings, setSettings] = useState(null);
   const [role, setRole] = useState(null);
   const [teamNameDraft, setTeamNameDraft] = useState('');
@@ -48,6 +50,11 @@ export default function ProfilePage() {
     setPlayer(playerRow);
     setSettings(settingsRow);
     setRole(profileRow?.role || null);
+
+    if (settingsRow?.draft_status === 'completed') {
+      const { data: teamsData } = await supabase.from('teams').select('*');
+      setAllTeams(teamsData || []);
+    }
 
     const teamId = profileRow?.team_id || playerRow.team_id;
     if (teamId) {
@@ -214,6 +221,9 @@ export default function ProfilePage() {
               >
                 Update profile
               </Link>
+            )}
+            {draftStatus === 'completed' && (
+              <PrintRosterButton teams={allTeams} pinnedTeamId={team?.id} width={108} />
             )}
             {role === 'commissioner' && (
               <Link

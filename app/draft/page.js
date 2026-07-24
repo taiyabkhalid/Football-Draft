@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
 import FootballIcon, { lightenColor } from '../../lib/FootballIcon';
+import PrintRosterButton from '../../lib/PrintRosterButton';
 
 const ALL_POSITIONS = ['QB', 'WR', 'C', 'CB', 'Safety', 'LB', 'Rush'];
 const OFFENSIVE_POSITIONS = ['QB', 'WR', 'C'];
@@ -535,7 +536,7 @@ export default function DraftPage() {
                   </p>
                 </div>
                 <p className="text-[10px] m-0 mt-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
-                  Round {currentRound} &middot; Pick {currentPickNumber}
+                  Round {currentRound} &middot; Pick {pickInRound(currentPickNumber, numTeams)}
                 </p>
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
@@ -605,15 +606,19 @@ export default function DraftPage() {
               {upcomingPicks.map((n) => {
                 const color = n.team?.team_color || '#0074ff';
                 return (
-                  <span
+                  <div
                     key={n.pickNumber}
-                    className="flex-none text-xs px-2.5 py-1.5 rounded-md whitespace-nowrap flex items-center gap-1.5"
-                    style={{ background: lightenColor(color, 0.85), color: '#0c2340' }}
+                    className="flex-none rounded-md flex flex-col items-center justify-center text-center px-1.5"
+                    style={{ width: 100, height: 44, background: lightenColor(color, 0.85), color: '#0c2340' }}
                   >
-                    <FootballIcon color={color} size={12} />
-                    {n.team?.name || '—'}
-                    <span style={{ color: '#5a6b7d' }}>&middot; Rnd {n.round} . Pick # {n.pickNumber}</span>
-                  </span>
+                    <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
+                      <FootballIcon color={color} size={11} />
+                      <span className="truncate">{n.team?.name || '—'}</span>
+                    </span>
+                    <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
+                      Rnd {n.round} . Pick {pickInRound(n.pickNumber, numTeams)}
+                    </span>
+                  </div>
                 );
               })}
             </div>
@@ -666,6 +671,11 @@ export default function DraftPage() {
         </button>
         {viewByTeamOpen && (
           <>
+            {draftStatus === 'completed' && (
+              <div className="mt-2 mb-2" style={{ maxWidth: 220 }}>
+                <PrintRosterButton teams={teams} />
+              </div>
+            )}
             <div className="flex gap-1.5 mt-2 mb-2">
               <button
                 onClick={() => setRosterViewMode('team')}
@@ -716,15 +726,16 @@ export default function DraftPage() {
                       <button
                         key={t.id}
                         onClick={() => setViewingTeamId(viewingTeamId === t.id ? null : t.id)}
-                        className="text-xs px-2.5 py-1.5 rounded-md font-medium flex items-center gap-1.5"
+                        className="text-xs px-2 py-1.5 rounded-md font-medium flex items-center gap-1.5 justify-center"
                         style={{
+                          width: 140,
                           background: lightenColor(color, 0.85),
                           color: '#0c2340',
                           border: selected ? `2px solid ${color}` : '2px solid transparent',
                         }}
                       >
                         <FootballIcon color={color} size={14} />
-                        {t.name}
+                        <span className="truncate">{t.name}</span>
                       </button>
                     );
                   })}
@@ -1057,12 +1068,12 @@ export default function DraftPage() {
         )}
       </div>
 
-      {/* Draft board - the main drafting area: search/sort, available players, cards, your team.
+      {/* Player selection - the main drafting area: search/sort, available players, cards, your team.
           Stays visible after the draft ends so GMs can still search/reference rosters and use
           "Add to my team" for leftover or late-registered players. */}
       <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5">
         <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: '#0c447c' }}>
-          Draft board
+          Player selection
         </p>
 
         <div className="flex gap-2 flex-wrap items-center">
@@ -1412,10 +1423,15 @@ export default function DraftPage() {
                     GM &middot; {team?.name || 'Unassigned'}
                   </p>
                 ) : p.draft_pick_number ? (
-                  <p className="text-xs text-ink m-0">
-                    Drafted &middot; Rnd {getRound(p.draft_pick_number, numTeams)} . Pick # {p.draft_pick_number} &middot;{' '}
-                    {team?.name || ''}
-                  </p>
+                  <>
+                    <p className="text-xs text-ink m-0">
+                      Drafted &middot; Rnd {getRound(p.draft_pick_number, numTeams)} . Overall Pick# {p.draft_pick_number}
+                    </p>
+                    <p className="text-xs font-medium text-ink m-0 mt-1">{team?.name || ''}</p>
+                    {team && ownerByTeam[team.id] && (
+                      <p className="text-[11px] text-muted m-0">{ownerByTeam[team.id].name}</p>
+                    )}
+                  </>
                 ) : p.team_id ? (
                   <p className="text-xs text-ink m-0">Added manually &middot; {team?.name || ''}</p>
                 ) : (

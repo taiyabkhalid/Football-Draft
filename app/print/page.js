@@ -1,0 +1,191 @@
+'use client';
+
+import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { supabase } from '../../lib/supabaseClient';
+import FootballIcon from '../../lib/FootballIcon';
+
+const th = { textAlign: 'left', padding: '5px 8px', color: '#5a6b7d', fontWeight: 500 };
+const td = { padding: '5px 8px' };
+
+function PrintContent() {
+  const params = useSearchParams();
+  const type = params.get('type'); // 'team' | 'all' | 'draft'
+  const teamId = params.get('teamId');
+
+  const [loading, setLoading] = useState(true);
+  const [teams, setTeams] = useState([]);
+  const [players, setPlayers] = useState([]);
+  const [profiles, setProfiles] = useState([]);
+  const [numTeams, setNumTeams] = useState(0);
+
+  useEffect(() => {
+    async function fetchAll() {
+      const [teamsRes, playersRes, profilesRes, settingsRes] = await Promise.all([
+        supabase.from('teams').select('*').order('name', { ascending: true }),
+        supabase.from('players').select('*').eq('is_active', true),
+        supabase.from('profiles').select('role, team_id, email'),
+        supabase.from('draft_settings').select('num_teams').eq('id', 1).single(),
+      ]);
+      setTeams(teamsRes.data || []);
+      setPlayers(playersRes.data || []);
+      setProfiles(profilesRes.data || []);
+      setNumTeams(settingsRes.data?.num_teams || (teamsRes.data || []).length);
+      setLoading(false);
+    }
+    fetchAll();
+  }, []);
+
+  if (loading) {
+    return <p style={{ padding: 24, fontFamily: 'sans-serif' }}>Loading…</p>;
+  }
+
+  const teamsById = Object.fromEntries(teams.map((t) => [t.id, t]));
+  const playersByEmail = Object.fromEntries(players.map((p) => [p.email, p]));
+  const ownerByTeamId = Object.fromEntries(
+    profiles
+      .filter((p) => p.team_id)
+      .map((p) => [p.team_id, playersByEmail[p.email]?.full_name || p.email])
+  );
+
+  function rosterFor(team) {
+    return players
+      .filter((p) => p.team_id === team.id && p.draft_pick_number)
+      .sort((a, b) => a.draft_pick_number - b.draft_pick_number);
+  }
+
+  function TeamSection({ team, breakBefore }) {
+    const roster = rosterFor(team);
+    const femaleCount = roster.filter((p) => p.gender === 'F').length;
+    return (
+      <div style={{ marginBottom: 24, pageBreakBefore: breakBefore ? 'always' : 'auto' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            paddingBottom: 10,
+            borderBottom: `2px solid ${team.team_color || '#185fa5'}`,
+            marginBottom: 10,
+          }}
+        >
+          <FootballIcon color={team.team_color || '#0074ff'} size={18} />
+          <div>
+            <p style={{ fontSize: 15, fontWeight: 600, color: '#0c2340', margin: 0 }}>{team.name}</p>
+            <p style={{ fontSize: 11, color: '#5a6b7d', margin: 0 }}>
+              GM: {ownerByTeamId[team.id] || 'Unassigned'} &middot; {roster.length} players &middot; {femaleCount} female
+            </p>
+          </div>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              <th style={th}>Overall Pick#</th>
+              <th style={th}>Player</th>
+              <th style={th}>Position (Off/Def)</th>
+              <th style={th}>Gender</th>
+              <th style={th}>Height</th>
+            </tr>
+          </thead>
+          <tbody>
+            {roster.map((p) => (
+              <tr key={p.id} style={{ borderTop: '1px solid #eef0f2' }}>
+                <td style={td}>{p.draft_pick_number}</td>
+                <td style={td}>{p.full_name}</td>
+                <td style={td}>
+                  {p.offensive_position} / {p.defensive_position}
+                </td>
+                <td style={td}>{p.gender}</td>
+                <td style={td}>
+                  {p.height_feet}'{p.height_inches}"
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  function DraftOrderTable() {
+    const allDrafted = players
+      .filter((p) => p.draft_pick_number)
+      .sort((a, b) => a.draft_pick_number - b.draft_pick_number);
+    return (
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr>
+            <th style={th}>Overall Pick#</th>
+            <th style={th}>Player</th>
+            <th style={th}>Position (Off/Def)</th>
+            <th style={th}>Gender</th>
+            <th style={th}>Team</th>
+            <th style={th}>GM</th>
+          </tr>
+        </thead>
+        <tbody>
+          {allDrafted.map((p) => (
+            <tr key={p.id} style={{ borderTop: '1px solid #eef0f2' }}>
+              <td style={td}>{p.draft_pick_number}</td>
+              <td style={td}>{p.full_name}</td>
+              <td style={td}>
+                {p.offensive_position} / {p.defensive_position}
+              </td>
+              <td style={td}>{p.gender}</td>
+              <td style={td}>{teamsById[p.team_id]?.name || ''}</td>
+              <td style={td}>{ownerByTeamId[p.team_id] || ''}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  let title = 'Draft results';
+  let body = null;
+
+  if (type === 'team') {
+    const team = teamsById[teamId];
+    title = team ? `${team.name} roster` : 'Team roster';
+    body = team ? <TeamSection team={team} /> : <p>Team not found.</p>;
+  } else if (type === 'all') {
+    title = 'All team rosters';
+    body = teams.map((t, i) => <TeamSection key={t.id} team={t} breakBefore={i > 0} />);
+  } else if (type === 'draft') {
+    title = 'Full draft order';
+    body = <DraftOrderTable />;
+  } else {
+    body = <p>Nothing to print — check the link you used to get here.</p>;
+  }
+
+  return (
+    <div style={{ fontFamily: 'sans-serif', color: '#0c2340', maxWidth: 850, margin: '0 auto', padding: 24 }}>
+      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <p style={{ fontSize: 13, color: '#5a6b7d', margin: 0 }}>Use your browser's print dialog (Ctrl/Cmd+P) to print or save as PDF.</p>
+        <button
+          onClick={() => window.print()}
+          style={{ fontSize: 13, fontWeight: 600, padding: '8px 16px', background: '#185fa5', color: '#fff', border: 'none', borderRadius: 6 }}
+        >
+          Print
+        </button>
+      </div>
+      <h1 style={{ fontSize: 18, margin: '0 0 16px' }}>{title}</h1>
+      {body}
+      <style>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+export default function PrintPage() {
+  return (
+    <Suspense fallback={<p style={{ padding: 24, fontFamily: 'sans-serif' }}>Loading…</p>}>
+      <PrintContent />
+    </Suspense>
+  );
+}
