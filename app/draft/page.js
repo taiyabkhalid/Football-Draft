@@ -718,6 +718,7 @@ export default function DraftPage() {
               <button
                 type="button"
                 onClick={() => {
+                  console.log('Draft board button clicked');
                   setRosterViewMode('board');
                   scrollHalfwayDown();
                 }}
@@ -732,11 +733,12 @@ export default function DraftPage() {
                 Draft board
               </button>
             </div>
-            <p className="text-[10px] text-faint mb-2">DEBUG: rosterViewMode = "{rosterViewMode}"</p>
+            <p className="text-xs font-bold mb-2" style={{ background: '#ffd60a', color: '#412402', padding: '4px 8px', borderRadius: 4 }}>
+              DEBUG: rosterViewMode = "{rosterViewMode}" (open browser console to check for "Draft board button clicked")
+            </p>
 
             {rosterViewMode === 'team' && (
               <>
-                <p className="text-[10px] text-muted mb-2">Tap a team to view their roster</p>
                 <div className="flex gap-2 flex-wrap mb-2">
                   {teams.map((t) => {
                     const color = t.team_color || '#0074ff';
@@ -770,19 +772,20 @@ export default function DraftPage() {
                     <div className="bg-white rounded-lg p-3 mb-1">
                       <div className="flex justify-between items-center mb-1">
                         <p className="text-sm font-medium text-ink m-0">{viewedTeam?.name}</p>
-                        {ownerByTeam[viewingTeamId] && (
-                          <p className="text-xs m-0 flex items-center gap-1" style={{ color: '#185fa5' }}>
-                            <i
-                              className={ownerByTeam[viewingTeamId].role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'}
-                              aria-hidden="true"
-                            />
-                            {ownerByTeam[viewingTeamId].name}
+                        {viewedTeam?.proxy_email && (
+                          <p className="text-xs m-0 flex items-center gap-1" style={{ color: '#854f0b' }}>
+                            <i className="ti ti-user-shield" aria-hidden="true" />
+                            {playersByEmail[viewedTeam.proxy_email]?.full_name || viewedTeam.proxy_email}
                           </p>
                         )}
                       </div>
-                      {viewedTeam?.proxy_email && (
-                        <p className="text-[11px] m-0 mb-2" style={{ color: '#854f0b' }}>
-                          Proxy: {playersByEmail[viewedTeam.proxy_email]?.full_name || viewedTeam.proxy_email}
+                      {ownerByTeam[viewingTeamId] && (
+                        <p className="text-[11px] m-0 mb-2 flex items-center gap-1" style={{ color: '#185fa5' }}>
+                          <i
+                            className={ownerByTeam[viewingTeamId].role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'}
+                            aria-hidden="true"
+                          />
+                          GM: {ownerByTeam[viewingTeamId].name}
                         </p>
                       )}
                       <div className="grid grid-cols-6 gap-1.5">
@@ -795,7 +798,7 @@ export default function DraftPage() {
                               onClick={() => player && openProfile(player.id)}
                               className="rounded-lg flex flex-col items-center text-center px-1 py-2"
                               style={{
-                                minHeight: 88,
+                                minHeight: 100,
                                 cursor: player ? 'pointer' : 'default',
                                 background: isClockSlot ? lightenColor(teamColor, 0.85) : '#f1f3f6',
                                 border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
@@ -999,21 +1002,44 @@ export default function DraftPage() {
             )}
 
             {rosterViewMode === 'board' && (
-              <div className="bg-white rounded-lg p-3 overflow-x-auto">
+              <div
+                className="bg-white rounded-lg p-3"
+                style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '65vh' }}
+              >
                 <table className="border-collapse text-xs" style={{ width: '100%' }}>
                   <thead>
                     <tr>
                       <th
-                        className="text-left p-2 sticky left-0 bg-white"
-                        style={{ minWidth: 130, position: 'sticky', top: 0, zIndex: 3 }}
+                        className="text-left p-2.5 sticky left-0"
+                        style={{
+                          minWidth: 130,
+                          position: 'sticky',
+                          top: 0,
+                          zIndex: 3,
+                          background: '#f1f3f6',
+                          color: '#0c2340',
+                          fontSize: 13,
+                          fontWeight: 700,
+                          borderBottom: '2px solid #d8dde2',
+                        }}
                       >
                         Team / GM
                       </th>
                       {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => (
                         <th
                           key={r}
-                          className="p-2 text-center font-medium bg-white"
-                          style={{ minWidth: 90, color: '#5a6b7d', position: 'sticky', top: 0, zIndex: 2 }}
+                          className="p-2.5 text-center"
+                          style={{
+                            minWidth: 90,
+                            position: 'sticky',
+                            top: 0,
+                            zIndex: 2,
+                            background: '#f1f3f6',
+                            color: '#0c2340',
+                            fontSize: 13,
+                            fontWeight: 700,
+                            borderBottom: '2px solid #d8dde2',
+                          }}
                         >
                           Round {r}
                         </th>
