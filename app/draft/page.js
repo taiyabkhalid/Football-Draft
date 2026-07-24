@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
-import { getRound, getTeamOnTheClock, buildFullPickOrder } from '../../lib/draftLogic';
+import { getRound, getTeamOnTheClock, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
 import FootballIcon, { lightenColor } from '../../lib/FootballIcon';
 
@@ -228,6 +228,8 @@ export default function DraftPage() {
   useEffect(() => {
     if (prevDraftStatusRef.current === 'in_progress' && draftStatus === 'completed') {
       setShowCompleteModal(true);
+      setViewByTeamOpen(true);
+      setRosterViewMode('board');
     }
     prevDraftStatusRef.current = draftStatus;
   }, [draftStatus]);
@@ -690,6 +692,17 @@ export default function DraftPage() {
               >
                 View by round
               </button>
+              <button
+                onClick={() => setRosterViewMode('board')}
+                className="text-xs px-2.5 py-1 rounded-md font-medium"
+                style={{
+                  background: rosterViewMode === 'board' ? '#185fa5' : '#ffffff',
+                  color: rosterViewMode === 'board' ? '#ffffff' : '#3d4a57',
+                  border: '1px solid #d8dde2',
+                }}
+              >
+                Draft board
+              </button>
             </div>
 
             {rosterViewMode === 'team' && (
@@ -773,7 +786,7 @@ export default function DraftPage() {
                                     {viewedTeam?.name}
                                   </p>
                                   <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
-                                    Rnd {currentRound} . Pick # {currentPickNumber}
+                                    Rnd {currentRound} . Overall Pick # {currentPickNumber}
                                   </span>
                                 </>
                               ) : entry?.kind === 'gm' ? (
@@ -805,7 +818,7 @@ export default function DraftPage() {
                                   {player.full_name}
                                 </p>
                                 <span className="text-[9px] text-muted mt-0.5">
-                                  Rnd {entry.pick.round} . Pick # {entry.pick.pick_number}
+                                  Rnd {entry.pick.round} . Overall Pick # {entry.pick.pick_number}
                                 </span>
                               </>
                             ) : entry?.kind === 'skipped' ? (
@@ -815,7 +828,7 @@ export default function DraftPage() {
                                 </div>
                                 <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
                                 <span className="text-[9px] text-faint mt-0.5">
-                                  Rnd {entry.pick.round} . Pick # {entry.pick.pick_number}
+                                  Rnd {entry.pick.round} . Overall Pick # {entry.pick.pick_number}
                                 </span>
                               </>
                             ) : entry?.kind === 'manual' ? (
@@ -904,7 +917,7 @@ export default function DraftPage() {
                               <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
                                 {slot.player.full_name}
                               </p>
-                              <span className="text-[9px] text-muted mt-0.5">Pick # {slot.pickNumber}</span>
+                              <span className="text-[9px] text-muted mt-0.5">Pick # {pickInRound(slot.pickNumber, numTeams)}</span>
                             </>
                           ) : isSkippedPick ? (
                             <>
@@ -928,7 +941,7 @@ export default function DraftPage() {
                                 {slot.team?.name}
                               </p>
                               <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
-                                Pick # {slot.pickNumber}
+                                Pick # {pickInRound(slot.pickNumber, numTeams)}
                               </span>
                             </>
                           ) : (
@@ -953,6 +966,92 @@ export default function DraftPage() {
                   </div>
                 </div>
               </>
+            )}
+
+            {rosterViewMode === 'board' && (
+              <div className="bg-white rounded-lg p-3 overflow-x-auto">
+                <table className="border-collapse text-xs" style={{ width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th className="text-left p-2 sticky left-0 bg-white" style={{ minWidth: 130 }}>
+                        Team / GM
+                      </th>
+                      {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => (
+                        <th key={r} className="p-2 text-center font-medium" style={{ minWidth: 90, color: '#5a6b7d' }}>
+                          Round {r}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {teams
+                      .slice()
+                      .sort((a, b) => a.draft_position - b.draft_position)
+                      .map((t) => {
+                        const owner = ownerByTeam[t.id];
+                        return (
+                          <tr key={t.id} className="border-t" style={{ borderColor: '#d8dde2' }}>
+                            <td className="p-2 sticky left-0 bg-white align-top">
+                              <div className="flex items-center gap-1.5">
+                                <FootballIcon color={t.team_color || '#0074ff'} size={12} />
+                                <span className="font-medium text-ink">{t.name}</span>
+                              </div>
+                              {owner && <p className="text-[10px] text-muted m-0 mt-0.5">GM: {owner.name}</p>}
+                            </td>
+                            {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => {
+                              const slot = allSlots.find((s) => s.round === r && s.team?.id === t.id);
+                              if (!slot) {
+                                return (
+                                  <td key={r} className="p-2 text-center align-top" style={{ color: '#8b97a3' }}>
+                                    &mdash;
+                                  </td>
+                                );
+                              }
+                              const isSkipped = slot.pick && !slot.pick.player_id;
+                              return (
+                                <td key={r} className="p-1.5 text-center align-top">
+                                  {slot.player ? (
+                                    <button
+                                      onClick={() => openProfile(slot.player.id)}
+                                      className="bg-surface rounded-lg p-1.5 text-center"
+                                      style={{ width: 80 }}
+                                    >
+                                      {slot.player.headshot_url ? (
+                                        <img
+                                          src={slot.player.headshot_url}
+                                          alt={slot.player.full_name}
+                                          className="w-7 h-7 rounded-full object-cover mx-auto"
+                                        />
+                                      ) : (
+                                        <div className="w-7 h-7 rounded-full bg-white mx-auto flex items-center justify-center">
+                                          <i className="ti ti-user text-faint text-sm" aria-hidden="true" />
+                                        </div>
+                                      )}
+                                      <p className="text-[10px] font-medium m-0 mt-1 truncate leading-tight" style={{ color: '#0c2340' }}>
+                                        {slot.player.full_name}
+                                      </p>
+                                      <p className="text-[9px] m-0" style={{ color: '#5a6b7d' }}>
+                                        {slot.player.gender} &middot; Pick #{pickInRound(slot.pickNumber, numTeams)}
+                                      </p>
+                                    </button>
+                                  ) : isSkipped ? (
+                                    <p className="text-[10px] italic m-0" style={{ color: '#8b97a3' }}>
+                                      Skipped
+                                    </p>
+                                  ) : (
+                                    <p className="m-0" style={{ color: '#8b97a3' }}>
+                                      &mdash;
+                                    </p>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </>
         )}

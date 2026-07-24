@@ -90,12 +90,13 @@ export default function RegisterPage() {
         return;
       }
 
-      // Same lock logic as the profile page
+      // Same lock logic as the profile page - only locked during the draft
+      // or within 2 hours of the scheduled start, not after completion
       const draftDatetime = settingsRow?.draft_datetime ? new Date(settingsRow.draft_datetime) : null;
       const withinTwoHours = draftDatetime && Date.now() >= draftDatetime.getTime() - 2 * 60 * 60 * 1000;
       const isLocked =
         !settingsRow?.profile_edits_unlocked_override &&
-        (settingsRow?.draft_status === 'completed' || withinTwoHours);
+        (settingsRow?.draft_status === 'in_progress' || settingsRow?.draft_status === 'paused' || withinTwoHours);
 
       if (isLocked) {
         setLocked(true);

@@ -670,6 +670,20 @@ export default function CommissionerToolsPage() {
 
           <div className="border-t border-line mt-3 pt-3">
             <p className="text-xs text-muted mb-2">
+              Profiles normally lock 2 hours before the draft and stay locked while it's happening, then unlock again
+              once it's done. Override this to let everyone edit their profile during that window if needed.
+            </p>
+            <button onClick={handleToggleUnlock} disabled={savingUnlock} className="btn-secondary text-xs w-full">
+              {savingUnlock
+                ? 'Saving…'
+                : settings?.profile_edits_unlocked_override
+                ? 'Re-lock profile edits'
+                : 'Unlock profile edits'}
+            </button>
+          </div>
+
+          <div className="border-t border-line mt-3 pt-3">
+            <p className="text-xs text-muted mb-2">
               Clears every pick and puts the draft back to not-started. Teams that are already assigned as GM/commissioner
               stay put — everyone else goes back into the pool. This can't be undone.
             </p>
@@ -1113,27 +1127,6 @@ export default function CommissionerToolsPage() {
               </div>
             ))}
           </div>
-          </>
-          )}
-        </div>
-        <div className="bg-surface rounded-xl p-4 mb-5">
-          <button onClick={() => toggleSection('profile-edit-lock')} className="w-full flex items-center justify-between">
-            <p className="text-sm font-medium text-ink m-0">Profile edit lock</p>
-            <i className={`ti ti-chevron-${openSections['profile-edit-lock'] ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
-          </button>
-          {openSections['profile-edit-lock'] && (
-          <>
-          <p className="text-xs text-muted mb-3">
-            Profiles normally lock 2 hours before the draft and stay locked once it's complete. Override this to let
-            everyone edit their profile again.
-          </p>
-          <button onClick={handleToggleUnlock} disabled={savingUnlock} className="btn-secondary text-xs w-full">
-            {savingUnlock
-              ? 'Saving…'
-              : settings?.profile_edits_unlocked_override
-              ? 'Re-lock profile edits'
-              : 'Unlock profile edits'}
-          </button>
           </>
           )}
         </div>

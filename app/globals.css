@@ -34,3 +34,12 @@ button {
 .field-label {
   @apply text-xs uppercase tracking-wide text-muted mb-1 block;
 }
+
+@keyframes subtle-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.animate-subtle-flash {
+  animation: subtle-flash 2s ease-in-out infinite;
+}

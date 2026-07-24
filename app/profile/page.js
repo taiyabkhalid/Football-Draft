@@ -121,11 +121,13 @@ export default function ProfilePage() {
   const draftDatetime = settings?.draft_datetime ? new Date(settings.draft_datetime) : null;
 
   // Locked if: commissioner hasn't overridden it open, AND
-  // (the draft has already ended, OR we're within 2 hours of the scheduled start)
+  // (the draft is currently happening, OR we're within 2 hours of the scheduled start)
+  // Once the draft completes, profiles unlock automatically.
   const withinTwoHoursOfDraft =
     draftDatetime && Date.now() >= draftDatetime.getTime() - 2 * 60 * 60 * 1000;
   const locked =
-    !settings?.profile_edits_unlocked_override && (draftStatus === 'completed' || withinTwoHoursOfDraft);
+    !settings?.profile_edits_unlocked_override &&
+    (draftStatus === 'in_progress' || draftStatus === 'paused' || withinTwoHoursOfDraft);
 
   return (
     <main style={{ background: '#ffffff', minHeight: '100vh' }}>

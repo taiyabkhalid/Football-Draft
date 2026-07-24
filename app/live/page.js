@@ -2,9 +2,73 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { getRound, getTeamOnTheClock, buildFullPickOrder } from '../../lib/draftLogic';
+import { getRound, getTeamOnTheClock, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
 import FootballIcon, { lightenColor } from '../../lib/FootballIcon';
+
+const PUB_LINES_YES = [
+  'Already planning the post-game pint.',
+  'First one to the pub after the game, guaranteed.',
+  'Has a permanent tab running at the local.',
+  'Will be first in line for a cold one after the whistle.',
+  'Knows the Greene King bartender by name!',
+  "Post-game pub session? Wouldn't miss it.",
+  'Already texting the group chat about pub plans.',
+  'Views the pub as part of the sport.',
+  'Never skips the post-game debrief over a pint.',
+  'Has a favorite seat reserved at the pub.',
+  "I'll be in the pub with or without you.",
+  "Can't wait to talk shit about other teams at the pub.",
+  "Pub o'clock is their favorite part of game day.",
+  '{gmName} owes me a pint!',
+  'Treats the post-game pint as a tradition, not an option.',
+  'Ready to relive every play over a beer.',
+  'The real MVP of the pub.',
+  'Has never turned down a post-game round.',
+  'Counting down to kickoff and last call equally.',
+  'Will be raising a glass no matter the score.',
+];
+
+const PUB_LINES_NO = [
+  'Skipping the pub, straight home after the game.',
+  'Prefers a quiet night over the Greene King.',
+  'No pub, need to ice up.',
+  'Dunno about this team, no pub for me \u{1F609}',
+  'Not a pub person, early night instead.',
+  'Heads straight home once the final whistle blows.',
+  'Would rather recover at home than at the bar.',
+  'Skips last call every time.',
+  'Home and in bed before the pub crowd arrives.',
+  'Prefers water and the sofa post-game.',
+  'Will pass on the pub, unless we find a better one.',
+  'Straight to the car, no detours to the pub.',
+  'Saves the socializing for next practice.',
+  'Home is the only post-game destination.',
+  "Doesn't need a pint to celebrate a win.",
+  'Early to bed, ready for the next game.',
+  'Would rather stretch than sit at the bar.',
+  "Screw you guys, I'm going home!",
+  'The pub can wait, rest comes first.',
+  'Heading home to watch the game tape instead.',
+];
+
+function pubLineFor(player, allPlayers, gmName) {
+  if (player.enjoys_pub == null) return null;
+  const lines = player.enjoys_pub ? PUB_LINES_YES : PUB_LINES_NO;
+  const sameGroup = allPlayers
+    .filter((p) => p.team_id && p.draft_pick_number && p.enjoys_pub === player.enjoys_pub)
+    .sort((a, b) => a.draft_pick_number - b.draft_pick_number);
+  const position = sameGroup.findIndex((p) => p.id === player.id);
+  const index = position >= 0 ? position % lines.length : 0;
+  return lines[index].replace('{gmName}', gmName || 'The GM');
+}
+
+function previousTeamLabel(previousTeam) {
+  if (!previousTeam) return 'New to Go Mammoth';
+  if (previousTeam === 'Other') return 'Played in a different league';
+  return previousTeam;
+}
+
 
 export default function LiveDraftPage() {
   const [teams, setTeams] = useState([]);
@@ -78,7 +142,70 @@ export default function LiveDraftPage() {
     return () => supabase.removeChannel(channel);
   }, [fetchAll]);
 
-  const currentPickNumber = picks.length + 1;
+  // ---- Reveal queue ----
+  // The spectator page deliberately lags behind the real draft: new picks
+  // are revealed one at a time (chime, then the "just drafted" pop-out,
+  // then a hold) rather than jumping straight to the live state, so nobody
+  // watching sees a pick before its moment. The GM draft page has no such
+  // queue and always reflects the database directly.
+  const [revealedCount, setRevealedCount] = useState(null);
+  const [queue, setQueue] = useState([]);
+  const [activeReveal, setActiveReveal] = useState(null);
+  const [showPopout, setShowPopout] = useState(false);
+  const audioRef = useRef(null);
+  const processingRef = useRef(false);
+
+  useEffect(() => {
+    if (revealedCount === null) setRevealedCount(picks.length);
+  }, [picks, revealedCount]);
+
+  useEffect(() => {
+    if (revealedCount === null) return;
+    const alreadyQueuedThrough = revealedCount + queue.length;
+    if (picks.length > alreadyQueuedThrough) {
+      setQueue((q) => [...q, ...picks.slice(alreadyQueuedThrough, picks.length)]);
+    }
+  }, [picks, revealedCount, queue.length]);
+
+  useEffect(() => {
+    if (processingRef.current || queue.length === 0) return;
+    processingRef.current = true;
+    const next = queue[0];
+
+    async function run() {
+      if (next.player_id) {
+        setActiveReveal(next);
+        setShowPopout(false);
+        let chimeMs = 2000;
+        const audio = audioRef.current;
+        if (audio) {
+          try {
+            audio.currentTime = 0;
+            await audio.play();
+            if (audio.duration && isFinite(audio.duration)) chimeMs = audio.duration * 1000;
+          } catch (e) {
+            // Autoplay can be blocked before the visitor interacts with the
+            // page at all - the reveal still proceeds on its own timing.
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, chimeMs * 0.75));
+        setShowPopout(true);
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        setShowPopout(false);
+        setActiveReveal(null);
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+      setRevealedCount((c) => (c ?? 0) + 1);
+      setQueue((q) => q.slice(1));
+      processingRef.current = false;
+    }
+    run();
+  }, [queue]);
+
+  const revealedPicks = useMemo(() => picks.slice(0, revealedCount ?? picks.length), [picks, revealedCount]);
+
+  const currentPickNumber = revealedPicks.length + 1;
   const numTeams = settings?.num_teams || teams.length;
   const draftStatus = settings?.draft_status || 'not_started';
   const draftType = settings?.draft_type || 'snake';
@@ -108,7 +235,7 @@ export default function LiveDraftPage() {
     return `${m}:${String(s).padStart(2, '0')}`;
   }, [secondsLeft]);
 
-  const clockUrgent = secondsLeft <= 20;
+  const timeExpired = secondsLeft === 0;
 
   function openProfile(playerId) {
     setOpenProfileIds((ids) => (ids.includes(playerId) ? ids : [...ids, playerId]));
@@ -119,7 +246,6 @@ export default function LiveDraftPage() {
 
   const playersById = useMemo(() => Object.fromEntries(players.map((p) => [p.id, p])), [players]);
   const teamsById = useMemo(() => Object.fromEntries(teams.map((t) => [t.id, t])), [teams]);
-  const previousPick = picks.length > 0 ? picks[picks.length - 1] : null;
 
   const upcomingPicks = useMemo(() => {
     if (!numTeams) return [];
@@ -167,15 +293,20 @@ export default function LiveDraftPage() {
   }, [picks]);
 
   const rosterByTeam = useMemo(() => {
+    const revealedPlayerIds = new Set(revealedPicks.filter((p) => p.player_id).map((p) => p.player_id));
     const map = {};
     for (const t of teams) {
-      const roster = players.filter((p) => p.team_id === t.id);
+      const roster = players.filter((p) => {
+        if (p.team_id !== t.id) return false;
+        const isOwner = ownerByTeam[t.id]?.email === p.email;
+        return isOwner || revealedPlayerIds.has(p.id);
+      });
       map[t.id] = { players: roster, count: roster.length, femaleCount: roster.filter((p) => p.gender === 'F').length };
     }
     return map;
-  }, [teams, players]);
+  }, [teams, players, revealedPicks, ownerByTeam]);
 
-  const pickByNumber = useMemo(() => Object.fromEntries(picks.map((p) => [p.pick_number, p])), [picks]);
+  const pickByNumber = useMemo(() => Object.fromEntries(revealedPicks.map((p) => [p.pick_number, p])), [revealedPicks]);
 
   // The draft runs until the whole DRAFTABLE pool is allocated - each team's
   // GM/commissioner already occupies one roster slot before the draft even
@@ -223,7 +354,7 @@ export default function LiveDraftPage() {
       return role === 'commissioner' || role === 'gm';
     });
 
-    const teamPicks = picks
+    const teamPicks = revealedPicks
       .filter((pk) => pk.team_id === teamId)
       .sort((a, b) => a.pick_number - b.pick_number);
     const pickedPlayerIds = new Set(teamPicks.filter((pk) => pk.player_id).map((pk) => pk.player_id));
@@ -259,12 +390,23 @@ export default function LiveDraftPage() {
     }
   }, [currentPickNumber, draftStatus]);
 
+  const pendingCompletionRef = useRef(false);
+
   useEffect(() => {
     if (prevDraftStatusRef.current === 'in_progress' && draftStatus === 'completed') {
-      setShowCompleteModal(true);
+      pendingCompletionRef.current = true;
     }
     prevDraftStatusRef.current = draftStatus;
   }, [draftStatus]);
+
+  useEffect(() => {
+    if (pendingCompletionRef.current && queue.length === 0 && !processingRef.current) {
+      setShowCompleteModal(true);
+      setViewByTeamOpen(true);
+      setRosterViewMode('board');
+      pendingCompletionRef.current = false;
+    }
+  }, [queue.length, revealedCount]);
 
   if (loading) {
     return (
@@ -297,64 +439,7 @@ export default function LiveDraftPage() {
 
       {draftStatus === 'in_progress' && (
         <>
-          <div className="flex flex-col sm:flex-row gap-2 px-4 sm:px-5 pt-4">
-            <div className="flex-1 bg-surface rounded-lg p-3">
-              <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Previous pick</p>
-              {previousPick ? (
-                <>
-                  <div className="flex items-center gap-2">
-                    <FootballIcon color={teamsById[previousPick.team_id]?.team_color || '#0074ff'} size={16} />
-                    <p className="text-xs text-ink m-0 truncate">
-                      {previousPick.player_id
-                        ? `${playersById[previousPick.player_id]?.full_name || 'Unknown'} — ${teamsById[previousPick.team_id]?.name || ''}`
-                        : `Skipped — ${teamsById[previousPick.team_id]?.name || ''}`}
-                    </p>
-                  </div>
-                  <p className="text-[10px] text-muted m-0 mt-1">
-                    Round {previousPick.round} &middot; Pick {previousPick.pick_number}
-                  </p>
-                </>
-              ) : (
-                <p className="text-xs text-faint">None yet</p>
-              )}
-            </div>
-            <div
-              className={`flex-1 rounded-lg p-3 flex items-center justify-between gap-2 ${clockUrgent ? 'animate-pulse' : ''}`}
-              style={{ background: clockUrgent ? '#c0392b' : '#185fa5' }}
-            >
-              <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
-                  On the clock
-                </p>
-                <div className="flex items-center gap-2">
-                  <FootballIcon color="#ffffff" size={16} />
-                  <p className="text-[13px] font-semibold truncate m-0" style={{ color: '#ffffff' }}>
-                    {teamOnClock?.name || '—'}
-                  </p>
-                </div>
-                <p className="text-[10px] m-0 mt-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
-                  Round {currentRound} &middot; Pick {currentPickNumber}
-                </p>
-              </div>
-              <p className="text-xl font-medium" style={{ color: '#ffffff' }}>
-                {timerDisplay}
-              </p>
-            </div>
-            <div className="flex-1 bg-surface rounded-lg p-3">
-              <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Next up</p>
-              <div className="flex items-center gap-2">
-                <FootballIcon color={teamNextOnClock?.team_color || '#0074ff'} size={16} />
-                <p className="text-xs text-ink m-0 truncate">{teamNextOnClock?.name || '—'}</p>
-              </div>
-              {teamNextOnClock && (
-                <p className="text-[10px] text-muted m-0 mt-1">
-                  Round {nextRound} &middot; Pick {currentPickNumber + 1}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="px-4 sm:px-5 pt-3">
+          <div className="px-4 sm:px-5 pt-4">
             <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Upcoming picks</p>
             <div className="flex gap-2 overflow-x-auto pb-2">
               {upcomingPicks.map((n) => {
@@ -374,8 +459,8 @@ export default function LiveDraftPage() {
             </div>
           </div>
 
-          <p className="text-xs text-muted px-4 sm:px-5 pt-1">
-            Round {currentRound}, pick {currentPickNumber}
+          <p className="text-2xl font-semibold text-center m-0 pt-2" style={{ color: '#0c2340' }}>
+            Round {currentRound}, Pick {pickInRound(currentPickNumber, numTeams)}
           </p>
         </>
       )}
@@ -396,6 +481,189 @@ export default function LiveDraftPage() {
           </p>
         </div>
       )}
+
+      <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5">
+        <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: '#0c447c' }}>
+          Drafted players
+        </p>
+        <p className="text-[10px] text-muted mb-3">Scroll to browse other rounds</p>
+
+        <audio ref={audioRef} src="/sounds/pick-chime.ogg" preload="auto" />
+
+        <div className="flex gap-2 overflow-x-auto pb-2 items-center" ref={draftedScrollRef}>
+          {allSlots.map((slot) => {
+            const isSkippedPick = slot.pick && !slot.pick.player_id;
+            const isClockSlot =
+              slot.pickNumber === currentPickNumber &&
+              !slot.player &&
+              !isSkippedPick &&
+              (draftStatus === 'in_progress' || draftStatus === 'paused');
+            const teamColor = slot.team?.team_color || '#0074ff';
+            const owner = ownerByTeam[slot.team?.id];
+
+            const isPoppedOut =
+              showPopout && activeReveal && slot.pickNumber === activeReveal.pick_number && activeReveal.player_id;
+
+            if (isPoppedOut) {
+              const player = playersById[activeReveal.player_id];
+              if (!player) return null;
+              const poppedTeamColor = slot.team?.team_color || '#0074ff';
+              const gmName = owner?.name;
+              return (
+                <div
+                  key={slot.pickNumber}
+                  ref={currentPickRef}
+                  className="flex-none rounded-2xl p-4 flex flex-col items-center text-center"
+                  style={{ width: 210, border: `4px solid ${poppedTeamColor}`, background: '#ffffff' }}
+                >
+                  <p className="text-[19px] font-medium m-0 mb-2.5 tracking-wide" style={{ color: poppedTeamColor }}>
+                    JUST DRAFTED!
+                  </p>
+                  <div className="flex items-center justify-center gap-1.5 mb-1">
+                    <FootballIcon color={poppedTeamColor} size={15} />
+                    <span className="text-sm font-medium" style={{ color: '#0c2340' }}>{slot.team?.name}</span>
+                  </div>
+                  {gmName && (
+                    <p className="text-[13px] m-0 mb-3" style={{ color: '#5a6b7d' }}>
+                      <span
+                        className="text-[10px] font-medium rounded px-1.5 py-px mr-1"
+                        style={{ color: poppedTeamColor, background: lightenColor(poppedTeamColor, 0.85) }}
+                      >
+                        GM
+                      </span>
+                      {gmName}
+                    </p>
+                  )}
+                  {player.headshot_url ? (
+                    <img src={player.headshot_url} alt={player.full_name} className="w-16 h-16 rounded-full object-cover mb-2.5" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-surface flex items-center justify-center mb-2.5">
+                      <i className="ti ti-user text-faint text-2xl" aria-hidden="true" />
+                    </div>
+                  )}
+                  <p className="text-[19px] font-medium m-0" style={{ color: '#0c2340' }}>{player.full_name}</p>
+                  <p className="text-xs m-0 mt-1 mb-1" style={{ color: '#5a6b7d' }}>
+                    {player.offensive_position} / {player.defensive_position} &middot; {player.gender} &middot;{' '}
+                    {player.height_feet}'{player.height_inches}"
+                  </p>
+                  <p className="text-[11px] m-0 mb-1.5" style={{ color: '#8b97a3' }}>
+                    Previous Team: {previousTeamLabel(player.previous_team)}
+                  </p>
+                  {pubLineFor(player, players, gmName) && (
+                    <p className="text-[11px] italic m-0" style={{ color: '#5a6b7d' }}>
+                      {pubLineFor(player, players, gmName)}
+                    </p>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <div
+                key={slot.pickNumber}
+                ref={slot.pickNumber === currentPickNumber ? currentPickRef : null}
+                onClick={() => slot.player && openProfile(slot.player.id)}
+                className={`flex-none rounded-xl p-3 flex flex-col items-center text-center ${
+                  isClockSlot && timeExpired ? 'animate-subtle-flash' : ''
+                }`}
+                style={{
+                  width: 150,
+                  height: 210,
+                  background: isClockSlot ? lightenColor(teamColor, 0.85) : '#ffffff',
+                  border: isClockSlot
+                    ? `2px solid ${teamColor}`
+                    : slot.pickNumber === currentPickNumber
+                    ? '1.5px solid #185fa5'
+                    : '1px solid #d8dde2',
+                  cursor: slot.player ? 'pointer' : 'default',
+                }}
+              >
+                <p className="text-[10px] text-muted m-0 mb-1.5">
+                  Round {slot.round} &middot; Pick {pickInRound(slot.pickNumber, numTeams)}
+                </p>
+                {slot.player ? (
+                  <>
+                    {slot.player.headshot_url ? (
+                      <img
+                        src={slot.player.headshot_url}
+                        alt={slot.player.full_name}
+                        className="w-10 h-10 rounded-full object-cover mb-1.5"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
+                        <i className="ti ti-user text-faint text-xl" aria-hidden="true" />
+                      </div>
+                    )}
+                    <p className="text-xs font-medium text-ink m-0 leading-snug">{slot.player.full_name}</p>
+                    <p className="text-[10px] text-muted m-0 mb-1.5">
+                      {slot.player.offensive_position} / {slot.player.defensive_position}
+                    </p>
+                  </>
+                ) : isSkippedPick ? (
+                  <>
+                    <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
+                      <i className="ti ti-x text-faint text-xl" aria-hidden="true" />
+                    </div>
+                    <p className="text-xs text-muted m-0 leading-snug">Skipped</p>
+                  </>
+                ) : isClockSlot ? (
+                  <>
+                    <p className="text-xs font-medium m-0 leading-tight" style={{ color: '#0c2340' }}>
+                      On the clock
+                    </p>
+                    <div
+                      className="w-10 h-10 rounded-full bg-white flex items-center justify-center my-1.5"
+                      style={{ border: `2px solid ${teamColor}` }}
+                    >
+                      <i className="ti ti-clock text-xl" style={{ color: teamColor }} aria-hidden="true" />
+                    </div>
+                    <p className="text-base font-semibold m-0 mb-1.5" style={{ color: '#0c2340' }}>
+                      {timerDisplay}
+                    </p>
+                    <div className="flex items-center gap-1 justify-center">
+                      <FootballIcon color={teamColor} size={13} />
+                      <span className="text-[13px] font-semibold leading-tight" style={{ color: '#0c2340' }}>
+                        {slot.team?.name}
+                      </span>
+                    </div>
+                    {owner && <span className="text-[11px] text-muted mt-0.5">GM: {owner.name}</span>}
+                  </>
+                ) : (
+                  <>
+                    <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
+                      <i className="ti ti-user text-faint text-xl" aria-hidden="true" />
+                    </div>
+                    <p className="text-xs text-faint m-0 leading-snug" style={{ fontStyle: 'italic' }}>
+                      Not yet selected
+                    </p>
+                  </>
+                )}
+                <div className="mt-auto pt-1.5 flex flex-col items-center gap-0.5">
+                  {slot.player ? (
+                    <>
+                      <div className="flex items-center gap-1.5 justify-center">
+                        <FootballIcon color={teamColor} size={16} />
+                        <span className="text-[13px] font-semibold leading-none" style={{ color: '#0c2340' }}>
+                          Drafted by: {slot.team?.name}
+                        </span>
+                      </div>
+                      {owner && <span className="text-[10px] text-muted">({owner.name})</span>}
+                    </>
+                  ) : !isClockSlot ? (
+                    <div className="flex items-center gap-1.5 justify-center min-w-0">
+                      <FootballIcon color={teamColor} size={12} />
+                      <span className="text-[10px] text-muted truncate leading-none">
+                        {slot.team?.name}
+                        {owner ? ` \u00b7 ${owner.name}` : ''}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="mx-4 sm:mx-5 mt-4 rounded-xl border border-line bg-surface px-4 py-3">
         <button onClick={() => setViewByTeamOpen((o) => !o)} className="w-full flex items-center justify-between">
@@ -431,6 +699,17 @@ export default function LiveDraftPage() {
                 }}
               >
                 View by round
+              </button>
+              <button
+                onClick={() => setRosterViewMode('board')}
+                className="text-xs px-2.5 py-1 rounded-md font-medium"
+                style={{
+                  background: rosterViewMode === 'board' ? '#185fa5' : '#ffffff',
+                  color: rosterViewMode === 'board' ? '#ffffff' : '#3d4a57',
+                  border: '1px solid #d8dde2',
+                }}
+              >
+                Draft board
               </button>
             </div>
 
@@ -529,7 +808,7 @@ export default function LiveDraftPage() {
                                     {viewedTeam?.name}
                                   </p>
                                   <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
-                                    Rnd {currentRound} . Pick # {currentPickNumber}
+                                    Rnd {currentRound} . Overall Pick # {currentPickNumber}
                                   </span>
                                 </>
                               ) : entry?.kind === 'gm' ? (
@@ -561,7 +840,7 @@ export default function LiveDraftPage() {
                                     {player.full_name}
                                   </p>
                                   <span className="text-[9px] text-muted mt-0.5">
-                                    Rnd {entry.pick.round} . Pick # {entry.pick.pick_number}
+                                    Rnd {entry.pick.round} . Overall Pick # {entry.pick.pick_number}
                                   </span>
                                 </>
                               ) : entry?.kind === 'skipped' ? (
@@ -571,7 +850,7 @@ export default function LiveDraftPage() {
                                   </div>
                                   <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
                                   <span className="text-[9px] text-faint mt-0.5">
-                                    Rnd {entry.pick.round} . Pick # {entry.pick.pick_number}
+                                    Rnd {entry.pick.round} . Overall Pick # {entry.pick.pick_number}
                                   </span>
                                 </>
                               ) : entry?.kind === 'manual' ? (
@@ -660,7 +939,7 @@ export default function LiveDraftPage() {
                               <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
                                 {slot.player.full_name}
                               </p>
-                              <span className="text-[9px] text-muted mt-0.5">Pick # {slot.pickNumber}</span>
+                              <span className="text-[9px] text-muted mt-0.5">Pick # {pickInRound(slot.pickNumber, numTeams)}</span>
                             </>
                           ) : isSkippedPick ? (
                             <>
@@ -684,7 +963,7 @@ export default function LiveDraftPage() {
                                 {slot.team?.name}
                               </p>
                               <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
-                                Pick # {slot.pickNumber}
+                                Pick # {pickInRound(slot.pickNumber, numTeams)}
                               </span>
                             </>
                           ) : (
@@ -710,119 +989,94 @@ export default function LiveDraftPage() {
                 </div>
               </>
             )}
+
+            {rosterViewMode === 'board' && (
+              <div className="bg-white rounded-lg p-3 overflow-x-auto">
+                <table className="border-collapse text-xs" style={{ width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th className="text-left p-2 sticky left-0 bg-white" style={{ minWidth: 130 }}>
+                        Team / GM
+                      </th>
+                      {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => (
+                        <th key={r} className="p-2 text-center font-medium" style={{ minWidth: 90, color: '#5a6b7d' }}>
+                          Round {r}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {teams
+                      .slice()
+                      .sort((a, b) => a.draft_position - b.draft_position)
+                      .map((t) => {
+                        const owner = ownerByTeam[t.id];
+                        return (
+                          <tr key={t.id} className="border-t" style={{ borderColor: '#d8dde2' }}>
+                            <td className="p-2 sticky left-0 bg-white align-top">
+                              <div className="flex items-center gap-1.5">
+                                <FootballIcon color={t.team_color || '#0074ff'} size={12} />
+                                <span className="font-medium text-ink">{t.name}</span>
+                              </div>
+                              {owner && <p className="text-[10px] text-muted m-0 mt-0.5">GM: {owner.name}</p>}
+                            </td>
+                            {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => {
+                              const slot = allSlots.find((s) => s.round === r && s.team?.id === t.id);
+                              if (!slot) {
+                                return (
+                                  <td key={r} className="p-2 text-center align-top" style={{ color: '#8b97a3' }}>
+                                    &mdash;
+                                  </td>
+                                );
+                              }
+                              const isSkipped = slot.pick && !slot.pick.player_id;
+                              return (
+                                <td key={r} className="p-1.5 text-center align-top">
+                                  {slot.player ? (
+                                    <button
+                                      onClick={() => openProfile(slot.player.id)}
+                                      className="bg-surface rounded-lg p-1.5 text-center"
+                                      style={{ width: 80 }}
+                                    >
+                                      {slot.player.headshot_url ? (
+                                        <img
+                                          src={slot.player.headshot_url}
+                                          alt={slot.player.full_name}
+                                          className="w-7 h-7 rounded-full object-cover mx-auto"
+                                        />
+                                      ) : (
+                                        <div className="w-7 h-7 rounded-full bg-white mx-auto flex items-center justify-center">
+                                          <i className="ti ti-user text-faint text-sm" aria-hidden="true" />
+                                        </div>
+                                      )}
+                                      <p className="text-[10px] font-medium m-0 mt-1 truncate leading-tight" style={{ color: '#0c2340' }}>
+                                        {slot.player.full_name}
+                                      </p>
+                                      <p className="text-[9px] m-0" style={{ color: '#5a6b7d' }}>
+                                        {slot.player.gender} &middot; Pick #{pickInRound(slot.pickNumber, numTeams)}
+                                      </p>
+                                    </button>
+                                  ) : isSkipped ? (
+                                    <p className="text-[10px] italic m-0" style={{ color: '#8b97a3' }}>
+                                      Skipped
+                                    </p>
+                                  ) : (
+                                    <p className="m-0" style={{ color: '#8b97a3' }}>
+                                      &mdash;
+                                    </p>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </>
         )}
-      </div>
-
-      <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5">
-        <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: '#0c447c' }}>
-          Drafted players
-        </p>
-        <p className="text-[10px] text-muted mb-3">Scroll to browse other rounds</p>
-
-        <div className="flex gap-2 overflow-x-auto pb-2" ref={draftedScrollRef}>
-          {allSlots.map((slot) => {
-            const isSkippedPick = slot.pick && !slot.pick.player_id;
-            const isClockSlot =
-              slot.pickNumber === currentPickNumber &&
-              !slot.player &&
-              !isSkippedPick &&
-              (draftStatus === 'in_progress' || draftStatus === 'paused');
-            const teamColor = slot.team?.team_color || '#0074ff';
-            const owner = ownerByTeam[slot.team?.id];
-            return (
-              <div
-                key={slot.pickNumber}
-                ref={slot.pickNumber === currentPickNumber ? currentPickRef : null}
-                onClick={() => slot.player && openProfile(slot.player.id)}
-                className="flex-none rounded-xl p-3 flex flex-col items-center text-center"
-                style={{
-                  width: 150,
-                  height: 210,
-                  background: isClockSlot ? lightenColor(teamColor, 0.85) : '#ffffff',
-                  border: isClockSlot
-                    ? `2px solid ${teamColor}`
-                    : slot.pickNumber === currentPickNumber
-                    ? '1.5px solid #185fa5'
-                    : '1px solid #d8dde2',
-                  cursor: slot.player ? 'pointer' : 'default',
-                }}
-              >
-                <p className="text-[10px] text-muted m-0 mb-1.5">
-                  Round {slot.round} &middot; Pick {slot.pickNumber}
-                </p>
-                {slot.player ? (
-                  <>
-                    {slot.player.headshot_url ? (
-                      <img
-                        src={slot.player.headshot_url}
-                        alt={slot.player.full_name}
-                        className="w-10 h-10 rounded-full object-cover mb-1.5"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
-                        <i className="ti ti-user text-faint text-xl" aria-hidden="true" />
-                      </div>
-                    )}
-                    <p className="text-xs font-medium text-ink m-0 leading-snug">{slot.player.full_name}</p>
-                    <p className="text-[10px] text-muted m-0 mb-1.5">
-                      {slot.player.offensive_position} / {slot.player.defensive_position}
-                    </p>
-                  </>
-                ) : isSkippedPick ? (
-                  <>
-                    <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
-                      <i className="ti ti-x text-faint text-xl" aria-hidden="true" />
-                    </div>
-                    <p className="text-xs text-muted m-0 leading-snug">Skipped</p>
-                  </>
-                ) : isClockSlot ? (
-                  <>
-                    <div
-                      className="w-10 h-10 rounded-full bg-white flex items-center justify-center mb-1.5"
-                      style={{ border: `2px solid ${teamColor}` }}
-                    >
-                      <i className="ti ti-clock text-xl" style={{ color: teamColor }} aria-hidden="true" />
-                    </div>
-                    <p className="text-xs font-medium m-0 leading-snug" style={{ color: '#0c2340' }}>
-                      On the clock
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
-                      <i className="ti ti-user text-faint text-xl" aria-hidden="true" />
-                    </div>
-                    <p className="text-xs text-faint m-0 leading-snug" style={{ fontStyle: 'italic' }}>
-                      Not yet selected
-                    </p>
-                  </>
-                )}
-                <div className="mt-auto pt-1.5 flex flex-col items-center gap-0.5">
-                  {slot.player ? (
-                    <>
-                      <div className="flex items-center gap-1.5 justify-center">
-                        <FootballIcon color={teamColor} size={16} />
-                        <span className="text-[13px] font-semibold leading-none" style={{ color: '#0c2340' }}>
-                          Drafted by: {slot.team?.name}
-                        </span>
-                      </div>
-                      {owner && <span className="text-[10px] text-muted">({owner.name})</span>}
-                    </>
-                  ) : (
-                    <div className="flex items-center gap-1.5 justify-center min-w-0">
-                      <FootballIcon color={teamColor} size={12} />
-                      <span className="text-[10px] text-muted truncate leading-none">
-                        {slot.team?.name}
-                        {owner ? ` \u00b7 ${owner.name}` : ''}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </div>
 
       {/* Read-only player profile popups — multiple can be open at once, stacked */}
