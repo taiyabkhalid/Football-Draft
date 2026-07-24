@@ -199,7 +199,7 @@ export default function DraftPage() {
   const upcomingPicks = useMemo(() => {
     if (!numTeams) return [];
     const list = [];
-    for (let i = 1; i <= 8; i++) {
+    for (let i = 0; i <= 7; i++) {
       const pickNum = currentPickNumber + i;
       list.push({
         pickNumber: pickNum,
@@ -645,15 +645,6 @@ export default function DraftPage() {
 
           <div className="border-t border-line mx-4 sm:mx-5 mt-1" />
 
-          {/* Skip pick (commissioner only) */}
-          {profile?.role === 'commissioner' && (
-            <div className="flex items-center justify-end px-4 sm:px-5 py-2.5">
-              <button onClick={skipPick} disabled={skipping || draftStatus === 'paused'} className="btn-secondary text-xs">
-                {skipping ? 'Skipping…' : draftStatus === 'paused' ? 'Skip pick (paused)' : 'Skip pick'}
-              </button>
-            </div>
-          )}
-
           <div className="border-t border-line mx-4 sm:mx-5" />
 
           {actionError && (
@@ -741,6 +732,7 @@ export default function DraftPage() {
                 Draft board
               </button>
             </div>
+            <p className="text-[10px] text-faint mb-2">DEBUG: rosterViewMode = "{rosterViewMode}"</p>
 
             {rosterViewMode === 'team' && (
               <>
@@ -1011,11 +1003,18 @@ export default function DraftPage() {
                 <table className="border-collapse text-xs" style={{ width: '100%' }}>
                   <thead>
                     <tr>
-                      <th className="text-left p-2 sticky left-0 bg-white" style={{ minWidth: 130 }}>
+                      <th
+                        className="text-left p-2 sticky left-0 bg-white"
+                        style={{ minWidth: 130, position: 'sticky', top: 0, zIndex: 3 }}
+                      >
                         Team / GM
                       </th>
                       {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => (
-                        <th key={r} className="p-2 text-center font-medium" style={{ minWidth: 90, color: '#5a6b7d' }}>
+                        <th
+                          key={r}
+                          className="p-2 text-center font-medium bg-white"
+                          style={{ minWidth: 90, color: '#5a6b7d', position: 'sticky', top: 0, zIndex: 2 }}
+                        >
                           Round {r}
                         </th>
                       ))}
@@ -1212,7 +1211,7 @@ export default function DraftPage() {
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-2">
             Players ({sortedAvailable.length} available)
           </p>
-          <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto pr-1">
+          <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
             {boardList.map((p) => {
               const isDrafted = !!p.team_id;
               return (
@@ -1349,15 +1348,27 @@ export default function DraftPage() {
           </div>
         </section>
 
-        {profile?.team_id && (() => {
-          const myTeam = teamsById[profile.team_id];
+        {(profile?.team_id || profile?.role === 'commissioner') && (() => {
+          const myTeam = profile?.team_id ? teamsById[profile.team_id] : null;
           const myColor = myTeam?.team_color || '#0074ff';
           return (
             <aside className="w-full lg:w-64 flex-shrink-0 order-3 lg:pl-3 lg:border-l border-line">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1 flex items-center gap-1.5">
-                <FootballIcon color={myColor} size={13} />
-                Your team: {myTeam?.name || '—'}
-              </p>
+              {profile?.role === 'commissioner' && (
+                <button
+                  onClick={skipPick}
+                  disabled={skipping || draftStatus === 'paused'}
+                  className="w-full text-xs font-medium rounded-md py-1.5 mb-2"
+                  style={{ background: '#faeeda', color: '#854f0b', border: 'none' }}
+                >
+                  {skipping ? 'Skipping…' : draftStatus === 'paused' ? 'Skip pick (paused)' : 'Skip pick — are you sure?'}
+                </button>
+              )}
+              {myTeam && (
+                <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1 flex items-center gap-1.5">
+                  <FootballIcon color={myColor} size={13} />
+                  Your team: {myTeam?.name || '—'}
+                </p>
+              )}
               {rosterByTeam[profile.team_id] && (
                 <>
                   <p className="text-xs text-ink mb-2">
@@ -1375,7 +1386,7 @@ export default function DraftPage() {
                         </p>
                       </div>
                     )}
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
                     {rosterByTeam[profile.team_id].players.map((p) => (
                       <div
                         key={p.id}

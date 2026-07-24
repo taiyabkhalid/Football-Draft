@@ -281,7 +281,7 @@ export default function LiveDraftPage() {
   const upcomingPicks = useMemo(() => {
     if (!numTeams) return [];
     const list = [];
-    for (let i = 1; i <= 8; i++) {
+    for (let i = 0; i <= 7; i++) {
       const pickNum = currentPickNumber + i;
       list.push({
         pickNumber: pickNum,
@@ -551,8 +551,9 @@ export default function LiveDraftPage() {
                 <div
                   key={slot.pickNumber}
                   ref={currentPickRef}
+                  onClick={() => openProfile(player.id)}
                   className="flex-none rounded-2xl p-4 flex flex-col items-center text-center"
-                  style={{ width: 210, border: `4px solid ${poppedTeamColor}`, background: '#ffffff' }}
+                  style={{ width: 210, border: `4px solid ${poppedTeamColor}`, background: '#ffffff', cursor: 'pointer' }}
                 >
                   <p className="text-[19px] font-medium m-0 mb-2.5 tracking-wide" style={{ color: poppedTeamColor }}>
                     JUST DRAFTED!
@@ -704,7 +705,14 @@ export default function LiveDraftPage() {
       </div>
 
       <div className="mx-4 sm:mx-5 mt-4 rounded-xl border border-line bg-surface px-4 py-3" ref={rostersSectionRef}>
-        <button onClick={() => setViewByTeamOpen((o) => !o)} className="w-full flex items-center justify-between">
+        <button
+          onClick={() => {
+            const opening = !viewByTeamOpen;
+            setViewByTeamOpen(opening);
+            if (opening) scrollRostersIntoView();
+          }}
+          className="w-full flex items-center justify-between"
+        >
           <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
             View rosters
           </p>
@@ -1049,11 +1057,18 @@ export default function LiveDraftPage() {
                 <table className="border-collapse text-xs" style={{ width: '100%' }}>
                   <thead>
                     <tr>
-                      <th className="text-left p-2 sticky left-0 bg-white" style={{ minWidth: 130 }}>
+                      <th
+                        className="text-left p-2 sticky left-0 bg-white"
+                        style={{ minWidth: 130, position: 'sticky', top: 0, zIndex: 3 }}
+                      >
                         Team / GM
                       </th>
                       {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => (
-                        <th key={r} className="p-2 text-center font-medium" style={{ minWidth: 90, color: '#5a6b7d' }}>
+                        <th
+                          key={r}
+                          className="p-2 text-center font-medium bg-white"
+                          style={{ minWidth: 90, color: '#5a6b7d', position: 'sticky', top: 0, zIndex: 2 }}
+                        >
                           Round {r}
                         </th>
                       ))}
