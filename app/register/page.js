@@ -26,6 +26,8 @@ const initialForm = {
   lastName: '',
   phone: '',
   email: '',
+  password: '',
+  confirmPassword: '',
   offensive_position: '',
   defensive_position: '',
   position_preference: '',
@@ -47,6 +49,7 @@ export default function RegisterPage() {
   const [mode, setMode] = useState('create'); // 'create' | 'edit'
   const [checkingSession, setCheckingSession] = useState(true);
   const [locked, setLocked] = useState(false);
+  const [registrationLocked, setRegistrationLocked] = useState(false);
 
   const [form, setForm] = useState(initialForm);
   const [photoBlob, setPhotoBlob] = useState(null);
@@ -76,6 +79,19 @@ export default function RegisterPage() {
       } = await supabase.auth.getUser();
 
       if (!user) {
+        // Brand new registrant, not logged in yet - check the registration
+        // blackout window: locked from 5 minutes before the scheduled start
+        // through the end of the draft, unless the commissioner has turned
+        // on the mid-draft override AND the draft is currently paused.
+        const { data: settingsRow } = await supabase.from('draft_settings').select('*').eq('id', 1).single();
+        const draftDatetime = settingsRow?.draft_datetime ? new Date(settingsRow.draft_datetime) : null;
+        const draftActive = settingsRow?.draft_status === 'in_progress' || settingsRow?.draft_status === 'paused';
+        const notYetStarted = settingsRow?.draft_status === 'not_started';
+        const withinFiveMinutes = notYetStarted && draftDatetime && Date.now() >= draftDatetime.getTime() - 5 * 60 * 1000;
+        const overrideActive = settingsRow?.registration_unlocked_override && settingsRow?.draft_status === 'paused';
+        if (!overrideActive && (withinFiveMinutes || draftActive)) {
+          setRegistrationLocked(true);
+        }
         setCheckingSession(false);
         return;
       }
@@ -149,6 +165,9 @@ export default function RegisterPage() {
     if (!form.lastName.trim()) missing.push('Last name');
     if (!form.phone.trim()) missing.push('Phone number');
     if (mode === 'create' && !form.email.trim().toLowerCase()) missing.push('Email');
+    if (mode === 'create' && !form.password) missing.push('Password');
+    if (mode === 'create' && form.password && form.password.length < 6) missing.push('Password (must be at least 6 characters)');
+    if (mode === 'create' && form.password && form.password !== form.confirmPassword) missing.push('Passwords must match');
     if (!photoBlob && !existingHeadshotUrl) missing.push('Headshot');
     if (!form.offensive_position) missing.push('Offensive position');
     if (!form.defensive_position) missing.push('Defensive position');
@@ -176,6 +195,20 @@ export default function RegisterPage() {
 
     setSubmitting(true);
     try {
+      if (mode === 'create') {
+        const { data: freshSettings } = await supabase.from('draft_settings').select('*').eq('id', 1).single();
+        const draftDatetime = freshSettings?.draft_datetime ? new Date(freshSettings.draft_datetime) : null;
+        const draftActive = freshSettings?.draft_status === 'in_progress' || freshSettings?.draft_status === 'paused';
+        const notYetStarted = freshSettings?.draft_status === 'not_started';
+        const withinFiveMinutes = notYetStarted && draftDatetime && Date.now() >= draftDatetime.getTime() - 5 * 60 * 1000;
+        const overrideActive = freshSettings?.registration_unlocked_override && freshSettings?.draft_status === 'paused';
+        if (!overrideActive && (withinFiveMinutes || draftActive)) {
+          setSubmitting(false);
+          setRegistrationLocked(true);
+          return;
+        }
+      }
+
       const ENUMS = {
         offensive_position: ['QB', 'WR', 'C'],
         defensive_position: ['CB', 'Safety', 'LB', 'Rush'],
@@ -245,19 +278,20 @@ export default function RegisterPage() {
 
         const { error: signUpError } = await supabase.auth.signUp({
           email: form.email.trim().toLowerCase(),
-          password: 'draft2026',
+          password: form.password,
         });
         if (signUpError && !signUpError.message.includes('already registered')) {
           console.error('Account creation issue:', signUpError.message);
         }
 
-        // Guarantee a session for the common case (brand new player using the
-        // shared password). If this email already has a different password
-        // (e.g. a GM/commissioner account), this will simply fail quietly,
-        // and they'll need to log in once with their own credentials.
+        // Sign them straight in with the password they just chose so the
+        // flow feels seamless - if this email already had a different
+        // account (e.g. a GM/commissioner set up ahead of time with a
+        // different password), this will simply fail quietly and they'll
+        // log in with their existing credentials instead.
         const { data: signInData } = await supabase.auth.signInWithPassword({
           email: form.email.trim().toLowerCase(),
-          password: 'draft2026',
+          password: form.password,
         });
         setAutoLoggedIn(!!signInData?.session);
       }
@@ -276,6 +310,28 @@ export default function RegisterPage() {
       <main>
         <BrandHeader pageLabel={mode === 'edit' ? 'Edit your profile' : 'Player registration'} />
         <p className="text-center text-muted text-sm p-10">Loading…</p>
+      </main>
+    );
+  }
+
+  if (registrationLocked) {
+    return (
+      <main>
+        <BrandHeader pageLabel="Player registration" />
+        <div
+          className="flex items-center justify-center px-4"
+          style={{ minHeight: '70vh' }}
+        >
+          <div className="bg-white rounded-xl border border-line p-5 max-w-sm w-full text-center">
+            <i className="ti ti-lock text-2xl" style={{ color: '#854f0b' }} aria-hidden="true" />
+            <p className="text-sm font-semibold text-ink mt-2 mb-1">Registration is currently closed</p>
+            <p className="text-xs text-muted m-0">
+              New player registration closes 5 minutes before the draft and stays closed while it's happening.
+              Reach out to your commissioner if you need to be added — they can open a short window to register you
+              while the draft is paused.
+            </p>
+          </div>
+        </div>
       </main>
     );
   }
@@ -401,6 +457,36 @@ export default function RegisterPage() {
                   style={mode === 'edit' ? { background: '#f1f3f6', color: '#8b97a3' } : undefined}
                 />
               </div>
+              {mode === 'create' && (
+                <>
+                  <div>
+                    <label className="field-label">
+                      Create a password
+                      <Req />
+                    </label>
+                    <input
+                      type="password"
+                      value={form.password}
+                      onChange={set('password')}
+                      placeholder="At least 6 characters"
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label">
+                      Confirm password
+                      <Req />
+                    </label>
+                    <input
+                      type="password"
+                      value={form.confirmPassword}
+                      onChange={set('confirmPassword')}
+                      placeholder="Re-enter your password"
+                      autoComplete="new-password"
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </section>
 

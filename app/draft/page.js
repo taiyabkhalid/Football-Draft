@@ -30,6 +30,20 @@ export default function DraftPage() {
   const [searchPreviousTeam, setSearchPreviousTeam] = useState('');
   const [sortBy, setSortBy] = useState('name');
   const [viewByTeamOpen, setViewByTeamOpen] = useState(true);
+  const rostersSectionRef = useRef(null);
+
+  function scrollRostersIntoView() {
+    setTimeout(() => {
+      rostersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  }
+
+  function scrollHalfwayDown() {
+    setTimeout(() => {
+      window.scrollTo({ top: document.body.scrollHeight * 0.5, behavior: 'smooth' });
+    }, 60);
+  }
+
   const [rosterViewMode, setRosterViewMode] = useState('team'); // 'team' | 'round'
   const [selectedRound, setSelectedRound] = useState(1);
   const roundInitialized = useRef(false);
@@ -467,7 +481,7 @@ export default function DraftPage() {
 
   if (!authChecked || !settings) {
     return (
-      <main style={{ background: '#ffffff', minHeight: '100vh' }}>
+      <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
         <BrandHeader pageLabel="Live draft" />
         <p style={{ padding: 40, textAlign: 'center', color: '#5a6b7d', fontSize: 13 }}>Loading draft room…</p>
       </main>
@@ -476,7 +490,7 @@ export default function DraftPage() {
 
   if (draftStatus === 'not_started') {
     return (
-      <main style={{ background: '#ffffff', minHeight: '100vh' }}>
+      <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
         <BrandHeader pageLabel="Live draft" />
         <div style={{ padding: 40, textAlign: 'center' }}>
           <p style={{ fontSize: 16, color: '#0c2340', fontWeight: 500 }}>The draft hasn't started yet.</p>
@@ -487,7 +501,7 @@ export default function DraftPage() {
   }
 
   return (
-    <main style={{ background: '#ffffff', minHeight: '100vh' }}>
+    <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
       <BrandHeader
         pageLabel={draftStatus === 'completed' ? 'Draft results' : draftStatus === 'paused' ? 'Draft paused' : 'Live draft'}
         liveIndicator={draftStatus === 'in_progress'}
@@ -538,6 +552,11 @@ export default function DraftPage() {
                 <p className="text-[10px] m-0 mt-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
                   Round {currentRound} &middot; Pick {pickInRound(currentPickNumber, numTeams)}
                 </p>
+                {canDraft && (
+                  <p className="text-xs font-semibold m-0 mt-1" style={{ color: '#ffffff' }}>
+                    Drafting for: {teamOnClock?.name}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
                 {profile?.role === 'commissioner' && (
@@ -659,7 +678,7 @@ export default function DraftPage() {
       )}
 
       {/* Team / Round roster viewer */}
-      <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-surface px-4 py-3">
+      <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-surface px-4 py-3" ref={rostersSectionRef}>
         <button
           onClick={() => setViewByTeamOpen((o) => !o)}
           className="w-full flex items-center justify-between"
@@ -671,16 +690,16 @@ export default function DraftPage() {
         </button>
         {viewByTeamOpen && (
           <>
-            {draftStatus === 'completed' && (
-              <div className="mt-2 mb-2" style={{ maxWidth: 220 }}>
-                <PrintRosterButton teams={teams} />
-              </div>
-            )}
             <div className="flex gap-1.5 mt-2 mb-2">
               <button
-                onClick={() => setRosterViewMode('team')}
-                className="text-xs px-2.5 py-1 rounded-md font-medium"
+                type="button"
+                onClick={() => {
+                  setRosterViewMode('team');
+                  scrollRostersIntoView();
+                }}
+                className="text-xs py-1.5 rounded-md font-medium text-center"
                 style={{
+                  width: 104,
                   background: rosterViewMode === 'team' ? '#185fa5' : '#ffffff',
                   color: rosterViewMode === 'team' ? '#ffffff' : '#3d4a57',
                   border: '1px solid #d8dde2',
@@ -689,12 +708,15 @@ export default function DraftPage() {
                 View by team
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setRosterViewMode('round');
                   setSelectedRound(Math.min(currentRound, maxRounds));
+                  scrollRostersIntoView();
                 }}
-                className="text-xs px-2.5 py-1 rounded-md font-medium"
+                className="text-xs py-1.5 rounded-md font-medium text-center"
                 style={{
+                  width: 104,
                   background: rosterViewMode === 'round' ? '#185fa5' : '#ffffff',
                   color: rosterViewMode === 'round' ? '#ffffff' : '#3d4a57',
                   border: '1px solid #d8dde2',
@@ -703,9 +725,14 @@ export default function DraftPage() {
                 View by round
               </button>
               <button
-                onClick={() => setRosterViewMode('board')}
-                className="text-xs px-2.5 py-1 rounded-md font-medium"
+                type="button"
+                onClick={() => {
+                  setRosterViewMode('board');
+                  scrollHalfwayDown();
+                }}
+                className="text-xs py-1.5 rounded-md font-medium text-center"
                 style={{
+                  width: 104,
                   background: rosterViewMode === 'board' ? '#185fa5' : '#ffffff',
                   color: rosterViewMode === 'board' ? '#ffffff' : '#3d4a57',
                   border: '1px solid #d8dde2',
@@ -1062,6 +1089,12 @@ export default function DraftPage() {
                       })}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {draftStatus === 'completed' && (
+              <div className="mt-3 pt-3 border-t border-line" style={{ maxWidth: 220 }}>
+                <PrintRosterButton teams={teams} />
               </div>
             )}
           </>

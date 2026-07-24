@@ -117,7 +117,7 @@ export default function ProfilePage() {
 
   if (loading || !player) {
     return (
-      <main style={{ background: '#ffffff', minHeight: '100vh' }}>
+      <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
         <BrandHeader pageLabel="Your profile" />
         <p className="text-center text-muted text-sm p-10">Loading your profile…</p>
       </main>
@@ -137,7 +137,7 @@ export default function ProfilePage() {
     (draftStatus === 'in_progress' || draftStatus === 'paused' || withinTwoHoursOfDraft);
 
   return (
-    <main style={{ background: '#ffffff', minHeight: '100vh' }}>
+    <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
       <BrandHeader pageLabel="Your profile" />
 
       {draftDatetime && (

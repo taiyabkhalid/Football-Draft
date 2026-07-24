@@ -45,6 +45,7 @@ export default function CommissionerToolsPage() {
   const [pausing, setPausing] = useState(false);
 
   const [savingUnlock, setSavingUnlock] = useState(false);
+  const [savingRegistrationUnlock, setSavingRegistrationUnlock] = useState(false);
 
   const [resetEmail, setResetEmail] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
@@ -253,6 +254,16 @@ export default function CommissionerToolsPage() {
     setSavingUnlock(false);
   }
 
+  async function handleToggleRegistration() {
+    setSavingRegistrationUnlock(true);
+    await supabase
+      .from('draft_settings')
+      .update({ registration_unlocked_override: !settings?.registration_unlocked_override })
+      .eq('id', 1);
+    await fetchData();
+    setSavingRegistrationUnlock(false);
+  }
+
   async function handleResetPassword() {
     if (!resetEmail) return;
     setResettingPassword(true);
@@ -452,7 +463,7 @@ export default function CommissionerToolsPage() {
 
   if (!checked) {
     return (
-      <main style={{ background: '#ffffff', minHeight: '100vh' }}>
+      <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
         <BrandHeader pageLabel="Commissioner tools" />
         <p className="text-center text-muted text-sm p-10">Checking access…</p>
       </main>
@@ -460,7 +471,7 @@ export default function CommissionerToolsPage() {
   }
 
   return (
-    <main style={{ background: '#ffffff', minHeight: '100vh' }}>
+    <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
       <BrandHeader pageLabel="Commissioner tools" />
       <div className="max-w-xl mx-auto px-4 py-8">
         <Link
@@ -680,6 +691,27 @@ export default function CommissionerToolsPage() {
                 ? 'Re-lock profile edits'
                 : 'Unlock profile edits'}
             </button>
+          </div>
+
+          <div className="border-t border-line mt-3 pt-3">
+            <p className="text-xs text-muted mb-2">
+              New player registration closes 5 minutes before the draft and stays closed while it's happening. If you
+              need to add someone mid-draft, turn this on — it only actually opens registration while the draft is
+              paused, and locks back down the moment you resume.
+            </p>
+            <button onClick={handleToggleRegistration} disabled={savingRegistrationUnlock} className="btn-secondary text-xs w-full">
+              {savingRegistrationUnlock
+                ? 'Saving…'
+                : settings?.registration_unlocked_override
+                ? 'Turn off mid-draft registration'
+                : 'Allow registration while paused'}
+            </button>
+            {settings?.registration_unlocked_override && draftStatus !== 'paused' && (
+              <p className="text-[11px] mt-1.5" style={{ color: '#854f0b' }}>
+                This is on, but registration is only actually open while the draft is paused — pause it to let the
+                new player register.
+              </p>
+            )}
           </div>
 
           <div className="border-t border-line mt-3 pt-3">
