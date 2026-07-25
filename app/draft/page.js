@@ -224,7 +224,11 @@ export default function DraftPage() {
   // team count, and the last round is partial if it doesn't divide evenly.
   // Each team's GM/commissioner already occupies one roster slot before the
   // draft even starts, so they're excluded from the count of picks needed.
-  const totalPicks = Math.max(players.length - numTeams, 0);
+  // A skip forfeits a turn without consuming a pool player, so it doesn't
+  // shrink the pool - it extends the draft by one turn to compensate,
+  // which is why skipCount is added back in here.
+  const skipCount = useMemo(() => picks.filter((p) => !p.player_id).length, [picks]);
+  const totalPicks = Math.max(players.length - numTeams, 0) + skipCount;
   const maxRounds = numTeams ? Math.ceil(totalPicks / numTeams) : 0;
   const pickByNumber = useMemo(() => Object.fromEntries(picks.map((p) => [p.pick_number, p])), [picks]);
 
@@ -335,6 +339,7 @@ export default function DraftPage() {
       map[t.id] = {
         players: roster,
         count: roster.length,
+        pickCount: roster.filter((p) => p.draft_pick_number != null).length,
         femaleCount: roster.filter((p) => p.gender === 'F').length,
       };
     }
@@ -1434,7 +1439,7 @@ export default function DraftPage() {
               {rosterByTeam[profile.team_id] && (
                 <>
                   <p className="text-xs text-ink mb-2">
-                    {rosterByTeam[profile.team_id].count} of {picksPerTeam[profile.team_id] ?? maxRounds} &middot;{' '}
+                    {rosterByTeam[profile.team_id].pickCount} of {picksPerTeam[profile.team_id] ?? maxRounds} &middot;{' '}
                     {rosterByTeam[profile.team_id].femaleCount} of {minFemale} F
                   </p>
                   {draftStatus === 'completed' &&

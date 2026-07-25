@@ -351,9 +351,13 @@ export default function LiveDraftPage() {
 
   // The draft runs until the whole DRAFTABLE pool is allocated - each team's
   // GM/commissioner already occupies one roster slot before the draft even
-  // starts, so they're excluded from the count of picks needed. See
-  // draft/page.js for the same logic.
-  const totalPicks = Math.max(players.length - numTeams, 0);
+  // starts, so they're excluded from the count of picks needed. A skip
+  // forfeits a turn without consuming a pool player, extending the draft
+  // by one turn to compensate - this uses the raw pick history (not the
+  // revealed subset) since it's structural (how many rounds exist), not
+  // spoiler content about who was picked. See draft/page.js for the same logic.
+  const skipCount = useMemo(() => picks.filter((p) => !p.player_id).length, [picks]);
+  const totalPicks = Math.max(players.length - numTeams, 0) + skipCount;
   const maxRounds = numTeams ? Math.ceil(totalPicks / numTeams) : 0;
 
   const allSlots = useMemo(() => {
