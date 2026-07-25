@@ -37,6 +37,17 @@ export default function DraftPage() {
   const [sortBy, setSortBy] = useState('name');
   const [viewByTeamOpen, setViewByTeamOpen] = useState(true);
   const rostersSectionRef = useRef(null);
+  const playerSelectionRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('focus') === 'search') {
+      setTimeout(() => {
+        playerSelectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
+    }
+  }, []);
 
   function scrollRostersIntoView() {
     setTimeout(() => {
@@ -153,6 +164,20 @@ export default function DraftPage() {
     return () => clearInterval(timer);
   }, []);
 
+  // Auto-start the draft the moment the scheduled time passes, from
+  // whichever page happens to be open - previously this only ever ran
+  // once, on Commissioner Tools' initial load, so it silently missed the
+  // moment unless someone happened to be on that exact page at that exact
+  // time. Safe to call repeatedly and from multiple open tabs/devices at
+  // once - it only actually changes anything the first time it succeeds.
+  useEffect(() => {
+    if (draftStatus !== 'not_started') return;
+    const timer = setInterval(() => {
+      supabase.rpc('start_draft_if_due');
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [draftStatus]);
+
   const pickStartedAt = settings?.current_pick_started_at ? new Date(settings.current_pick_started_at).getTime() : null;
   const liveSecondsLeft = pickStartedAt
     ? Math.max(pickClockSeconds - Math.floor((now - pickStartedAt) / 1000), 0)
@@ -173,14 +198,27 @@ export default function DraftPage() {
   const draftDatetimeMs = settings?.draft_datetime ? new Date(settings.draft_datetime).getTime() : null;
   const msUntilDraft = draftDatetimeMs !== null ? draftDatetimeMs - now : null;
   const draftStartCountdown = useMemo(() => {
-    if (msUntilDraft === null) return '--:--:--';
+    if (msUntilDraft === null) return '--:--';
     const totalSeconds = Math.max(Math.floor(msUntilDraft / 1000), 0);
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = totalSeconds % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const mmss = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    if (days > 0) return `${days}d ${hours}h ${mmss}`;
+    if (hours > 0) return `${hours}h ${mmss}`;
+    return mmss;
   }, [msUntilDraft]);
   const showDraftOrderPreview = msUntilDraft !== null && msUntilDraft <= 30 * 60 * 1000;
+  const secondsUntilDraftGm = msUntilDraft !== null ? Math.floor(msUntilDraft / 1000) : null;
+
+  const scrolledToTopForStartRef = useRef(false);
+  useEffect(() => {
+    if (secondsUntilDraftGm !== null && secondsUntilDraftGm <= 10 && secondsUntilDraftGm >= 0 && !scrolledToTopForStartRef.current) {
+      scrolledToTopForStartRef.current = true;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [secondsUntilDraftGm]);
 
   const clockUrgent = draftStatus === 'in_progress' && secondsLeft <= 20;
 
@@ -539,24 +577,30 @@ export default function DraftPage() {
       />
 
       {draftStatus === 'not_started' && (
-        <div className="px-4 sm:px-5 pt-4 pb-3">
-          <div className="flex justify-center">
-            <div
-              className="rounded-lg p-3 flex flex-col items-center justify-center"
-              style={{ background: '#185fa5', width: '100%', maxWidth: 320 }}
-            >
-              <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
-                Draft starts in
-              </p>
-              <p className="text-2xl font-semibold m-0" style={{ color: '#ffffff', letterSpacing: '0.03em' }}>
-                {draftStartCountdown}
-              </p>
+        <>
+          <div
+            className="px-4 sm:px-5 pt-4 pb-3"
+            style={{ position: 'sticky', top: 0, zIndex: 30, background: '#ffffff', boxShadow: '0 2px 6px rgba(12,35,64,0.08)' }}
+          >
+            <div className="flex justify-center">
+              <div
+                className="rounded-lg p-3 flex flex-col items-center justify-center"
+                style={{ background: '#185fa5', width: '100%', maxWidth: 320 }}
+              >
+                <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                  Draft starts in
+                </p>
+                <p className="text-2xl font-semibold m-0" style={{ color: '#ffffff', letterSpacing: '0.03em' }}>
+                  {draftStartCountdown}
+                </p>
+              </div>
             </div>
+            <p className="text-xs text-center text-muted mt-2 mb-0">
+              You can search and research players now - drafting opens once the commissioner starts the draft.
+            </p>
           </div>
-          <p className="text-xs text-center text-muted mt-2">
-            You can search and research players now - drafting opens once the commissioner starts the draft.
-          </p>
 
+          <div className="px-4 sm:px-5">
           {showDraftOrderPreview && (
             <div className="mt-4 rounded-xl border border-line bg-surface px-4 py-3.5">
               <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#0c447c' }}>
@@ -587,7 +631,8 @@ export default function DraftPage() {
               )}
             </div>
           )}
-        </div>
+          </div>
+        </>
       )}
 
       {draftStatus === 'in_progress' || draftStatus === 'paused' ? (
@@ -1219,7 +1264,7 @@ export default function DraftPage() {
       {/* Player selection - the main drafting area: search/sort, available players, cards, your team.
           Stays visible after the draft ends so GMs can still search/reference rosters and use
           "Add to my team" for leftover or late-registered players. */}
-      <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5">
+      <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5" ref={playerSelectionRef}>
         <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: '#0c447c' }}>
           Player selection
         </p>
@@ -1425,10 +1470,7 @@ export default function DraftPage() {
                       <FootballIcon color={teamsById[p.team_id]?.team_color || '#0074ff'} size={13} />
                       <span className="text-[11px] font-medium" style={{ color: '#3d4a57' }}>
                         {p.draft_pick_number
-                          ? `Drafted \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'} \u00b7 Rnd ${getRound(
-                              p.draft_pick_number,
-                              numTeams
-                            )} . Pick # ${p.draft_pick_number}`
+                          ? `Drafted By: ${teamsById[p.team_id]?.name || 'Unknown'}`
                           : `Added manually \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'}`}
                       </span>
                     </div>

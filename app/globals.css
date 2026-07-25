@@ -13,6 +13,17 @@ textarea {
   @apply focus:outline-none focus:ring-2 focus:ring-royal focus:border-transparent;
 }
 
+/* iOS Safari (and some Android browsers) auto-zoom the page when focusing
+   an input smaller than 16px - this is what was causing the zoomed-in
+   feeling that carried over from the login page onto the profile page. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 input::placeholder {
   @apply text-faint;
 }
