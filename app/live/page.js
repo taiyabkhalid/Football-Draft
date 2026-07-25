@@ -89,12 +89,6 @@ export default function LiveDraftPage() {
     }, 60);
   }
 
-  function scrollHalfwayDown() {
-    setTimeout(() => {
-      window.scrollTo({ top: document.body.scrollHeight * 0.5, behavior: 'smooth' });
-    }, 60);
-  }
-
   const [rosterViewMode, setRosterViewMode] = useState('team'); // 'team' | 'round'
 
   function jumpToTeam(teamId) {
@@ -385,10 +379,10 @@ export default function LiveDraftPage() {
 
   useEffect(() => {
     if (!roundInitialized.current && currentRound) {
-      setSelectedRound(Math.min(currentRound, maxRounds));
+      setSelectedRound(draftStatus === 'completed' ? 1 : Math.min(currentRound, maxRounds));
       roundInitialized.current = true;
     }
-  }, [currentRound, maxRounds]);
+  }, [currentRound, maxRounds, draftStatus]);
 
   const roundSlots = useMemo(() => allSlots.filter((s) => s.round === selectedRound), [allSlots, selectedRound]);
 
@@ -700,7 +694,7 @@ export default function LiveDraftPage() {
               type="button"
               onClick={() => {
                 setRosterViewMode('round');
-                setSelectedRound(Math.min(currentRound, maxRounds));
+                setSelectedRound(currentPickNumber > totalPicks ? 1 : Math.min(currentRound, maxRounds));
                 scrollRostersIntoView();
               }}
               className="text-xs py-1.5 rounded-md font-medium text-center"
@@ -717,7 +711,7 @@ export default function LiveDraftPage() {
               type="button"
               onClick={() => {
                 setRosterViewMode('board');
-                scrollHalfwayDown();
+                scrollRostersIntoView();
               }}
               className="text-xs py-1.5 rounded-md font-medium text-center"
               style={{
@@ -1105,7 +1099,7 @@ export default function LiveDraftPage() {
                                       {slot.player.full_name}
                                     </p>
                                     <p className="text-[9px] m-0" style={{ color: '#5a6b7d' }}>
-                                      {slot.player.gender} &middot; Pick #{pickInRound(slot.pickNumber, numTeams)}
+                                      {slot.player.gender} &middot; Overall Pick #{slot.pickNumber}
                                     </p>
                                   </button>
                                 ) : isSkipped ? (

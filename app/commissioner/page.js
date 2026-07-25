@@ -208,6 +208,20 @@ export default function CommissionerToolsPage() {
       }
       seen.add(t.draft_position);
     }
+    // Positions must be contiguous 1..N with no gaps - e.g. 1,2,3,5 (skipping
+    // 4) would silently break the pick order, since the draft's rotation
+    // math assumes every position from 1 through the team count is filled.
+    const expected = Array.from({ length: teamOrder.length }, (_, i) => i + 1);
+    const actual = Array.from(seen).sort((a, b) => a - b);
+    const hasGap = expected.some((n, i) => n !== actual[i]);
+    if (hasGap) {
+      setOrderMessage({
+        type: 'error',
+        text: `Draft positions must run 1 through ${teamOrder.length} with no gaps - double check the numbers you've entered.`,
+      });
+      setSavingOrder(false);
+      return;
+    }
     const results = await Promise.all(
       teamOrder.map((t) => supabase.from('teams').update({ draft_position: t.draft_position }).eq('id', t.id))
     );

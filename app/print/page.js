@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import FootballIcon from '../../lib/FootballIcon';
+import { getRound } from '../../lib/draftLogic';
 
 const th = { textAlign: 'left', padding: '5px 8px', color: '#5a6b7d', fontWeight: 500 };
 const td = { padding: '5px 8px' };
@@ -116,6 +117,7 @@ function PrintContent() {
         <thead>
           <tr>
             <th style={th}>Overall Pick#</th>
+            <th style={th}>Round</th>
             <th style={th}>Player</th>
             <th style={th}>Position (Off/Def)</th>
             <th style={th}>Gender</th>
@@ -127,6 +129,7 @@ function PrintContent() {
           {allDrafted.map((p) => (
             <tr key={p.id} style={{ borderTop: '1px solid #eef0f2' }}>
               <td style={td}>{p.draft_pick_number}</td>
+              <td style={td}>{getRound(p.draft_pick_number, numTeams)}</td>
               <td style={td}>{p.full_name}</td>
               <td style={td}>
                 {p.offensive_position} / {p.defensive_position}
