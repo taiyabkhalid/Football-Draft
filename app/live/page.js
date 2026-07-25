@@ -477,6 +477,557 @@ export default function LiveDraftPage() {
     );
   }
 
+  const draftedPlayersBlock = (
+    <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5">
+      <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: '#0c447c' }}>
+        Drafted players
+      </p>
+
+      <audio ref={audioRef} src="/sounds/pick-chime.mp3" preload="auto" />
+
+      <div className="flex gap-2 overflow-x-auto pb-2 items-center" ref={draftedScrollRef}>
+        {allSlots.map((slot) => {
+          const isSkippedPick = slot.pick && !slot.pick.player_id;
+          const isClockSlot =
+            slot.pickNumber === currentPickNumber &&
+            !slot.player &&
+            !isSkippedPick &&
+            (draftStatus === 'in_progress' || draftStatus === 'paused');
+          const teamColor = slot.team?.team_color || '#0074ff';
+          const owner = ownerByTeam[slot.team?.id];
+
+          const isPoppedOut =
+            showPopout && activeReveal && slot.pickNumber === activeReveal.pick_number && activeReveal.player_id;
+
+          if (isPoppedOut) {
+            const player = playersById[activeReveal.player_id];
+            if (!player) return null;
+            const poppedTeamColor = slot.team?.team_color || '#0074ff';
+            const gmName = owner?.name;
+            return (
+              <div
+                key={slot.pickNumber}
+                ref={currentPickRef}
+                onClick={() => openProfile(player.id)}
+                className="flex-none rounded-2xl p-4 flex flex-col items-center text-center"
+                style={{ width: 210, border: `4px solid ${poppedTeamColor}`, background: '#ffffff', cursor: 'pointer' }}
+              >
+                <p className="text-[19px] font-medium m-0 mb-2.5 tracking-wide" style={{ color: poppedTeamColor }}>
+                  JUST DRAFTED!
+                </p>
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <FootballIcon color={poppedTeamColor} size={15} />
+                  <span className="text-sm font-medium" style={{ color: '#0c2340' }}>{slot.team?.name}</span>
+                </div>
+                {gmName && (
+                  <p className="text-[13px] m-0 mb-3" style={{ color: '#5a6b7d' }}>
+                    <span
+                      className="text-[10px] font-medium rounded px-1.5 py-px mr-1"
+                      style={{ color: poppedTeamColor, background: lightenColor(poppedTeamColor, 0.85) }}
+                    >
+                      GM
+                    </span>
+                    {gmName}
+                  </p>
+                )}
+                {player.headshot_url ? (
+                  <img src={player.headshot_url} alt={player.full_name} className="w-16 h-16 rounded-full object-cover mb-2.5" />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-surface flex items-center justify-center mb-2.5">
+                    <i className="ti ti-user text-faint text-2xl" aria-hidden="true" />
+                  </div>
+                )}
+                <p className="text-[19px] font-medium m-0" style={{ color: '#0c2340' }}>{player.full_name}</p>
+                <p className="text-xs m-0 mt-1 mb-1" style={{ color: '#5a6b7d' }}>
+                  {player.offensive_position} / {player.defensive_position} &middot; {player.gender} &middot;{' '}
+                  {player.height_feet}'{player.height_inches}"
+                </p>
+                <p className="text-[11px] m-0 mb-1.5" style={{ color: '#8b97a3' }}>
+                  Previous Team: {previousTeamLabel(player.previous_team)}
+                </p>
+                {pubLineFor(player, players, gmName) && (
+                  <p className="text-[11px] italic m-0" style={{ color: '#5a6b7d' }}>
+                    {pubLineFor(player, players, gmName)}
+                  </p>
+                )}
+              </div>
+            );
+          }
+
+          return (
+            <div
+              key={slot.pickNumber}
+              ref={!activeReveal && slot.pickNumber === currentPickNumber ? currentPickRef : null}
+              onClick={() => slot.player && openProfile(slot.player.id)}
+              className={`flex-none rounded-xl p-3 flex flex-col items-center text-center ${
+                isClockSlot && timeExpired ? 'animate-subtle-flash' : ''
+              }`}
+              style={{
+                width: 150,
+                height: 210,
+                background: isClockSlot ? lightenColor(teamColor, 0.85) : '#ffffff',
+                border: isClockSlot
+                  ? `2px solid ${teamColor}`
+                  : slot.pickNumber === currentPickNumber
+                  ? '1.5px solid #185fa5'
+                  : '1px solid #d8dde2',
+                cursor: slot.player ? 'pointer' : 'default',
+              }}
+            >
+              <p className="text-[10px] text-muted m-0 mb-1.5">
+                Round {slot.round} &middot; Pick {pickInRound(slot.pickNumber, numTeams)}
+              </p>
+              {slot.player ? (
+                <>
+                  {slot.player.headshot_url ? (
+                    <img
+                      src={slot.player.headshot_url}
+                      alt={slot.player.full_name}
+                      className="w-10 h-10 rounded-full object-cover mb-1.5"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
+                      <i className="ti ti-user text-faint text-xl" aria-hidden="true" />
+                    </div>
+                  )}
+                  <p className="text-xs font-medium text-ink m-0 leading-snug">{slot.player.full_name}</p>
+                  <p className="text-[10px] text-muted m-0 mb-1.5">
+                    {slot.player.offensive_position} / {slot.player.defensive_position}
+                  </p>
+                </>
+              ) : isSkippedPick ? (
+                <>
+                  <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
+                    <i className="ti ti-x text-faint text-xl" aria-hidden="true" />
+                  </div>
+                  <p className="text-xs text-muted m-0 leading-snug">Skipped</p>
+                </>
+              ) : isClockSlot ? (
+                <>
+                  <p className="text-xs font-medium m-0 leading-tight" style={{ color: '#0c2340' }}>
+                    On the clock
+                  </p>
+                  <div
+                    className="w-10 h-10 rounded-full bg-white flex items-center justify-center my-1.5"
+                    style={{ border: `2px solid ${teamColor}` }}
+                  >
+                    <i className="ti ti-clock text-xl" style={{ color: teamColor }} aria-hidden="true" />
+                  </div>
+                  <p className="text-base font-semibold m-0 mb-1.5" style={{ color: '#0c2340' }}>
+                    {timerDisplay}
+                  </p>
+                  <div className="flex items-center gap-1 justify-center">
+                    <FootballIcon color={teamColor} size={13} />
+                    <span className="text-[13px] font-semibold leading-tight" style={{ color: '#0c2340' }}>
+                      {slot.team?.name}
+                    </span>
+                  </div>
+                  {owner && <span className="text-[11px] text-muted mt-0.5">GM: {owner.name}</span>}
+                </>
+              ) : (
+                <>
+                  <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
+                    <i className="ti ti-user text-faint text-xl" aria-hidden="true" />
+                  </div>
+                  <p className="text-xs text-faint m-0 leading-snug" style={{ fontStyle: 'italic' }}>
+                    Not yet selected
+                  </p>
+                </>
+              )}
+              <div className="mt-auto pt-1.5 flex flex-col items-center gap-0.5">
+                {slot.player ? (
+                  <>
+                    <div className="flex items-center gap-1.5 justify-center">
+                      <FootballIcon color={teamColor} size={16} />
+                      <span className="text-[13px] font-semibold leading-none" style={{ color: '#0c2340' }}>
+                        Drafted by: {slot.team?.name}
+                      </span>
+                    </div>
+                    {owner && <span className="text-[10px] text-muted">({owner.name})</span>}
+                  </>
+                ) : !isClockSlot ? (
+                  <div className="flex items-center gap-1.5 justify-center min-w-0">
+                    <FootballIcon color={teamColor} size={12} />
+                    <span className="text-[10px] text-muted truncate leading-none">
+                      {slot.team?.name}
+                      {owner ? ` \u00b7 ${owner.name}` : ''}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const rostersBlock = (
+    <div className="mx-4 sm:mx-5 mt-4 rounded-xl border border-line bg-surface px-4 py-3" ref={rostersSectionRef}>
+      <button
+        onClick={() => {
+          const opening = !viewByTeamOpen;
+          setViewByTeamOpen(opening);
+          if (opening) scrollRostersIntoView();
+        }}
+        className="w-full flex items-center justify-between"
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
+          View rosters
+        </p>
+        <i className={`ti ti-chevron-${viewByTeamOpen ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+      </button>
+      {viewByTeamOpen && (
+        <>
+          <div className="flex gap-1.5 mt-2 mb-2">
+            <button
+              type="button"
+              onClick={() => {
+                setRosterViewMode('team');
+                scrollRostersIntoView();
+              }}
+              className="text-xs py-1.5 rounded-md font-medium text-center"
+              style={{
+                width: 104,
+                background: rosterViewMode === 'team' ? '#185fa5' : '#ffffff',
+                color: rosterViewMode === 'team' ? '#ffffff' : '#3d4a57',
+                border: '1px solid #d8dde2',
+              }}
+            >
+              View by team
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRosterViewMode('round');
+                setSelectedRound(Math.min(currentRound, maxRounds));
+                scrollRostersIntoView();
+              }}
+              className="text-xs py-1.5 rounded-md font-medium text-center"
+              style={{
+                width: 104,
+                background: rosterViewMode === 'round' ? '#185fa5' : '#ffffff',
+                color: rosterViewMode === 'round' ? '#ffffff' : '#3d4a57',
+                border: '1px solid #d8dde2',
+              }}
+            >
+              View by round
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRosterViewMode('board');
+                scrollHalfwayDown();
+              }}
+              className="text-xs py-1.5 rounded-md font-medium text-center"
+              style={{
+                width: 104,
+                background: rosterViewMode === 'board' ? '#185fa5' : '#ffffff',
+                color: rosterViewMode === 'board' ? '#ffffff' : '#3d4a57',
+                border: '1px solid #d8dde2',
+              }}
+            >
+              Draft board
+            </button>
+            {draftStatus === 'completed' && (
+              <PrintRosterButton teams={teams} width={104} compact />
+            )}
+          </div>
+
+          {rosterViewMode === 'team' && (
+            <>
+              <div className="flex gap-2 flex-wrap mb-2">
+                {teams.map((t) => {
+                  const color = t.team_color || '#0074ff';
+                  const selected = viewingTeamId === t.id;
+                  const isMine = t.id === myTeamId;
+                  const ring = isMine ? ', 0 0 0 2px #185fa5' : '';
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setViewingTeamId(viewingTeamId === t.id ? null : t.id)}
+                      className="text-xs px-2 py-1.5 rounded-md font-medium flex items-center gap-1.5 justify-center"
+                      style={{
+                        width: 140,
+                        boxSizing: 'border-box',
+                        background: selected ? color : lightenColor(color, 0.85),
+                        color: selected ? '#ffffff' : '#0c2340',
+                        borderLeft: 'none',
+                        borderRight: 'none',
+                        borderTop: selected ? '3px solid rgba(0,0,0,0.25)' : '1px solid rgba(255,255,255,0.7)',
+                        borderBottom: selected ? '1px solid rgba(255,255,255,0.25)' : '3px solid rgba(0,0,0,0.18)',
+                        boxShadow: selected
+                          ? `inset 0 1px 3px rgba(0,0,0,0.3)${ring}`
+                          : `0 1px 2px rgba(12,35,64,0.15)${ring}`,
+                      }}
+                    >
+                      <FootballIcon color={selected ? '#ffffff' : color} size={14} />
+                      <span className="truncate">
+                        {t.name}
+                        {isMine ? ' (you)' : ''}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {viewingTeamId &&
+                (() => {
+                  const viewedTeam = teamsById[viewingTeamId];
+                  const teamColor = viewedTeam?.team_color || '#0074ff';
+                  const teamRoster = rosterByTeam[viewingTeamId];
+                  return (
+                    <div
+                      className="rounded-lg p-3"
+                      style={{ background: lightenColor(teamColor, 0.92), border: `1px solid ${lightenColor(teamColor, 0.7)}` }}
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <p className="text-sm font-medium text-ink m-0">{viewedTeam?.name}</p>
+                        {viewedTeam?.proxy_email && (
+                          <p className="text-xs m-0" style={{ color: '#854f0b' }}>
+                            Proxy: {playersByEmail[viewedTeam.proxy_email]?.full_name || viewedTeam.proxy_email}
+                          </p>
+                        )}
+                      </div>
+                      {ownerByTeam[viewingTeamId] && (
+                        <p className="text-[11px] m-0 mb-2" style={{ color: '#185fa5' }}>
+                          GM:{' '}
+                          <i
+                            className={ownerByTeam[viewingTeamId].role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'}
+                            style={{ color: teamColor }}
+                            aria-hidden="true"
+                          />{' '}
+                          {ownerByTeam[viewingTeamId].name}
+                        </p>
+                      )}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {teamRoster?.players.map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => openProfile(p.id)}
+                            className="bg-white rounded-lg px-2 py-2 text-center flex flex-col items-center"
+                            style={{ minHeight: 100 }}
+                          >
+                            {p.headshot_url ? (
+                              <img src={p.headshot_url} alt={p.full_name} className="w-8 h-8 rounded-full object-cover mb-1" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-surface flex items-center justify-center mb-1">
+                                <i className="ti ti-user text-faint text-sm" aria-hidden="true" />
+                              </div>
+                            )}
+                            <p className="text-[10px] font-medium m-0 leading-tight truncate w-full">{p.full_name}</p>
+                            <p className="text-[9px] text-muted m-0">
+                              {p.offensive_position} / {p.defensive_position}
+                            </p>
+                            <p className="text-[9px] text-muted m-0">{p.gender}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+            </>
+          )}
+
+          {rosterViewMode === 'round' && (
+            <>
+              <div className="flex items-center justify-center gap-3 mb-2">
+                <button
+                  onClick={() => setSelectedRound((r) => Math.max(1, r - 1))}
+                  disabled={selectedRound <= 1}
+                  className="btn-secondary text-xs px-2 py-1"
+                >
+                  <i className="ti ti-chevron-left" aria-hidden="true" />
+                </button>
+                <p className="text-xs font-medium text-ink m-0">
+                  Round {selectedRound} of {maxRounds}
+                </p>
+                <button
+                  onClick={() => setSelectedRound((r) => Math.min(maxRounds, r + 1))}
+                  disabled={selectedRound >= maxRounds}
+                  className="btn-secondary text-xs px-2 py-1"
+                >
+                  <i className="ti ti-chevron-right" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {roundSlots.map((slot) => {
+                  const isSkippedPick = slot.pick && !slot.pick.player_id;
+                  const isClockSlot =
+                    slot.pickNumber === currentPickNumber &&
+                    !slot.player &&
+                    !isSkippedPick &&
+                    (draftStatus === 'in_progress' || draftStatus === 'paused');
+                  const teamColor = slot.team?.team_color || '#0074ff';
+                  const owner = ownerByTeam[slot.team?.id];
+                  return (
+                    <div
+                      key={slot.pickNumber}
+                      onClick={() => slot.player && openProfile(slot.player.id)}
+                      className="rounded-lg p-2 flex flex-col items-center text-center"
+                      style={{
+                        minHeight: 100,
+                        background: isClockSlot ? lightenColor(teamColor, 0.85) : '#ffffff',
+                        border: isClockSlot ? `2px solid ${teamColor}` : '1px solid #d8dde2',
+                        cursor: slot.player ? 'pointer' : 'default',
+                      }}
+                    >
+                      <p className="text-[9px] text-muted m-0 mb-1">Pick # {pickInRound(slot.pickNumber, numTeams)}</p>
+                      {slot.player ? (
+                        <>
+                          {slot.player.headshot_url ? (
+                            <img
+                              src={slot.player.headshot_url}
+                              alt={slot.player.full_name}
+                              className="w-8 h-8 rounded-full object-cover mb-1"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-surface flex items-center justify-center mb-1">
+                              <i className="ti ti-user text-faint text-sm" aria-hidden="true" />
+                            </div>
+                          )}
+                          <p className="text-[10px] font-medium m-0 leading-tight">{slot.player.full_name}</p>
+                        </>
+                      ) : isSkippedPick ? (
+                        <p className="text-[10px] text-muted m-0">Skipped</p>
+                      ) : isClockSlot ? (
+                        <p className="text-[10px] font-medium m-0" style={{ color: '#0c2340' }}>
+                          On the clock
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-faint m-0 italic">Not yet selected</p>
+                      )}
+                      <div className="flex items-center gap-1 mt-auto pt-1 justify-center">
+                        <FootballIcon color={teamColor} size={11} />
+                        <span className="text-[9px] text-muted truncate">{slot.team?.name}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {rosterViewMode === 'board' && (
+            <div className="bg-white rounded-lg p-3" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '65vh' }}>
+              <table className="border-collapse text-xs" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th
+                      className="text-left p-2.5 sticky left-0"
+                      style={{
+                        minWidth: 130,
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 3,
+                        background: '#f1f3f6',
+                        color: '#0c2340',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        borderBottom: '2px solid #d8dde2',
+                      }}
+                    >
+                      Team / GM
+                    </th>
+                    {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => (
+                      <th
+                        key={r}
+                        className="p-2.5 text-center"
+                        style={{
+                          minWidth: 90,
+                          position: 'sticky',
+                          top: 0,
+                          zIndex: 2,
+                          background: '#f1f3f6',
+                          color: '#0c2340',
+                          fontSize: 13,
+                          fontWeight: 700,
+                          borderBottom: '2px solid #d8dde2',
+                        }}
+                      >
+                        Round {r}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {teams
+                    .slice()
+                    .sort((a, b) => a.draft_position - b.draft_position)
+                    .map((t) => {
+                      const owner = ownerByTeam[t.id];
+                      return (
+                        <tr key={t.id} className="border-t" style={{ borderColor: '#d8dde2' }}>
+                          <td className="p-2 sticky left-0 bg-white align-top">
+                            <div className="flex items-center gap-1.5">
+                              <FootballIcon color={t.team_color || '#0074ff'} size={12} />
+                              <span className="font-medium text-ink">{t.name}</span>
+                            </div>
+                            {owner && <p className="text-[10px] text-muted m-0 mt-0.5">GM: {owner.name}</p>}
+                          </td>
+                          {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => {
+                            const slot = allSlots.find((s) => s.round === r && s.team?.id === t.id);
+                            if (!slot) {
+                              return (
+                                <td key={r} className="p-2 text-center align-top" style={{ color: '#8b97a3' }}>
+                                  &mdash;
+                                </td>
+                              );
+                            }
+                            const isSkipped = slot.pick && !slot.pick.player_id;
+                            return (
+                              <td key={r} className="p-1.5 text-center align-top">
+                                {slot.player ? (
+                                  <button
+                                    onClick={() => openProfile(slot.player.id)}
+                                    className="bg-surface rounded-lg p-1.5 text-center"
+                                    style={{ width: 80 }}
+                                  >
+                                    {slot.player.headshot_url ? (
+                                      <img
+                                        src={slot.player.headshot_url}
+                                        alt={slot.player.full_name}
+                                        className="w-7 h-7 rounded-full object-cover mx-auto"
+                                      />
+                                    ) : (
+                                      <div className="w-7 h-7 rounded-full bg-white mx-auto flex items-center justify-center">
+                                        <i className="ti ti-user text-faint text-sm" aria-hidden="true" />
+                                      </div>
+                                    )}
+                                    <p
+                                      className="text-[10px] font-medium m-0 mt-1 truncate leading-tight"
+                                      style={{ color: '#0c2340' }}
+                                    >
+                                      {slot.player.full_name}
+                                    </p>
+                                    <p className="text-[9px] m-0" style={{ color: '#5a6b7d' }}>
+                                      {slot.player.gender} &middot; Pick #{pickInRound(slot.pickNumber, numTeams)}
+                                    </p>
+                                  </button>
+                                ) : isSkipped ? (
+                                  <p className="text-[10px] italic m-0" style={{ color: '#8b97a3' }}>
+                                    Skipped
+                                  </p>
+                                ) : (
+                                  <p className="m-0" style={{ color: '#8b97a3' }}>
+                                    &mdash;
+                                  </p>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
   return (
     <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
       <BrandHeader
@@ -536,671 +1087,17 @@ export default function LiveDraftPage() {
         </div>
       )}
 
-      <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5">
-        <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: '#0c447c' }}>
-          Drafted players
-        </p>
-        <p className="text-[10px] text-muted mb-3">Scroll to browse other rounds</p>
-
-        <audio ref={audioRef} src="/sounds/pick-chime.mp3" preload="auto" />
-
-        <div className="flex gap-2 overflow-x-auto pb-2 items-center" ref={draftedScrollRef}>
-          {allSlots.map((slot) => {
-            const isSkippedPick = slot.pick && !slot.pick.player_id;
-            const isClockSlot =
-              slot.pickNumber === currentPickNumber &&
-              !slot.player &&
-              !isSkippedPick &&
-              (draftStatus === 'in_progress' || draftStatus === 'paused');
-            const teamColor = slot.team?.team_color || '#0074ff';
-            const owner = ownerByTeam[slot.team?.id];
-
-            const isPoppedOut =
-              showPopout && activeReveal && slot.pickNumber === activeReveal.pick_number && activeReveal.player_id;
-
-            if (isPoppedOut) {
-              const player = playersById[activeReveal.player_id];
-              if (!player) return null;
-              const poppedTeamColor = slot.team?.team_color || '#0074ff';
-              const gmName = owner?.name;
-              return (
-                <div
-                  key={slot.pickNumber}
-                  ref={currentPickRef}
-                  onClick={() => openProfile(player.id)}
-                  className="flex-none rounded-2xl p-4 flex flex-col items-center text-center"
-                  style={{ width: 210, border: `4px solid ${poppedTeamColor}`, background: '#ffffff', cursor: 'pointer' }}
-                >
-                  <p className="text-[19px] font-medium m-0 mb-2.5 tracking-wide" style={{ color: poppedTeamColor }}>
-                    JUST DRAFTED!
-                  </p>
-                  <div className="flex items-center justify-center gap-1.5 mb-1">
-                    <FootballIcon color={poppedTeamColor} size={15} />
-                    <span className="text-sm font-medium" style={{ color: '#0c2340' }}>{slot.team?.name}</span>
-                  </div>
-                  {gmName && (
-                    <p className="text-[13px] m-0 mb-3" style={{ color: '#5a6b7d' }}>
-                      <span
-                        className="text-[10px] font-medium rounded px-1.5 py-px mr-1"
-                        style={{ color: poppedTeamColor, background: lightenColor(poppedTeamColor, 0.85) }}
-                      >
-                        GM
-                      </span>
-                      {gmName}
-                    </p>
-                  )}
-                  {player.headshot_url ? (
-                    <img src={player.headshot_url} alt={player.full_name} className="w-16 h-16 rounded-full object-cover mb-2.5" />
-                  ) : (
-                    <div className="w-16 h-16 rounded-full bg-surface flex items-center justify-center mb-2.5">
-                      <i className="ti ti-user text-faint text-2xl" aria-hidden="true" />
-                    </div>
-                  )}
-                  <p className="text-[19px] font-medium m-0" style={{ color: '#0c2340' }}>{player.full_name}</p>
-                  <p className="text-xs m-0 mt-1 mb-1" style={{ color: '#5a6b7d' }}>
-                    {player.offensive_position} / {player.defensive_position} &middot; {player.gender} &middot;{' '}
-                    {player.height_feet}'{player.height_inches}"
-                  </p>
-                  <p className="text-[11px] m-0 mb-1.5" style={{ color: '#8b97a3' }}>
-                    Previous Team: {previousTeamLabel(player.previous_team)}
-                  </p>
-                  {pubLineFor(player, players, gmName) && (
-                    <p className="text-[11px] italic m-0" style={{ color: '#5a6b7d' }}>
-                      {pubLineFor(player, players, gmName)}
-                    </p>
-                  )}
-                </div>
-              );
-            }
-
-            return (
-              <div
-                key={slot.pickNumber}
-                ref={!activeReveal && slot.pickNumber === currentPickNumber ? currentPickRef : null}
-                onClick={() => slot.player && openProfile(slot.player.id)}
-                className={`flex-none rounded-xl p-3 flex flex-col items-center text-center ${
-                  isClockSlot && timeExpired ? 'animate-subtle-flash' : ''
-                }`}
-                style={{
-                  width: 150,
-                  height: 210,
-                  background: isClockSlot ? lightenColor(teamColor, 0.85) : '#ffffff',
-                  border: isClockSlot
-                    ? `2px solid ${teamColor}`
-                    : slot.pickNumber === currentPickNumber
-                    ? '1.5px solid #185fa5'
-                    : '1px solid #d8dde2',
-                  cursor: slot.player ? 'pointer' : 'default',
-                }}
-              >
-                <p className="text-[10px] text-muted m-0 mb-1.5">
-                  Round {slot.round} &middot; Pick {pickInRound(slot.pickNumber, numTeams)}
-                </p>
-                {slot.player ? (
-                  <>
-                    {slot.player.headshot_url ? (
-                      <img
-                        src={slot.player.headshot_url}
-                        alt={slot.player.full_name}
-                        className="w-10 h-10 rounded-full object-cover mb-1.5"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
-                        <i className="ti ti-user text-faint text-xl" aria-hidden="true" />
-                      </div>
-                    )}
-                    <p className="text-xs font-medium text-ink m-0 leading-snug">{slot.player.full_name}</p>
-                    <p className="text-[10px] text-muted m-0 mb-1.5">
-                      {slot.player.offensive_position} / {slot.player.defensive_position}
-                    </p>
-                  </>
-                ) : isSkippedPick ? (
-                  <>
-                    <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
-                      <i className="ti ti-x text-faint text-xl" aria-hidden="true" />
-                    </div>
-                    <p className="text-xs text-muted m-0 leading-snug">Skipped</p>
-                  </>
-                ) : isClockSlot ? (
-                  <>
-                    <p className="text-xs font-medium m-0 leading-tight" style={{ color: '#0c2340' }}>
-                      On the clock
-                    </p>
-                    <div
-                      className="w-10 h-10 rounded-full bg-white flex items-center justify-center my-1.5"
-                      style={{ border: `2px solid ${teamColor}` }}
-                    >
-                      <i className="ti ti-clock text-xl" style={{ color: teamColor }} aria-hidden="true" />
-                    </div>
-                    <p className="text-base font-semibold m-0 mb-1.5" style={{ color: '#0c2340' }}>
-                      {timerDisplay}
-                    </p>
-                    <div className="flex items-center gap-1 justify-center">
-                      <FootballIcon color={teamColor} size={13} />
-                      <span className="text-[13px] font-semibold leading-tight" style={{ color: '#0c2340' }}>
-                        {slot.team?.name}
-                      </span>
-                    </div>
-                    {owner && <span className="text-[11px] text-muted mt-0.5">GM: {owner.name}</span>}
-                  </>
-                ) : (
-                  <>
-                    <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
-                      <i className="ti ti-user text-faint text-xl" aria-hidden="true" />
-                    </div>
-                    <p className="text-xs text-faint m-0 leading-snug" style={{ fontStyle: 'italic' }}>
-                      Not yet selected
-                    </p>
-                  </>
-                )}
-                <div className="mt-auto pt-1.5 flex flex-col items-center gap-0.5">
-                  {slot.player ? (
-                    <>
-                      <div className="flex items-center gap-1.5 justify-center">
-                        <FootballIcon color={teamColor} size={16} />
-                        <span className="text-[13px] font-semibold leading-none" style={{ color: '#0c2340' }}>
-                          Drafted by: {slot.team?.name}
-                        </span>
-                      </div>
-                      {owner && <span className="text-[10px] text-muted">({owner.name})</span>}
-                    </>
-                  ) : !isClockSlot ? (
-                    <div className="flex items-center gap-1.5 justify-center min-w-0">
-                      <FootballIcon color={teamColor} size={12} />
-                      <span className="text-[10px] text-muted truncate leading-none">
-                        {slot.team?.name}
-                        {owner ? ` \u00b7 ${owner.name}` : ''}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="mx-4 sm:mx-5 mt-4 rounded-xl border border-line bg-surface px-4 py-3" ref={rostersSectionRef}>
-        <button
-          onClick={() => {
-            const opening = !viewByTeamOpen;
-            setViewByTeamOpen(opening);
-            if (opening) scrollRostersIntoView();
-          }}
-          className="w-full flex items-center justify-between"
-        >
-          <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
-            View rosters
-          </p>
-          <i className={`ti ti-chevron-${viewByTeamOpen ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
-        </button>
-        {viewByTeamOpen && (
-          <>
-            <div className="flex gap-1.5 mt-2 mb-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setRosterViewMode('team');
-                  scrollRostersIntoView();
-                }}
-                className="text-xs py-1.5 rounded-md font-medium text-center"
-                style={{
-                  width: 104,
-                  background: rosterViewMode === 'team' ? '#185fa5' : '#ffffff',
-                  color: rosterViewMode === 'team' ? '#ffffff' : '#3d4a57',
-                  border: '1px solid #d8dde2',
-                }}
-              >
-                View by team
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRosterViewMode('round');
-                  setSelectedRound(Math.min(currentRound, maxRounds));
-                  scrollRostersIntoView();
-                }}
-                className="text-xs py-1.5 rounded-md font-medium text-center"
-                style={{
-                  width: 104,
-                  background: rosterViewMode === 'round' ? '#185fa5' : '#ffffff',
-                  color: rosterViewMode === 'round' ? '#ffffff' : '#3d4a57',
-                  border: '1px solid #d8dde2',
-                }}
-              >
-                View by round
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRosterViewMode('board');
-                  scrollHalfwayDown();
-                }}
-                className="text-xs py-1.5 rounded-md font-medium text-center"
-                style={{
-                  width: 104,
-                  background: rosterViewMode === 'board' ? '#185fa5' : '#ffffff',
-                  color: rosterViewMode === 'board' ? '#ffffff' : '#3d4a57',
-                  border: '1px solid #d8dde2',
-                }}
-              >
-                Draft board
-              </button>
-            </div>
-
-            {rosterViewMode === 'team' && (
-              <>
-                <div className="flex gap-2 flex-wrap mb-3">
-                  {teams.map((t) => {
-                    const color = t.team_color || '#0074ff';
-                    const selected = viewingTeamId === t.id;
-                    const isMine = t.id === myTeamId;
-                    const ring = isMine ? ', 0 0 0 2px #185fa5' : '';
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => setViewingTeamId(viewingTeamId === t.id ? null : t.id)}
-                        className="text-xs px-2 py-1.5 rounded-md font-medium flex items-center gap-1.5 justify-center"
-                        style={{
-                          width: 140,
-                          boxSizing: 'border-box',
-                          background: selected ? color : lightenColor(color, 0.85),
-                          color: selected ? '#ffffff' : '#0c2340',
-                          borderLeft: 'none',
-                          borderRight: 'none',
-                          borderTop: selected ? '3px solid rgba(0,0,0,0.25)' : '1px solid rgba(255,255,255,0.7)',
-                          borderBottom: selected ? '1px solid rgba(255,255,255,0.25)' : '3px solid rgba(0,0,0,0.18)',
-                          boxShadow: selected
-                            ? `inset 0 1px 3px rgba(0,0,0,0.3)${ring}`
-                            : `0 1px 2px rgba(12,35,64,0.15)${ring}`,
-                        }}
-                      >
-                        <FootballIcon color={selected ? '#ffffff' : color} size={14} />
-                        <span className="truncate">
-                          {t.name}
-                          {isMine ? ' (you)' : ''}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {viewingTeamId && rosterByTeam[viewingTeamId] && (() => {
-                  const slots = buildTeamSlots(viewingTeamId);
-                  const firstEmptyIndex = slots.findIndex((s) => !s);
-                  const viewedTeam = teamsById[viewingTeamId];
-                  const teamColor = viewedTeam?.team_color || '#0074ff';
-                  const isTeamOnClock =
-                    teamOnClock?.id === viewingTeamId && (draftStatus === 'in_progress' || draftStatus === 'paused');
-                  return (
-                    <div className="bg-white rounded-lg p-3.5 mb-1">
-                      <div className="flex justify-between items-center mb-1">
-                        <p className="text-sm font-medium text-ink m-0">{viewedTeam?.name}</p>
-                        {viewedTeam?.proxy_email && (
-                          <p className="text-xs m-0" style={{ color: '#854f0b' }}>
-                            Proxy: {playersByEmail[viewedTeam.proxy_email]?.full_name || viewedTeam.proxy_email}
-                          </p>
-                        )}
-                      </div>
-                      {ownerByTeam[viewingTeamId] && (
-                        <p className="text-[11px] m-0 mb-2" style={{ color: '#185fa5' }}>
-                          GM:{' '}
-                          <i
-                            className={ownerByTeam[viewingTeamId].role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'}
-                            style={{ color: teamColor }}
-                            aria-hidden="true"
-                          />{' '}
-                          {ownerByTeam[viewingTeamId].name}
-                        </p>
-                      )}
-                      {draftStatus === 'completed' &&
-                        rosterByTeam[viewingTeamId] &&
-                        (rosterByTeam[viewingTeamId].count < minRoster ||
-                          rosterByTeam[viewingTeamId].femaleCount < minFemale) && (
-                          <div className="bg-[#faeeda] rounded-md px-2.5 py-2 mb-2 flex gap-1.5">
-                            <i className="ti ti-alert-triangle text-sm flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
-                            <p className="text-[11px] m-0" style={{ color: '#633806' }}>
-                              Below the {minRoster}-player / {minFemale}-female minimum.
-                            </p>
-                          </div>
-                        )}
-                      <div className="grid grid-cols-6 gap-1.5">
-                        {slots.map((entry, i) => {
-                          const player = entry?.player;
-                          const isClockSlot = isTeamOnClock && i === firstEmptyIndex;
-                          return (
-                            <div
-                              key={player?.id || `${entry?.kind || 'empty'}-${i}`}
-                              onClick={() => player && openProfile(player.id)}
-                              className="rounded-lg flex flex-col items-center text-center px-1 py-2"
-                              style={{
-                                minHeight: 100,
-                                cursor: player ? 'pointer' : 'default',
-                                background: isClockSlot ? lightenColor(teamColor, 0.85) : '#f1f3f6',
-                                border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
-                              }}
-                            >
-                              {isClockSlot ? (
-                                <>
-                                  <div
-                                    className="w-8 h-8 rounded-full bg-white flex items-center justify-center"
-                                    style={{ border: `2px solid ${teamColor}` }}
-                                  >
-                                    <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
-                                  </div>
-                                  <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
-                                    On the clock
-                                  </p>
-                                  <p className="text-[9px] font-medium m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
-                                    {viewedTeam?.name}
-                                  </p>
-                                  <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
-                                    Rnd {currentRound} . Overall Pick # {currentPickNumber}
-                                  </span>
-                                </>
-                              ) : entry?.kind === 'gm' ? (
-                                <>
-                                  {player.headshot_url ? (
-                                    <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
-                                  ) : (
-                                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-                                      <i className="ti ti-user text-faint text-base" aria-hidden="true" />
-                                    </div>
-                                  )}
-                                  <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
-                                    {player.full_name}
-                                  </p>
-                                  <span className="text-[9px] font-medium mt-0.5" style={{ color: '#185fa5' }}>
-                                    {roleByEmail[player.email?.toLowerCase()] === 'commissioner' ? 'Commish' : 'GM'}
-                                  </span>
-                                </>
-                              ) : entry?.kind === 'player' ? (
-                                <>
-                                  {player.headshot_url ? (
-                                    <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
-                                  ) : (
-                                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-                                      <i className="ti ti-user text-faint text-base" aria-hidden="true" />
-                                    </div>
-                                  )}
-                                  <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
-                                    {player.full_name}
-                                  </p>
-                                  <span className="text-[9px] text-muted mt-0.5">
-                                    Rnd {entry.pick.round} . Overall Pick # {entry.pick.pick_number}
-                                  </span>
-                                </>
-                              ) : entry?.kind === 'skipped' ? (
-                                <>
-                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-                                    <i className="ti ti-x text-faint text-base" aria-hidden="true" />
-                                  </div>
-                                  <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
-                                  <span className="text-[9px] text-faint mt-0.5">
-                                    Rnd {entry.pick.round} . Overall Pick # {entry.pick.pick_number}
-                                  </span>
-                                </>
-                              ) : entry?.kind === 'manual' ? (
-                                <>
-                                  {player.headshot_url ? (
-                                    <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
-                                  ) : (
-                                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-                                      <i className="ti ti-user text-faint text-base" aria-hidden="true" />
-                                    </div>
-                                  )}
-                                  <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
-                                    {player.full_name}
-                                  </p>
-                                  <span className="text-[9px] text-muted mt-0.5">Added manually</span>
-                                </>
-                              ) : (
-                                <>
-                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-50">
-                                    <i className="ti ti-user text-faint text-base" aria-hidden="true" />
-                                  </div>
-                                  <p className="text-[9px] text-faint m-0 mt-1" style={{ fontStyle: 'italic' }}>
-                                    Empty
-                                  </p>
-                                </>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </>
-            )}
-
-            {rosterViewMode === 'round' && (
-              <>
-                <div className="flex gap-2 flex-wrap mb-2">
-                  {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => setSelectedRound(r)}
-                      className="text-xs px-2.5 py-1.5 rounded-md font-medium"
-                      style={{
-                        background: selectedRound === r ? '#185fa5' : '#e6f1fb',
-                        color: selectedRound === r ? '#ffffff' : '#0c447c',
-                        border: '2px solid transparent',
-                      }}
-                    >
-                      Round {r}
-                    </button>
-                  ))}
-                </div>
-                <div className="bg-white rounded-lg p-3.5">
-                  <div className="grid grid-cols-6 gap-1.5">
-                    {roundSlots.map((slot) => {
-                      const isSkippedPick = slot.pick && !slot.pick.player_id;
-                      const isClockSlot = slot.pickNumber === currentPickNumber && !slot.player && !isSkippedPick;
-                      const teamColor = slot.team?.team_color || '#0074ff';
-                      return (
-                        <div
-                          key={slot.pickNumber}
-                          onClick={() => slot.player && openProfile(slot.player.id)}
-                          className="rounded-lg flex flex-col items-center text-center px-1 py-2"
-                          style={{
-                            minHeight: 100,
-                            background: isClockSlot ? lightenColor(teamColor, 0.85) : '#f1f3f6',
-                            border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
-                            cursor: slot.player ? 'pointer' : 'default',
-                          }}
-                        >
-                          {slot.player ? (
-                            <>
-                              {slot.player.headshot_url ? (
-                                <img
-                                  src={slot.player.headshot_url}
-                                  alt={slot.player.full_name}
-                                  className="w-8 h-8 rounded-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-                                  <i className="ti ti-user text-faint text-base" aria-hidden="true" />
-                                </div>
-                              )}
-                              <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
-                                {slot.player.full_name}
-                              </p>
-                              <span className="text-[9px] text-muted mt-0.5">Pick # {pickInRound(slot.pickNumber, numTeams)}</span>
-                            </>
-                          ) : isSkippedPick ? (
-                            <>
-                              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-                                <i className="ti ti-x text-faint text-base" aria-hidden="true" />
-                              </div>
-                              <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
-                            </>
-                          ) : isClockSlot ? (
-                            <>
-                              <div
-                                className="w-8 h-8 rounded-full bg-white flex items-center justify-center"
-                                style={{ border: `2px solid ${teamColor}` }}
-                              >
-                                <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
-                              </div>
-                              <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
-                                On the clock
-                              </p>
-                              <p className="text-[9px] font-medium m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
-                                {slot.team?.name}
-                              </p>
-                              <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
-                                Pick # {pickInRound(slot.pickNumber, numTeams)}
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-50">
-                                <i className="ti ti-user text-faint text-base" aria-hidden="true" />
-                              </div>
-                              <p className="text-[9px] text-faint m-0 mt-1" style={{ fontStyle: 'italic' }}>
-                                Not yet selected
-                              </p>
-                            </>
-                          )}
-                          {!isClockSlot && (
-                            <div className="mt-auto pt-1 flex items-center gap-1">
-                              <FootballIcon color={teamColor} size={10} />
-                              <span className="text-[9px] text-muted truncate">{slot.team?.name}</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {rosterViewMode === 'board' && (
-              <div
-                className="bg-white rounded-lg p-3"
-                style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '65vh' }}
-              >
-                <table className="border-collapse text-xs" style={{ width: '100%' }}>
-                  <thead>
-                    <tr>
-                      <th
-                        className="text-left p-2.5 sticky left-0"
-                        style={{
-                          minWidth: 130,
-                          position: 'sticky',
-                          top: 0,
-                          zIndex: 3,
-                          background: '#f1f3f6',
-                          color: '#0c2340',
-                          fontSize: 13,
-                          fontWeight: 700,
-                          borderBottom: '2px solid #d8dde2',
-                        }}
-                      >
-                        Team / GM
-                      </th>
-                      {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => (
-                        <th
-                          key={r}
-                          className="p-2.5 text-center"
-                          style={{
-                            minWidth: 90,
-                            position: 'sticky',
-                            top: 0,
-                            zIndex: 2,
-                            background: '#f1f3f6',
-                            color: '#0c2340',
-                            fontSize: 13,
-                            fontWeight: 700,
-                            borderBottom: '2px solid #d8dde2',
-                          }}
-                        >
-                          Round {r}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {teams
-                      .slice()
-                      .sort((a, b) => a.draft_position - b.draft_position)
-                      .map((t) => {
-                        const owner = ownerByTeam[t.id];
-                        return (
-                          <tr key={t.id} className="border-t" style={{ borderColor: '#d8dde2' }}>
-                            <td className="p-2 sticky left-0 bg-white align-top">
-                              <div className="flex items-center gap-1.5">
-                                <FootballIcon color={t.team_color || '#0074ff'} size={12} />
-                                <span className="font-medium text-ink">{t.name}</span>
-                              </div>
-                              {owner && <p className="text-[10px] text-muted m-0 mt-0.5">GM: {owner.name}</p>}
-                            </td>
-                            {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => {
-                              const slot = allSlots.find((s) => s.round === r && s.team?.id === t.id);
-                              if (!slot) {
-                                return (
-                                  <td key={r} className="p-2 text-center align-top" style={{ color: '#8b97a3' }}>
-                                    &mdash;
-                                  </td>
-                                );
-                              }
-                              const isSkipped = slot.pick && !slot.pick.player_id;
-                              return (
-                                <td key={r} className="p-1.5 text-center align-top">
-                                  {slot.player ? (
-                                    <button
-                                      onClick={() => openProfile(slot.player.id)}
-                                      className="bg-surface rounded-lg p-1.5 text-center"
-                                      style={{ width: 80 }}
-                                    >
-                                      {slot.player.headshot_url ? (
-                                        <img
-                                          src={slot.player.headshot_url}
-                                          alt={slot.player.full_name}
-                                          className="w-7 h-7 rounded-full object-cover mx-auto"
-                                        />
-                                      ) : (
-                                        <div className="w-7 h-7 rounded-full bg-white mx-auto flex items-center justify-center">
-                                          <i className="ti ti-user text-faint text-sm" aria-hidden="true" />
-                                        </div>
-                                      )}
-                                      <p className="text-[10px] font-medium m-0 mt-1 truncate leading-tight" style={{ color: '#0c2340' }}>
-                                        {slot.player.full_name}
-                                      </p>
-                                      <p className="text-[9px] m-0" style={{ color: '#5a6b7d' }}>
-                                        {slot.player.gender} &middot; Pick #{pickInRound(slot.pickNumber, numTeams)}
-                                      </p>
-                                    </button>
-                                  ) : isSkipped ? (
-                                    <p className="text-[10px] italic m-0" style={{ color: '#8b97a3' }}>
-                                      Skipped
-                                    </p>
-                                  ) : (
-                                    <p className="m-0" style={{ color: '#8b97a3' }}>
-                                      &mdash;
-                                    </p>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {draftStatus === 'completed' && (
-              <div className="mt-3 pt-3 border-t border-line" style={{ maxWidth: 220 }}>
-                <PrintRosterButton teams={teams} />
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      {draftStatus === 'completed' ? (
+        <>
+          {rostersBlock}
+          {draftedPlayersBlock}
+        </>
+      ) : (
+        <>
+          {draftedPlayersBlock}
+          {rostersBlock}
+        </>
+      )}
 
       {/* Read-only player profile popups — multiple can be open at once, stacked */}
       {openProfileIds.map((id, idx) => {

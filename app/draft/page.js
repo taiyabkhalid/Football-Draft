@@ -763,6 +763,9 @@ export default function DraftPage() {
               >
                 Draft board
               </button>
+              {draftStatus === 'completed' && (
+                <PrintRosterButton teams={teams} width={104} compact />
+              )}
             </div>
 
             {rosterViewMode === 'team' && (
@@ -1157,12 +1160,6 @@ export default function DraftPage() {
                 </table>
               </div>
             )}
-
-            {draftStatus === 'completed' && (
-              <div className="mt-3 pt-3 border-t border-line" style={{ maxWidth: 220 }}>
-                <PrintRosterButton teams={teams} />
-              </div>
-            )}
           </>
         )}
       </div>
@@ -1245,16 +1242,6 @@ export default function DraftPage() {
           {hasActiveSearch && (
             <button onClick={clearSearch} className="btn-secondary text-xs">
               Clear search
-            </button>
-          )}
-          {profile?.role === 'commissioner' && (
-            <button
-              onClick={skipPick}
-              disabled={skipping || draftStatus === 'paused'}
-              className="text-xs font-medium rounded-md py-1.5 px-3 ml-auto"
-              style={{ background: '#faeeda', color: '#854f0b', border: 'none' }}
-            >
-              {skipping ? 'Skipping…' : draftStatus === 'paused' ? 'Skip pick (paused)' : 'Skip pick — are you sure?'}
             </button>
           )}
         </div>
@@ -1425,11 +1412,21 @@ export default function DraftPage() {
           </div>
         </section>
 
-        {profile?.team_id && (() => {
-          const myTeam = teamsById[profile.team_id];
+        {(profile?.team_id || profile?.role === 'commissioner') && (() => {
+          const myTeam = profile?.team_id ? teamsById[profile.team_id] : null;
           const myColor = myTeam?.team_color || '#0074ff';
           return (
             <aside className="w-full lg:w-64 flex-shrink-0 order-3 lg:pl-3 lg:border-l border-line">
+              {profile?.role === 'commissioner' && (
+                <button
+                  onClick={skipPick}
+                  disabled={skipping || draftStatus === 'paused'}
+                  className="text-xs font-medium rounded-md px-3 mb-2"
+                  style={{ background: '#faeeda', color: '#854f0b', border: 'none', height: 38 }}
+                >
+                  {skipping ? 'Skipping…' : draftStatus === 'paused' ? 'Skip pick (paused)' : 'Skip Pick \u00bb'}
+                </button>
+              )}
               {myTeam && (
                 <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1 flex items-center gap-1.5">
                   <FootballIcon color={myColor} size={13} />
