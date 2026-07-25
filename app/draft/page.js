@@ -53,6 +53,13 @@ export default function DraftPage() {
   const [togglingPause, setTogglingPause] = useState(false);
   const [actionError, setActionError] = useState(null);
   const [viewingTeamId, setViewingTeamId] = useState(null);
+
+  function jumpToTeam(teamId) {
+    setViewByTeamOpen(true);
+    setRosterViewMode('team');
+    setViewingTeamId(teamId);
+    scrollRostersIntoView();
+  }
   const [openProfileIds, setOpenProfileIds] = useState([]);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const prevDraftStatusRef = useRef(null);
@@ -265,6 +272,24 @@ export default function DraftPage() {
         };
       });
   }, [numTeams, totalPicks, draftType, selectedRound, teams, pickByNumber, playersById]);
+
+  // Full pick order across every round - the Draft Board grid needs this
+  // (previously this was missing entirely, causing a crash the moment
+  // anyone switched to the Draft Board tab on this page).
+  const allSlots = useMemo(() => {
+    if (!numTeams) return [];
+    return buildFullPickOrder(numTeams, totalPicks, draftType).map((slot) => {
+      const team = teams.find((t) => t.draft_position === slot.draftPosition);
+      const pick = pickByNumber[slot.pickNumber];
+      return {
+        pickNumber: slot.pickNumber,
+        round: slot.round,
+        team,
+        pick,
+        player: pick?.player_id ? playersById[pick.player_id] : null,
+      };
+    });
+  }, [numTeams, totalPicks, draftType, teams, pickByNumber, playersById]);
 
   function buildTeamSlots(teamId) {
     const roster = rosterByTeam[teamId]?.players || [];
@@ -625,10 +650,12 @@ export default function DraftPage() {
               {upcomingPicks.map((n) => {
                 const color = n.team?.team_color || '#0074ff';
                 return (
-                  <div
+                  <button
                     key={n.pickNumber}
+                    type="button"
+                    onClick={() => n.team && jumpToTeam(n.team.id)}
                     className="flex-none rounded-md flex flex-col items-center justify-center text-center px-1.5"
-                    style={{ width: 100, height: 44, background: lightenColor(color, 0.85), color: '#0c2340' }}
+                    style={{ width: 100, height: 44, background: lightenColor(color, 0.85), color: '#0c2340', border: 'none', cursor: n.team ? 'pointer' : 'default' }}
                   >
                     <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
                       <FootballIcon color={color} size={11} />
@@ -637,7 +664,7 @@ export default function DraftPage() {
                     <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
                       Rnd {n.round} . Pick {pickInRound(n.pickNumber, numTeams)}
                     </span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -718,7 +745,6 @@ export default function DraftPage() {
               <button
                 type="button"
                 onClick={() => {
-                  console.log('Draft board button clicked');
                   setRosterViewMode('board');
                   scrollHalfwayDown();
                 }}
@@ -733,9 +759,6 @@ export default function DraftPage() {
                 Draft board
               </button>
             </div>
-            <p className="text-xs font-bold mb-2" style={{ background: '#ffd60a', color: '#412402', padding: '4px 8px', borderRadius: 4 }}>
-              DEBUG: rosterViewMode = "{rosterViewMode}" (open browser console to check for "Draft board button clicked")
-            </p>
 
             {rosterViewMode === 'team' && (
               <>
@@ -743,6 +766,8 @@ export default function DraftPage() {
                   {teams.map((t) => {
                     const color = t.team_color || '#0074ff';
                     const selected = viewingTeamId === t.id;
+                    const isMine = profile?.team_id === t.id;
+                    const ring = isMine ? ', 0 0 0 2px #185fa5' : '';
                     return (
                       <button
                         key={t.id}
@@ -750,13 +775,23 @@ export default function DraftPage() {
                         className="text-xs px-2 py-1.5 rounded-md font-medium flex items-center gap-1.5 justify-center"
                         style={{
                           width: 140,
-                          background: lightenColor(color, 0.85),
-                          color: '#0c2340',
-                          border: selected ? `2px solid ${color}` : '2px solid transparent',
+                          boxSizing: 'border-box',
+                          background: selected ? color : lightenColor(color, 0.85),
+                          color: selected ? '#ffffff' : '#0c2340',
+                          borderLeft: 'none',
+                          borderRight: 'none',
+                          borderTop: selected ? '3px solid rgba(0,0,0,0.25)' : '1px solid rgba(255,255,255,0.7)',
+                          borderBottom: selected ? '1px solid rgba(255,255,255,0.25)' : '3px solid rgba(0,0,0,0.18)',
+                          boxShadow: selected
+                            ? `inset 0 1px 3px rgba(0,0,0,0.3)${ring}`
+                            : `0 1px 2px rgba(12,35,64,0.15)${ring}`,
                         }}
                       >
-                        <FootballIcon color={color} size={14} />
-                        <span className="truncate">{t.name}</span>
+                        <FootballIcon color={selected ? '#ffffff' : color} size={14} />
+                        <span className="truncate">
+                          {t.name}
+                          {isMine ? ' (you)' : ''}
+                        </span>
                       </button>
                     );
                   })}
@@ -773,19 +808,20 @@ export default function DraftPage() {
                       <div className="flex justify-between items-center mb-1">
                         <p className="text-sm font-medium text-ink m-0">{viewedTeam?.name}</p>
                         {viewedTeam?.proxy_email && (
-                          <p className="text-xs m-0 flex items-center gap-1" style={{ color: '#854f0b' }}>
-                            <i className="ti ti-user-shield" aria-hidden="true" />
-                            {playersByEmail[viewedTeam.proxy_email]?.full_name || viewedTeam.proxy_email}
+                          <p className="text-xs m-0" style={{ color: '#854f0b' }}>
+                            Proxy: {playersByEmail[viewedTeam.proxy_email]?.full_name || viewedTeam.proxy_email}
                           </p>
                         )}
                       </div>
                       {ownerByTeam[viewingTeamId] && (
-                        <p className="text-[11px] m-0 mb-2 flex items-center gap-1" style={{ color: '#185fa5' }}>
+                        <p className="text-[11px] m-0 mb-2" style={{ color: '#185fa5' }}>
+                          GM:{' '}
                           <i
                             className={ownerByTeam[viewingTeamId].role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'}
+                            style={{ color: teamColor }}
                             aria-hidden="true"
-                          />
-                          GM: {ownerByTeam[viewingTeamId].name}
+                          />{' '}
+                          {ownerByTeam[viewingTeamId].name}
                         </p>
                       )}
                       <div className="grid grid-cols-6 gap-1.5">
@@ -1206,6 +1242,16 @@ export default function DraftPage() {
               Clear search
             </button>
           )}
+          {profile?.role === 'commissioner' && (
+            <button
+              onClick={skipPick}
+              disabled={skipping || draftStatus === 'paused'}
+              className="text-xs font-medium rounded-md py-1.5 px-3 ml-auto"
+              style={{ background: '#faeeda', color: '#854f0b', border: 'none' }}
+            >
+              {skipping ? 'Skipping…' : draftStatus === 'paused' ? 'Skip pick (paused)' : 'Skip pick — are you sure?'}
+            </button>
+          )}
         </div>
         {hasActiveSearch && (
           <p className="text-[10px] text-faint mt-1.5">
@@ -1374,21 +1420,11 @@ export default function DraftPage() {
           </div>
         </section>
 
-        {(profile?.team_id || profile?.role === 'commissioner') && (() => {
-          const myTeam = profile?.team_id ? teamsById[profile.team_id] : null;
+        {profile?.team_id && (() => {
+          const myTeam = teamsById[profile.team_id];
           const myColor = myTeam?.team_color || '#0074ff';
           return (
             <aside className="w-full lg:w-64 flex-shrink-0 order-3 lg:pl-3 lg:border-l border-line">
-              {profile?.role === 'commissioner' && (
-                <button
-                  onClick={skipPick}
-                  disabled={skipping || draftStatus === 'paused'}
-                  className="w-full text-xs font-medium rounded-md py-1.5 mb-2"
-                  style={{ background: '#faeeda', color: '#854f0b', border: 'none' }}
-                >
-                  {skipping ? 'Skipping…' : draftStatus === 'paused' ? 'Skip pick (paused)' : 'Skip pick — are you sure?'}
-                </button>
-              )}
               {myTeam && (
                 <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1 flex items-center gap-1.5">
                   <FootballIcon color={myColor} size={13} />

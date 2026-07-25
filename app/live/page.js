@@ -96,6 +96,13 @@ export default function LiveDraftPage() {
   }
 
   const [rosterViewMode, setRosterViewMode] = useState('team'); // 'team' | 'round'
+
+  function jumpToTeam(teamId) {
+    setViewByTeamOpen(true);
+    setRosterViewMode('team');
+    setViewingTeamId(teamId);
+    scrollRostersIntoView();
+  }
   const [selectedRound, setSelectedRound] = useState(1);
   const roundInitialized = useRef(false);
   const [openProfileIds, setOpenProfileIds] = useState([]);
@@ -256,9 +263,12 @@ export default function LiveDraftPage() {
   }, []);
 
   const pickStartedAt = settings?.current_pick_started_at ? new Date(settings.current_pick_started_at).getTime() : null;
-  const secondsLeft = pickStartedAt
-    ? Math.max(pickClockSeconds - Math.floor((now - pickStartedAt) / 1000), 0)
-    : pickClockSeconds;
+  const secondsLeft =
+    draftStatus === 'paused' && settings?.paused_seconds_remaining != null
+      ? settings.paused_seconds_remaining
+      : pickStartedAt
+      ? Math.max(pickClockSeconds - Math.floor((now - pickStartedAt) / 1000), 0)
+      : pickClockSeconds;
 
   const timerDisplay = useMemo(() => {
     const m = Math.floor(secondsLeft / 60);
@@ -479,10 +489,12 @@ export default function LiveDraftPage() {
               {upcomingPicks.map((n) => {
                 const color = n.team?.team_color || '#0074ff';
                 return (
-                  <div
+                  <button
                     key={n.pickNumber}
+                    type="button"
+                    onClick={() => n.team && jumpToTeam(n.team.id)}
                     className="flex-none rounded-md flex flex-col items-center justify-center text-center px-1.5"
-                    style={{ width: 100, height: 44, background: lightenColor(color, 0.85), color: '#0c2340' }}
+                    style={{ width: 100, height: 44, background: lightenColor(color, 0.85), color: '#0c2340', border: 'none', cursor: n.team ? 'pointer' : 'default' }}
                   >
                     <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
                       <FootballIcon color={color} size={11} />
@@ -491,7 +503,7 @@ export default function LiveDraftPage() {
                     <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
                       Rnd {n.round} . Pick {pickInRound(n.pickNumber, numTeams)}
                     </span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -779,6 +791,7 @@ export default function LiveDraftPage() {
                     const color = t.team_color || '#0074ff';
                     const selected = viewingTeamId === t.id;
                     const isMine = t.id === myTeamId;
+                    const ring = isMine ? ', 0 0 0 2px #185fa5' : '';
                     return (
                       <button
                         key={t.id}
@@ -786,12 +799,19 @@ export default function LiveDraftPage() {
                         className="text-xs px-2 py-1.5 rounded-md font-medium flex items-center gap-1.5 justify-center"
                         style={{
                           width: 140,
-                          background: lightenColor(color, 0.85),
-                          color: '#0c2340',
-                          border: selected ? `2px solid ${color}` : isMine ? '2px solid #185fa5' : '2px solid transparent',
+                          boxSizing: 'border-box',
+                          background: selected ? color : lightenColor(color, 0.85),
+                          color: selected ? '#ffffff' : '#0c2340',
+                          borderLeft: 'none',
+                          borderRight: 'none',
+                          borderTop: selected ? '3px solid rgba(0,0,0,0.25)' : '1px solid rgba(255,255,255,0.7)',
+                          borderBottom: selected ? '1px solid rgba(255,255,255,0.25)' : '3px solid rgba(0,0,0,0.18)',
+                          boxShadow: selected
+                            ? `inset 0 1px 3px rgba(0,0,0,0.3)${ring}`
+                            : `0 1px 2px rgba(12,35,64,0.15)${ring}`,
                         }}
                       >
-                        <FootballIcon color={color} size={14} />
+                        <FootballIcon color={selected ? '#ffffff' : color} size={14} />
                         <span className="truncate">
                           {t.name}
                           {isMine ? ' (you)' : ''}
@@ -813,19 +833,20 @@ export default function LiveDraftPage() {
                       <div className="flex justify-between items-center mb-1">
                         <p className="text-sm font-medium text-ink m-0">{viewedTeam?.name}</p>
                         {viewedTeam?.proxy_email && (
-                          <p className="text-xs m-0 flex items-center gap-1" style={{ color: '#854f0b' }}>
-                            <i className="ti ti-user-shield" aria-hidden="true" />
-                            {playersByEmail[viewedTeam.proxy_email]?.full_name || viewedTeam.proxy_email}
+                          <p className="text-xs m-0" style={{ color: '#854f0b' }}>
+                            Proxy: {playersByEmail[viewedTeam.proxy_email]?.full_name || viewedTeam.proxy_email}
                           </p>
                         )}
                       </div>
                       {ownerByTeam[viewingTeamId] && (
-                        <p className="text-[11px] m-0 mb-2 flex items-center gap-1" style={{ color: '#185fa5' }}>
+                        <p className="text-[11px] m-0 mb-2" style={{ color: '#185fa5' }}>
+                          GM:{' '}
                           <i
                             className={ownerByTeam[viewingTeamId].role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'}
+                            style={{ color: teamColor }}
                             aria-hidden="true"
-                          />
-                          GM: {ownerByTeam[viewingTeamId].name}
+                          />{' '}
+                          {ownerByTeam[viewingTeamId].name}
                         </p>
                       )}
                       {draftStatus === 'completed' &&
