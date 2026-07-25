@@ -157,12 +157,12 @@ export default function ProfilePage() {
       )}
 
       <div className="max-w-md mx-auto px-4 py-6">
-        {(role === 'gm' || role === 'commissioner') && draftStatus !== 'completed' && (
+        {(role === 'gm' || role === 'commissioner') && (
           <Link
             href="/draft"
             className="block text-center mb-4"
             style={{
-              background: '#c0392b',
+              background: draftStatus === 'completed' ? '#185fa5' : '#c0392b',
               color: '#ffffff',
               fontWeight: 600,
               borderRadius: 8,
@@ -171,7 +171,7 @@ export default function ProfilePage() {
               textDecoration: 'none',
             }}
           >
-            Go to Draft Room
+            {draftStatus === 'completed' ? 'Draft Results' : 'Go to Draft Room'}
           </Link>
         )}
 
@@ -334,7 +334,15 @@ export default function ProfilePage() {
         )}
 
         <Link href="/live" className="btn-primary block text-center mb-4">
-          Watch the live draft <i className="ti ti-arrow-right text-sm" aria-hidden="true" />
+          {draftStatus === 'not_started'
+            ? 'Enter Draft Room'
+            : draftStatus === 'completed'
+            ? 'Draft Results'
+            : (
+              <>
+                Watch the live draft <i className="ti ti-arrow-right text-sm" aria-hidden="true" />
+              </>
+            )}
         </Link>
 
         <div className="rounded-lg border border-line px-3.5 py-3 mb-4">

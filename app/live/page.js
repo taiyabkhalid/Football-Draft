@@ -64,6 +64,9 @@ function pubLineFor(player, allPlayers, gmName) {
   return lines[index].replace('{gmName}', gmName || 'The GM');
 }
 
+const ALL_POSITIONS = ['QB', 'WR', 'C', 'CB', 'Safety', 'LB', 'Rush'];
+const OFFENSIVE_POSITIONS = ['QB', 'WR', 'C'];
+
 function previousTeamLabel(previousTeam) {
   if (!previousTeam) return 'New to Go Mammoth';
   if (previousTeam === 'Other') return 'Played in a different league';
@@ -256,6 +259,24 @@ export default function LiveDraftPage() {
     return () => clearInterval(timer);
   }, []);
 
+  const draftDatetimeMs = settings?.draft_datetime ? new Date(settings.draft_datetime).getTime() : null;
+  const msUntilDraft = draftDatetimeMs !== null ? draftDatetimeMs - now : null;
+  const msUntilRoomOpens = msUntilDraft !== null ? msUntilDraft - 2 * 60 * 60 * 1000 : null;
+  const roomIsOpen = msUntilRoomOpens !== null && msUntilRoomOpens <= 0;
+  const showDraftOrderPreview = msUntilDraft !== null && msUntilDraft <= 30 * 60 * 1000;
+
+  function formatCountdown(ms) {
+    if (ms === null) return '--:--:--';
+    const totalSeconds = Math.max(Math.floor(ms / 1000), 0);
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  const secondsUntilDraft = msUntilDraft !== null ? Math.floor(msUntilDraft / 1000) : null;
+  const showStartPopup = secondsUntilDraft !== null && secondsUntilDraft <= 10 && secondsUntilDraft >= 0;
+
   const pickStartedAt = settings?.current_pick_started_at ? new Date(settings.current_pick_started_at).getTime() : null;
   const secondsLeft =
     draftStatus === 'paused' && settings?.paused_seconds_remaining != null
@@ -421,6 +442,61 @@ export default function LiveDraftPage() {
     return slots;
   }
 
+  // ---- Search Players (spectator research tool) ----
+  // "Drafted" status here must respect the same reveal-queue lag as
+  // everything else on this page - a player whose pick hasn't been shown
+  // yet should still appear as available, not grayed out, even if they're
+  // already actually drafted in the database.
+  const revealedDraftedIds = useMemo(
+    () => new Set(revealedPicks.filter((p) => p.player_id).map((p) => p.player_id)),
+    [revealedPicks]
+  );
+  function isRevealedDrafted(p) {
+    if (!p.team_id) return false;
+    const role = roleByEmail[p.email?.toLowerCase()];
+    if (role === 'gm' || role === 'commissioner') return true;
+    return revealedDraftedIds.has(p.id);
+  }
+
+  const [spSearchName, setSpSearchName] = useState('');
+  const [spSearchPosition, setSpSearchPosition] = useState('');
+  const [spSearchGender, setSpSearchGender] = useState('');
+  const [spSearchPreviousTeam, setSpSearchPreviousTeam] = useState('');
+  const [spSortBy, setSpSortBy] = useState('name');
+
+  function spSortList(list, key) {
+    const sorted = [...list];
+    if (key === 'gender') sorted.sort((a, b) => a.gender.localeCompare(b.gender) || a.full_name.localeCompare(b.full_name));
+    else if (key === 'position')
+      sorted.sort((a, b) => a.offensive_position.localeCompare(b.offensive_position) || a.full_name.localeCompare(b.full_name));
+    else sorted.sort((a, b) => a.full_name.localeCompare(b.full_name));
+    return sorted;
+  }
+
+  function spMatchesSearch(p) {
+    const q = spSearchName.trim().toLowerCase();
+    const nameOk = q === '' || p.full_name.toLowerCase().split(/\s+/).some((word) => word.startsWith(q));
+    const posOk =
+      spSearchPosition === '' || p.offensive_position === spSearchPosition || p.defensive_position === spSearchPosition;
+    const genderOk = spSearchGender === '' || p.gender === spSearchGender;
+    const prevTeamOk = spSearchPreviousTeam === '' || p.previous_team === spSearchPreviousTeam;
+    return nameOk && posOk && genderOk && prevTeamOk;
+  }
+
+  const spHasActiveSearch =
+    spSearchName.trim() !== '' || spSearchPosition !== '' || spSearchGender !== '' || spSearchPreviousTeam !== '';
+
+  const spPreviousTeamOptions = useMemo(() => {
+    const set = new Set(players.map((p) => p.previous_team).filter(Boolean));
+    return Array.from(set).sort();
+  }, [players]);
+
+  const spResults = useMemo(() => {
+    const activePlayers = players.filter((p) => p.is_active);
+    const filtered = spHasActiveSearch ? activePlayers.filter(spMatchesSearch) : activePlayers;
+    return spSortList(filtered, spSearchName.trim() ? 'name' : spSortBy);
+  }, [players, spHasActiveSearch, spSearchName, spSearchPosition, spSearchGender, spSearchPreviousTeam, spSortBy]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       if (draftStatus === 'completed') {
@@ -463,10 +539,88 @@ export default function LiveDraftPage() {
     return (
       <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
         <BrandHeader pageLabel="Live draft / results" />
-        <div className="text-center p-10">
-          <p className="text-base font-medium text-ink">The draft hasn't started yet.</p>
-          <p className="text-sm text-muted">Check back once the commissioner opens it.</p>
-        </div>
+
+        {!roomIsOpen ? (
+          <div className="text-center px-4" style={{ paddingTop: 60, paddingBottom: 60 }}>
+            <p className="text-sm text-muted mb-8">
+              The spectator draft room opens automatically 2 hours before the draft starts.
+            </p>
+            <p className="text-xs uppercase tracking-wide text-muted mb-2">Draft starts in</p>
+            <p className="text-4xl font-semibold m-0 mb-8" style={{ color: '#0c2340', letterSpacing: '0.03em' }}>
+              {formatCountdown(msUntilDraft)}
+            </p>
+            <p className="text-xs uppercase tracking-wide text-muted mb-2">Draft room opens in</p>
+            <p className="text-xl font-semibold m-0" style={{ color: '#185fa5', letterSpacing: '0.03em' }}>
+              {formatCountdown(msUntilRoomOpens)}
+            </p>
+          </div>
+        ) : (
+          <div className="px-4 sm:px-5 pt-4">
+            <div className="flex justify-center">
+              <div className="rounded-lg p-3 flex flex-col items-center justify-center" style={{ background: '#185fa5', width: '100%', maxWidth: 320 }}>
+                <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                  Draft starts in
+                </p>
+                <p className="text-2xl font-semibold m-0" style={{ color: '#ffffff', letterSpacing: '0.03em' }}>
+                  {formatCountdown(msUntilDraft)}
+                </p>
+              </div>
+            </div>
+
+            {showDraftOrderPreview && (
+              <div className="mt-4 rounded-xl border border-line bg-surface px-4 py-3.5">
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#0c447c' }}>
+                  Draft order
+                </p>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {teams
+                    .slice()
+                    .sort((a, b) => a.draft_position - b.draft_position)
+                    .map((t) => (
+                      <div
+                        key={t.id}
+                        className="flex-none rounded-md flex flex-col items-center justify-center text-center px-2 py-1.5"
+                        style={{ minWidth: 90, background: lightenColor(t.team_color || '#0074ff', 0.85) }}
+                      >
+                        <span className="text-[10px] text-muted">#{t.draft_position}</span>
+                        <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
+                          <FootballIcon color={t.team_color || '#0074ff'} size={11} />
+                          <span className="truncate">{t.name}</span>
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {showStartPopup && (
+              <div
+                className="fixed inset-0 flex items-center justify-center px-4"
+                style={{ background: 'rgba(12,35,64,0.6)', zIndex: 100 }}
+              >
+                <div className="bg-white rounded-2xl p-8 text-center" style={{ maxWidth: 320 }}>
+                  {secondsUntilDraft > 0 ? (
+                    <>
+                      <p className="text-xs uppercase tracking-wide text-muted mb-2">Kicking off in</p>
+                      <p className="text-6xl font-bold m-0" style={{ color: '#185fa5' }}>
+                        {secondsUntilDraft}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-lg font-semibold m-0 mb-2" style={{ color: '#0c2340' }}>
+                        The Go Mammoth Draft has officially started!
+                      </p>
+                      <p className="text-sm m-0" style={{ color: '#5a6b7d' }}>
+                        Don't expect to be the first pick.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </main>
     );
   }
@@ -667,7 +821,7 @@ export default function LiveDraftPage() {
         className="w-full flex items-center justify-between"
       >
         <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
-          View rosters
+          View rosters / Search players
         </p>
         <i className={`ti ti-chevron-${viewByTeamOpen ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
       </button>
@@ -723,10 +877,145 @@ export default function LiveDraftPage() {
             >
               Draft board
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRosterViewMode('search');
+                scrollRostersIntoView();
+              }}
+              className="text-xs py-1.5 rounded-md font-medium text-center"
+              style={{
+                width: 104,
+                background: rosterViewMode === 'search' ? '#185fa5' : '#ffffff',
+                color: rosterViewMode === 'search' ? '#ffffff' : '#3d4a57',
+                border: '1px solid #d8dde2',
+              }}
+            >
+              Search players
+            </button>
             {draftStatus === 'completed' && (
               <PrintRosterButton teams={teams} width={104} compact />
             )}
           </div>
+
+          {rosterViewMode === 'search' && (
+            <div>
+              <div className="flex gap-2 flex-wrap items-center mb-2">
+                <div className="relative flex-none" style={{ width: 150 }}>
+                  <i className="ti ti-search absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-faint" aria-hidden="true" />
+                  <input
+                    type="text"
+                    value={spSearchName}
+                    onChange={(e) => setSpSearchName(e.target.value)}
+                    placeholder="Search by name"
+                    className="w-full pl-8 text-xs"
+                    style={{ borderColor: spSearchName ? '#185fa5' : undefined }}
+                  />
+                </div>
+                <select
+                  value={spSearchPosition}
+                  onChange={(e) => setSpSearchPosition(e.target.value)}
+                  className="flex-none text-xs"
+                  style={{ width: 120, borderColor: spSearchPosition ? '#185fa5' : undefined }}
+                >
+                  <option value="">Position: any</option>
+                  <optgroup label="Offense">
+                    {OFFENSIVE_POSITIONS.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Defense">
+                    {ALL_POSITIONS.filter((p) => !OFFENSIVE_POSITIONS.includes(p)).map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+                <select
+                  value={spSearchGender}
+                  onChange={(e) => setSpSearchGender(e.target.value)}
+                  className="flex-none text-xs"
+                  style={{ width: 100, borderColor: spSearchGender ? '#185fa5' : undefined }}
+                >
+                  <option value="">M/F: any</option>
+                  <option value="M">M</option>
+                  <option value="F">F</option>
+                </select>
+                <select
+                  value={spSearchPreviousTeam}
+                  onChange={(e) => setSpSearchPreviousTeam(e.target.value)}
+                  className="flex-none text-xs"
+                  style={{ width: 140, borderColor: spSearchPreviousTeam ? '#185fa5' : undefined }}
+                >
+                  <option value="">Previous team: any</option>
+                  {spPreviousTeamOptions.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={spSortBy}
+                  onChange={(e) => setSpSortBy(e.target.value)}
+                  className="flex-none text-xs"
+                  style={{ width: 110 }}
+                >
+                  <option value="name">Sort: name</option>
+                  <option value="gender">Sort: M/F</option>
+                  <option value="position">Sort: position</option>
+                </select>
+              </div>
+
+              <p className="text-[10px] text-muted mb-2">{spResults.length} players</p>
+
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {spResults.map((p) => {
+                  const drafted = isRevealedDrafted(p);
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => openProfile(p.id)}
+                      className="flex-none rounded-xl p-2.5 flex flex-col items-center text-center"
+                      style={{
+                        width: 130,
+                        background: drafted ? '#f1f3f6' : '#ffffff',
+                        border: '1px solid #d8dde2',
+                        opacity: drafted ? 0.55 : 1,
+                      }}
+                    >
+                      {p.headshot_url ? (
+                        <img src={p.headshot_url} alt={p.full_name} className="w-10 h-10 rounded-full object-cover mb-1.5" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
+                          <i className="ti ti-user text-faint text-xl" aria-hidden="true" />
+                        </div>
+                      )}
+                      <p className="text-xs font-medium text-ink m-0 leading-snug">
+                        {p.full_name} <span className="font-normal text-muted">({p.gender})</span>
+                      </p>
+                      <p className="text-[10px] text-muted m-0 mt-0.5">
+                        {p.offensive_position} / {p.defensive_position}
+                      </p>
+                      <p className="text-[10px] text-muted m-0">
+                        {p.height_feet}'{p.height_inches}"
+                      </p>
+                      <p className="text-[10px] text-muted m-0 mt-0.5">
+                        Previous team: {previousTeamLabel(p.previous_team)}
+                      </p>
+                      {drafted && (
+                        <span className="text-[9px] font-medium mt-1.5" style={{ color: '#5a6b7d' }}>
+                          Drafted
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {rosterViewMode === 'team' && (
             <>

@@ -11,6 +11,12 @@ import PrintRosterButton from '../../lib/PrintRosterButton';
 const ALL_POSITIONS = ['QB', 'WR', 'C', 'CB', 'Safety', 'LB', 'Rush'];
 const OFFENSIVE_POSITIONS = ['QB', 'WR', 'C'];
 
+function previousTeamLabel(previousTeam) {
+  if (!previousTeam) return 'New to Go Mammoth';
+  if (previousTeam === 'Other') return 'Played in a different league';
+  return previousTeam;
+}
+
 export default function DraftPage() {
   const router = useRouter();
 
@@ -163,6 +169,18 @@ export default function DraftPage() {
     const s = secondsLeft % 60;
     return `${m}:${String(s).padStart(2, '0')}`;
   }, [secondsLeft]);
+
+  const draftDatetimeMs = settings?.draft_datetime ? new Date(settings.draft_datetime).getTime() : null;
+  const msUntilDraft = draftDatetimeMs !== null ? draftDatetimeMs - now : null;
+  const draftStartCountdown = useMemo(() => {
+    if (msUntilDraft === null) return '--:--:--';
+    const totalSeconds = Math.max(Math.floor(msUntilDraft / 1000), 0);
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }, [msUntilDraft]);
+  const showDraftOrderPreview = msUntilDraft !== null && msUntilDraft <= 30 * 60 * 1000;
 
   const clockUrgent = draftStatus === 'in_progress' && secondsLeft <= 20;
 
@@ -512,18 +530,6 @@ export default function DraftPage() {
     );
   }
 
-  if (draftStatus === 'not_started') {
-    return (
-      <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
-        <BrandHeader pageLabel="Live draft" />
-        <div style={{ padding: 40, textAlign: 'center' }}>
-          <p style={{ fontSize: 16, color: '#0c2340', fontWeight: 500 }}>The draft hasn't started yet.</p>
-          <p style={{ fontSize: 13, color: '#5a6b7d' }}>Check back once the commissioner opens it.</p>
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
       <BrandHeader
@@ -531,6 +537,58 @@ export default function DraftPage() {
         liveIndicator={draftStatus === 'in_progress'}
         pickTimer={draftStatus === 'in_progress' || draftStatus === 'paused' ? timerDisplay : undefined}
       />
+
+      {draftStatus === 'not_started' && (
+        <div className="px-4 sm:px-5 pt-4 pb-3">
+          <div className="flex justify-center">
+            <div
+              className="rounded-lg p-3 flex flex-col items-center justify-center"
+              style={{ background: '#185fa5', width: '100%', maxWidth: 320 }}
+            >
+              <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                Draft starts in
+              </p>
+              <p className="text-2xl font-semibold m-0" style={{ color: '#ffffff', letterSpacing: '0.03em' }}>
+                {draftStartCountdown}
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-center text-muted mt-2">
+            You can search and research players now - drafting opens once the commissioner starts the draft.
+          </p>
+
+          {showDraftOrderPreview && (
+            <div className="mt-4 rounded-xl border border-line bg-surface px-4 py-3.5">
+              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#0c447c' }}>
+                Draft order
+              </p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {teams
+                  .slice()
+                  .sort((a, b) => a.draft_position - b.draft_position)
+                  .map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex-none rounded-md flex flex-col items-center justify-center text-center px-2 py-1.5"
+                      style={{ minWidth: 90, background: lightenColor(t.team_color || '#0074ff', 0.85) }}
+                    >
+                      <span className="text-[10px] text-muted">#{t.draft_position}</span>
+                      <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
+                        <FootballIcon color={t.team_color || '#0074ff'} size={11} />
+                        <span className="truncate">{t.name}</span>
+                      </span>
+                    </div>
+                  ))}
+              </div>
+              {profile?.role === 'commissioner' && (
+                <p className="text-[10px] text-muted mt-2 mb-0">
+                  You can still change this order in Commish Tools right up until the draft starts.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {draftStatus === 'in_progress' || draftStatus === 'paused' ? (
         <>
@@ -1354,6 +1412,9 @@ export default function DraftPage() {
                   <p className="text-[11px] my-0.5" style={{ color: isMatch ? '#0c447c' : '#5a6b7d' }}>
                     Offense: {p.offensive_position} &nbsp; Defense: {p.defensive_position}
                   </p>
+                  <p className="text-[11px] my-0.5" style={{ color: isMatch ? '#0c447c' : '#5a6b7d' }}>
+                    Previous team: {previousTeamLabel(p.previous_team)}
+                  </p>
                   {!isDrafted && (
                     <p className="text-[11px] mt-0.5" style={{ color: isMatch ? '#0c447c' : '#5a6b7d' }}>
                       Injuries: {p.injury_status === 'None' ? 'None' : `${p.injury_status} (${p.weeks_until_recovered || '?'}w)`}
@@ -1387,7 +1448,7 @@ export default function DraftPage() {
                     >
                       {drafting === p.id ? 'Adding…' : 'Add to my team'}
                     </button>
-                  ) : (
+                  ) : draftStatus === 'not_started' ? null : (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
