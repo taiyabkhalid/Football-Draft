@@ -748,6 +748,7 @@ export default function LiveDraftPage() {
                 const drafted = isRevealedDrafted(p);
                 const draftedTeam = drafted ? teamsById[p.team_id] : null;
                 const draftedTeamColor = draftedTeam?.team_color || '#0074ff';
+                const isGm = ['gm', 'commissioner'].includes(roleByEmail[p.email?.toLowerCase()]);
                 return (
                   <button
                     key={p.id}
@@ -755,20 +756,27 @@ export default function LiveDraftPage() {
                     className="flex-none rounded-xl overflow-hidden flex flex-col items-center text-center"
                     style={{
                       width: 130,
-                      background: drafted ? '#f1f3f6' : '#ffffff',
+                      background: !p.is_active ? '#f1f3f6' : drafted ? '#f1f3f6' : '#ffffff',
                       border: '1px solid #d8dde2',
+                      opacity: !p.is_active ? 0.6 : 1,
                     }}
                   >
-                    {drafted && (
+                    {!p.is_active ? (
+                      <div className="w-full py-1" style={{ background: '#d8dde2' }}>
+                        <p className="text-[10px] font-semibold m-0" style={{ color: '#3d4a57' }}>
+                          Inactive
+                        </p>
+                      </div>
+                    ) : drafted ? (
                       <div className="w-full py-1" style={{ background: lightenColor(draftedTeamColor, 0.85) }}>
                         <p className="text-[9px] font-medium m-0" style={{ color: '#0c2340' }}>
-                          Drafted By:
+                          {isGm ? 'General Manager' : 'Drafted By:'}
                         </p>
                         <p className="text-[10px] font-semibold m-0 truncate px-1" style={{ color: '#0c2340' }}>
                           {draftedTeam?.name || 'Unknown'}
                         </p>
                       </div>
-                    )}
+                    ) : null}
                     <div className="p-2.5 flex flex-col items-center">
                       {p.headshot_url ? (
                         <img src={p.headshot_url} alt={p.full_name} className="w-10 h-10 rounded-full object-cover mb-1.5" />
@@ -1174,6 +1182,7 @@ export default function LiveDraftPage() {
                   const drafted = isRevealedDrafted(p);
                   const draftedTeam = drafted ? teamsById[p.team_id] : null;
                   const draftedTeamColor = draftedTeam?.team_color || '#0074ff';
+                  const isGm = ['gm', 'commissioner'].includes(roleByEmail[p.email?.toLowerCase()]);
                   return (
                     <button
                       key={p.id}
@@ -1181,20 +1190,27 @@ export default function LiveDraftPage() {
                       className="flex-none rounded-xl overflow-hidden flex flex-col items-center text-center"
                       style={{
                         width: 130,
-                        background: drafted ? '#f1f3f6' : '#ffffff',
+                        background: !p.is_active ? '#f1f3f6' : drafted ? '#f1f3f6' : '#ffffff',
                         border: '1px solid #d8dde2',
+                        opacity: !p.is_active ? 0.6 : 1,
                       }}
                     >
-                      {drafted && (
+                      {!p.is_active ? (
+                        <div className="w-full py-1" style={{ background: '#d8dde2' }}>
+                          <p className="text-[10px] font-semibold m-0" style={{ color: '#3d4a57' }}>
+                            Inactive
+                          </p>
+                        </div>
+                      ) : drafted ? (
                         <div className="w-full py-1" style={{ background: lightenColor(draftedTeamColor, 0.85) }}>
                           <p className="text-[9px] font-medium m-0" style={{ color: '#0c2340' }}>
-                            Drafted By:
+                            {isGm ? 'General Manager' : 'Drafted By:'}
                           </p>
                           <p className="text-[10px] font-semibold m-0 truncate px-1" style={{ color: '#0c2340' }}>
                             {draftedTeam?.name || 'Unknown'}
                           </p>
                         </div>
-                      )}
+                      ) : null}
                       <div className="p-2.5 flex flex-col items-center">
                         {p.headshot_url ? (
                           <img src={p.headshot_url} alt={p.full_name} className="w-10 h-10 rounded-full object-cover mb-1.5" />
