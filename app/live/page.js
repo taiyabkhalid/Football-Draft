@@ -202,6 +202,25 @@ export default function LiveDraftPage() {
   const audioRef = useRef(null);
   const processingRef = useRef(false);
   const initializedRef = useRef(false);
+  const prevStatusForResetRef = useRef(null);
+
+  // If the commissioner resets the draft while this tab is still open (no
+  // refresh), all of this local reveal-queue state would otherwise be
+  // stale relative to the fresh draft - stuck thinking it's already caught
+  // up, which is exactly why picks stopped chiming and the pop-out card
+  // stopped appearing after a reset without reloading the page.
+  useEffect(() => {
+    const prev = prevStatusForResetRef.current;
+    if (prev !== null && prev !== 'not_started' && draftStatus === 'not_started') {
+      initializedRef.current = false;
+      processingRef.current = false;
+      setRevealedCount(null);
+      setQueue([]);
+      setActiveReveal(null);
+      setShowPopout(false);
+    }
+    prevStatusForResetRef.current = draftStatus;
+  }, [draftStatus]);
 
   useEffect(() => {
     if (!loading && !initializedRef.current) {
@@ -292,7 +311,7 @@ export default function LiveDraftPage() {
 
   const draftDatetimeMs = settings?.draft_datetime ? new Date(settings.draft_datetime).getTime() : null;
   const msUntilDraft = draftDatetimeMs !== null ? draftDatetimeMs - now : null;
-  const msUntilRoomOpens = msUntilDraft !== null ? msUntilDraft - 2 * 60 * 60 * 1000 : null;
+  const msUntilRoomOpens = msUntilDraft !== null ? msUntilDraft - 30 * 60 * 1000 : null;
   const roomIsOpen = msUntilRoomOpens !== null && msUntilRoomOpens <= 0;
   const showDraftOrderPreview = msUntilDraft !== null && msUntilDraft <= 30 * 60 * 1000;
 
@@ -585,15 +604,11 @@ export default function LiveDraftPage() {
     {!roomIsOpen ? (
       <div className="text-center px-4" style={{ paddingTop: 60, paddingBottom: 60 }}>
         <p className="text-sm text-muted mb-8">
-          The spectator draft room opens automatically 2 hours before the draft starts.
+          The spectator draft room opens automatically 30 minutes before the draft starts.
         </p>
         <p className="text-xs uppercase tracking-wide text-muted mb-2">Draft starts in</p>
-        <p className="text-4xl font-semibold m-0 mb-8" style={{ color: '#0c2340', letterSpacing: '0.03em' }}>
+        <p className="text-4xl font-semibold m-0" style={{ color: '#0c2340', letterSpacing: '0.03em' }}>
           {formatCountdown(msUntilDraft)}
-        </p>
-        <p className="text-xs uppercase tracking-wide text-muted mb-2">Draft room opens in</p>
-        <p className="text-xl font-semibold m-0" style={{ color: '#185fa5', letterSpacing: '0.03em' }}>
-          {formatCountdown(msUntilRoomOpens)}
         </p>
       </div>
     ) : (

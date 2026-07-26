@@ -692,14 +692,14 @@ export default function DraftPage() {
                   </p>
                 )}
               </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
+              <div className="flex items-start gap-3 flex-shrink-0">
                 {profile?.role === 'commissioner' && (
                   <div className="flex flex-col gap-1.5">
                     <button
                       onClick={handleTogglePause}
                       disabled={togglingPause}
-                      className="rounded-md flex items-center gap-1.5 px-2 py-1.5"
-                      style={{ background: 'rgba(255,255,255,0.2)', border: 'none' }}
+                      className="rounded-md flex items-center justify-center gap-1.5 px-2 py-1.5"
+                      style={{ background: 'rgba(255,255,255,0.2)', border: 'none', width: 112 }}
                     >
                       <i
                         className={`ti ${draftStatus === 'paused' ? 'ti-player-play' : 'ti-player-pause'} text-sm`}
@@ -713,8 +713,8 @@ export default function DraftPage() {
                     <button
                       onClick={() => setShowSkipConfirm(true)}
                       disabled={draftStatus === 'paused'}
-                      className="rounded-md px-2 py-1.5"
-                      style={{ background: '#faeeda', border: 'none' }}
+                      className="rounded-md px-2 py-1.5 flex items-center justify-center"
+                      style={{ background: '#faeeda', border: 'none', width: 112 }}
                     >
                       <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: '#854f0b' }}>
                         Skip Pick &raquo;
@@ -1509,7 +1509,7 @@ export default function DraftPage() {
                     >
                       {drafting === p.id ? 'Adding…' : 'Add to my team'}
                     </button>
-                  ) : draftStatus === 'not_started' ? null : (
+                  ) : (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
