@@ -38,6 +38,7 @@ export default function CommissionerToolsPage() {
   // Draft order form state
   const [teamOrder, setTeamOrder] = useState([]);
   const [savingOrder, setSavingOrder] = useState(false);
+  const [savingAutoRandomize, setSavingAutoRandomize] = useState(false);
   const [orderMessage, setOrderMessage] = useState(null);
 
   const [startingNow, setStartingNow] = useState(false);
@@ -243,6 +244,16 @@ export default function CommissionerToolsPage() {
         .map((t) => ({ ...t, draft_position: posById[t.id] }))
         .sort((a, b) => a.draft_position - b.draft_position)
     );
+  }
+
+  async function handleToggleAutoRandomize() {
+    setSavingAutoRandomize(true);
+    await supabase
+      .from('draft_settings')
+      .update({ auto_randomize_draft_order: !settings?.auto_randomize_draft_order })
+      .eq('id', 1);
+    await fetchData();
+    setSavingAutoRandomize(false);
   }
 
   async function handleStartNow() {
@@ -641,6 +652,41 @@ export default function CommissionerToolsPage() {
             <button onClick={handleSaveOrder} disabled={draftLocked || savingOrder} className="btn-primary text-xs flex-1">
               {savingOrder ? 'Saving…' : 'Save order'}
             </button>
+          </div>
+
+          <div className="border-t border-line mt-3 pt-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted m-0 pr-3">
+                Auto-randomize the draft order 30 minutes before the draft starts, so it's visible to everyone the
+                moment the pages are open. Manual randomize and Save order above still work right up until then.
+              </p>
+              <button
+                onClick={handleToggleAutoRandomize}
+                disabled={savingAutoRandomize || draftLocked}
+                className="flex-shrink-0 rounded-full"
+                style={{
+                  width: 44,
+                  height: 24,
+                  background: settings?.auto_randomize_draft_order ? '#185fa5' : '#d8dde2',
+                  border: 'none',
+                  position: 'relative',
+                }}
+                aria-label="Toggle auto-randomize draft order"
+              >
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 2,
+                    left: settings?.auto_randomize_draft_order ? 22 : 2,
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    background: '#ffffff',
+                    transition: 'left 0.15s',
+                  }}
+                />
+              </button>
+            </div>
           </div>
           </>
           )}

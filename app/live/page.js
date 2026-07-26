@@ -80,12 +80,15 @@ export default function LiveDraftPage() {
   const [inactivePlayers, setInactivePlayers] = useState([]);
   const [picks, setPicks] = useState([]);
   const [settings, setSettings] = useState(null);
+  const draftStatus = settings?.draft_status || 'not_started';
   const [profiles, setProfiles] = useState([]);
   const [viewingTeamId, setViewingTeamId] = useState(null);
   const [myTeamId, setMyTeamId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [viewByTeamOpen, setViewByTeamOpen] = useState(false);
   const rostersSectionRef = useRef(null);
+  const searchPanelRef = useRef(null);
+  const [searchPanelOpen, setSearchPanelOpen] = useState(false);
 
   function scrollRostersIntoView() {
     setTimeout(() => {
@@ -128,6 +131,7 @@ export default function LiveDraftPage() {
     setLoading(false);
   }, []);
 
+  const focusHandledRef = useRef(false);
   useEffect(() => {
     async function checkMyTeam() {
       const {
@@ -140,8 +144,12 @@ export default function LiveDraftPage() {
         setViewingTeamId(playerRow.team_id);
       }
       // Arriving via a hamburger-menu shortcut - jump straight to the right
-      // panel and mode instead of leaving View Rosters collapsed.
-      if (typeof window !== 'undefined') {
+      // panel and mode instead of leaving View Rosters collapsed. Wait for
+      // loading to finish so draftStatus is actually known before deciding
+      // whether "search" means the standalone pre-draft panel or the full
+      // View Rosters search tab.
+      if (typeof window !== 'undefined' && !loading && !focusHandledRef.current) {
+        focusHandledRef.current = true;
         const params = new URLSearchParams(window.location.search);
         const focus = params.get('focus');
         if (focus === 'team' && playerRow?.team_id) {
@@ -151,16 +159,23 @@ export default function LiveDraftPage() {
             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
           }, 300);
         } else if (focus === 'search') {
-          setViewByTeamOpen(true);
-          setRosterViewMode('search');
-          setTimeout(() => {
-            rostersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }, 300);
+          if (draftStatus === 'not_started') {
+            setSearchPanelOpen(true);
+            setTimeout(() => {
+              searchPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 300);
+          } else {
+            setViewByTeamOpen(true);
+            setRosterViewMode('search');
+            setTimeout(() => {
+              rostersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 300);
+          }
         }
       }
     }
     checkMyTeam();
-  }, []);
+  }, [loading, draftStatus]);
 
   useEffect(() => {
     fetchAll();
@@ -217,34 +232,27 @@ export default function LiveDraftPage() {
     const next = queue[0];
 
     async function run() {
-      if (next.player_id) {
-        setActiveReveal(next);
-        setShowPopout(false);
-        let chimeMs = 2000;
-        const audio = audioRef.current;
-        if (audio) {
-          try {
-            audio.currentTime = 0;
-            await audio.play();
-            if (audio.duration && isFinite(audio.duration)) chimeMs = audio.duration * 1000;
-          } catch (e) {
-            // Autoplay can be blocked before the visitor interacts with the
-            // page at all - the reveal still proceeds on its own timing.
-          }
+      setActiveReveal(next);
+      setShowPopout(false);
+      let chimeMs = 2000;
+      const audio = audioRef.current;
+      if (audio) {
+        try {
+          audio.currentTime = 0;
+          await audio.play();
+          if (audio.duration && isFinite(audio.duration)) chimeMs = audio.duration * 1000;
+        } catch (e) {
+          // Autoplay can be blocked before the visitor interacts with the
+          // page at all - the reveal still proceeds on its own timing.
         }
-        await new Promise((resolve) => setTimeout(resolve, chimeMs * 0.75));
-        setShowPopout(true);
-        setRevealedCount((c) => (c ?? 0) + 1);
-        // Hold at least 5 seconds before considering the next queued pick -
-        // if nothing else is queued when that ends, this pick just stays
-        // featured (persistently) until a genuinely new one arrives.
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-      } else {
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        setActiveReveal(null);
-        setShowPopout(false);
-        setRevealedCount((c) => (c ?? 0) + 1);
       }
+      await new Promise((resolve) => setTimeout(resolve, chimeMs * 0.75));
+      setShowPopout(true);
+      setRevealedCount((c) => (c ?? 0) + 1);
+      // Hold at least 5 seconds before considering the next queued pick -
+      // if nothing else is queued when that ends, this pick just stays
+      // featured (persistently) until a genuinely new one arrives.
+      await new Promise((resolve) => setTimeout(resolve, 5000));
       setQueue((q) => q.slice(1));
       processingRef.current = false;
     }
@@ -255,7 +263,6 @@ export default function LiveDraftPage() {
 
   const currentPickNumber = revealedPicks.length + 1;
   const numTeams = settings?.num_teams || teams.length;
-  const draftStatus = settings?.draft_status || 'not_started';
   const draftType = settings?.draft_type || 'snake';
   const currentRound = numTeams ? getRound(currentPickNumber, numTeams) : 1;
   const nextRound = numTeams ? getRound(currentPickNumber + 1, numTeams) : 1;
@@ -278,6 +285,7 @@ export default function LiveDraftPage() {
     if (draftStatus !== 'not_started') return;
     const timer = setInterval(() => {
       supabase.rpc('start_draft_if_due');
+      supabase.rpc('randomize_draft_order_if_due');
     }, 5000);
     return () => clearInterval(timer);
   }, [draftStatus]);
@@ -300,9 +308,6 @@ export default function LiveDraftPage() {
     if (hours > 0) return `${hours}h ${mmss}`;
     return mmss;
   }
-
-  const secondsUntilDraft = msUntilDraft !== null ? Math.floor(msUntilDraft / 1000) : null;
-  const showStartPopup = secondsUntilDraft !== null && secondsUntilDraft <= 10 && secondsUntilDraft >= 0;
 
   const pickStartedAt = settings?.current_pick_started_at ? new Date(settings.current_pick_started_at).getTime() : null;
   const secondsLeft =
@@ -576,7 +581,8 @@ export default function LiveDraftPage() {
   }
 
   const preDraftWaitingRoomBlock = draftStatus === 'not_started' && (
-    !roomIsOpen ? (
+    <>
+    {!roomIsOpen ? (
       <div className="text-center px-4" style={{ paddingTop: 60, paddingBottom: 60 }}>
         <p className="text-sm text-muted mb-8">
           The spectator draft room opens automatically 2 hours before the draft starts.
@@ -628,35 +634,151 @@ export default function LiveDraftPage() {
             </div>
           </div>
         )}
+      </div>
+    )}
 
-        {showStartPopup && (
-          <div
-            className="fixed inset-0 flex items-center justify-center px-4"
-            style={{ background: 'rgba(12,35,64,0.6)', zIndex: 100 }}
-          >
-            <div className="bg-white rounded-2xl p-8 text-center" style={{ maxWidth: 320 }}>
-              {secondsUntilDraft > 0 ? (
-                <>
-                  <p className="text-xs uppercase tracking-wide text-muted mb-2">Kicking off in</p>
-                  <p className="text-6xl font-bold m-0" style={{ color: '#185fa5' }}>
-                    {secondsUntilDraft}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-lg font-semibold m-0 mb-2" style={{ color: '#0c2340' }}>
-                    The Go Mammoth Draft has officially started!
-                  </p>
-                  <p className="text-sm m-0" style={{ color: '#5a6b7d' }}>
-                    Don't expect to be the first pick.
-                  </p>
-                </>
-              )}
+      <div className="mx-4 sm:mx-5 mt-4 rounded-xl border border-line bg-surface px-4 py-3" ref={searchPanelRef}>
+        <button onClick={() => setSearchPanelOpen((o) => !o)} className="w-full flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
+            Search player
+          </p>
+          <i className={`ti ti-chevron-${searchPanelOpen ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+        </button>
+        {searchPanelOpen && (
+          <div className="mt-2">
+            <div className="flex gap-2 flex-wrap items-center mb-2">
+              <div className="relative flex-none" style={{ width: 150 }}>
+                <i className="ti ti-search absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-faint" aria-hidden="true" />
+                <input
+                  type="text"
+                  value={spSearchName}
+                  onChange={(e) => setSpSearchName(e.target.value)}
+                  placeholder="Search by name"
+                  className="w-full pl-8 text-xs"
+                  style={{ borderColor: spSearchName ? '#185fa5' : undefined }}
+                />
+              </div>
+              <select
+                value={spSearchPosition}
+                onChange={(e) => setSpSearchPosition(e.target.value)}
+                className="flex-none text-xs"
+                style={{ width: 120, borderColor: spSearchPosition ? '#185fa5' : undefined }}
+              >
+                <option value="">Position: any</option>
+                <optgroup label="Offense">
+                  {OFFENSIVE_POSITIONS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Defense">
+                  {ALL_POSITIONS.filter((p) => !OFFENSIVE_POSITIONS.includes(p)).map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+              <select
+                value={spSearchGender}
+                onChange={(e) => setSpSearchGender(e.target.value)}
+                className="flex-none text-xs"
+                style={{ width: 100, borderColor: spSearchGender ? '#185fa5' : undefined }}
+              >
+                <option value="">M/F: any</option>
+                <option value="M">M</option>
+                <option value="F">F</option>
+              </select>
+              <select
+                value={spSearchPreviousTeam}
+                onChange={(e) => setSpSearchPreviousTeam(e.target.value)}
+                className="flex-none text-xs"
+                style={{ width: 140, borderColor: spSearchPreviousTeam ? '#185fa5' : undefined }}
+              >
+                <option value="">Previous team: any</option>
+                {spPreviousTeamOptions.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={spSearchAvailability}
+                onChange={(e) => setSpSearchAvailability(e.target.value)}
+                className="flex-none text-xs"
+                style={{ width: 130, borderColor: spSearchAvailability ? '#185fa5' : undefined }}
+              >
+                <option value="">Availability: any</option>
+                <option value="available">Available</option>
+                <option value="drafted">Drafted</option>
+                <option value="not_available">Not Available</option>
+              </select>
+              <select
+                value={spSortBy}
+                onChange={(e) => setSpSortBy(e.target.value)}
+                className="flex-none text-xs"
+                style={{ width: 110 }}
+              >
+                <option value="name">Sort: name</option>
+                <option value="gender">Sort: M/F</option>
+                <option value="position">Sort: position</option>
+              </select>
+            </div>
+
+            <p className="text-[10px] text-muted mb-2">{spResults.length} players</p>
+
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {spResults.map((p) => {
+                const drafted = isRevealedDrafted(p);
+                const draftedTeam = drafted ? teamsById[p.team_id] : null;
+                const draftedTeamColor = draftedTeam?.team_color || '#0074ff';
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => openProfile(p.id)}
+                    className="flex-none rounded-xl overflow-hidden flex flex-col items-center text-center"
+                    style={{
+                      width: 130,
+                      background: drafted ? '#f1f3f6' : '#ffffff',
+                      border: '1px solid #d8dde2',
+                    }}
+                  >
+                    {drafted && (
+                      <div className="w-full py-1" style={{ background: lightenColor(draftedTeamColor, 0.85) }}>
+                        <p className="text-[9px] font-medium m-0" style={{ color: '#0c2340' }}>
+                          Drafted By:
+                        </p>
+                        <p className="text-[10px] font-semibold m-0 truncate px-1" style={{ color: '#0c2340' }}>
+                          {draftedTeam?.name || 'Unknown'}
+                        </p>
+                      </div>
+                    )}
+                    <div className="p-2.5 flex flex-col items-center">
+                      {p.headshot_url ? (
+                        <img src={p.headshot_url} alt={p.full_name} className="w-10 h-10 rounded-full object-cover mb-1.5" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center mb-1.5">
+                          <i className="ti ti-user text-faint text-xl" aria-hidden="true" />
+                        </div>
+                      )}
+                      <p className="text-xs font-medium text-ink m-0 leading-snug">
+                        {p.full_name} <span className="font-normal text-muted">({p.gender})</span>
+                      </p>
+                      <p className="text-[10px] text-muted m-0 mt-0.5">
+                        {p.offensive_position} / {p.defensive_position} &middot; {p.height_feet}'{p.height_inches}"
+                      </p>
+                      <p className="text-[10px] text-muted m-0 mt-0.5">Previous Team:</p>
+                      <p className="text-[10px] text-muted m-0">{previousTeamLabel(p.previous_team)}</p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
       </div>
-    )
+    </>
   );
 
   const draftedPlayersBlock = (
@@ -680,6 +802,15 @@ export default function LiveDraftPage() {
 
           const isPoppedOut =
             showPopout && activeReveal && slot.pickNumber === activeReveal.pick_number && activeReveal.player_id;
+          const isPoppedOutSkip =
+            showPopout && activeReveal && slot.pickNumber === activeReveal.pick_number && !activeReveal.player_id;
+
+          const skipReasonMessage =
+            slot.pick?.skip_reason === 'gm_slow'
+              ? 'The GM went to the toilet and never came back.'
+              : slot.pick?.skip_reason === 'commissioner_decision'
+              ? "Commissioner's Decision"
+              : null;
 
           if (isPoppedOut) {
             const player = playersById[activeReveal.player_id];
@@ -739,7 +870,7 @@ export default function LiveDraftPage() {
           return (
             <div
               key={slot.pickNumber}
-              ref={!activeReveal && slot.pickNumber === currentPickNumber ? currentPickRef : null}
+              ref={isPoppedOutSkip ? currentPickRef : !activeReveal && slot.pickNumber === currentPickNumber ? currentPickRef : null}
               onClick={() => slot.player && openProfile(slot.player.id)}
               className={`flex-none rounded-xl p-3 flex flex-col items-center text-center ${
                 isClockSlot && timeExpired ? 'animate-subtle-flash' : ''
@@ -783,6 +914,9 @@ export default function LiveDraftPage() {
                     <i className="ti ti-x text-faint text-xl" aria-hidden="true" />
                   </div>
                   <p className="text-xs text-muted m-0 leading-snug">Skipped</p>
+                  {skipReasonMessage && (
+                    <p className="text-[10px] text-faint m-0 mt-0.5 italic px-1">{skipReasonMessage}</p>
+                  )}
                 </>
               ) : isClockSlot ? (
                 <>
@@ -844,14 +978,11 @@ export default function LiveDraftPage() {
     </div>
   );
 
-  const rostersLocked = draftStatus === 'not_started' && !roomIsOpen;
-
   const rostersBlock = (
     <div className="relative">
       <div
         className="mx-4 sm:mx-5 mt-4 rounded-xl border border-line bg-surface px-4 py-3"
         ref={rostersSectionRef}
-        style={rostersLocked ? { opacity: 0.4, pointerEvents: 'none' } : undefined}
       >
       <button
         onClick={() => {
@@ -1040,11 +1171,11 @@ export default function LiveDraftPage() {
                       }}
                     >
                       {drafted && (
-                        <div className="w-full py-1" style={{ background: draftedTeamColor }}>
-                          <p className="text-[9px] font-medium m-0" style={{ color: '#ffffff' }}>
+                        <div className="w-full py-1" style={{ background: lightenColor(draftedTeamColor, 0.85) }}>
+                          <p className="text-[9px] font-medium m-0" style={{ color: '#0c2340' }}>
                             Drafted By:
                           </p>
-                          <p className="text-[10px] font-semibold m-0 truncate px-1" style={{ color: '#ffffff' }}>
+                          <p className="text-[10px] font-semibold m-0 truncate px-1" style={{ color: '#0c2340' }}>
                             {draftedTeam?.name || 'Unknown'}
                           </p>
                         </div>
@@ -1308,6 +1439,13 @@ export default function LiveDraftPage() {
                               <i className="ti ti-x text-faint text-base" aria-hidden="true" />
                             </div>
                             <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
+                            {slot.pick?.skip_reason && (
+                              <p className="text-[8px] text-faint m-0 mt-0.5 italic px-1 leading-tight">
+                                {slot.pick.skip_reason === 'gm_slow'
+                                  ? 'The GM went to the toilet and never came back.'
+                                  : "Commissioner's Decision"}
+                              </p>
+                            )}
                           </>
                         ) : isClockSlot ? (
                           <>
@@ -1469,13 +1607,6 @@ export default function LiveDraftPage() {
         </>
       )}
       </div>
-      {rostersLocked && (
-        <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
-          <p className="text-xs font-medium m-0" style={{ color: '#5a6b7d' }}>
-            Search and rosters open 2 hours before the draft.
-          </p>
-        </div>
-      )}
     </div>
   );
 
@@ -1489,7 +1620,16 @@ export default function LiveDraftPage() {
 
       {preDraftWaitingRoomBlock}
 
-      {draftStatus === 'in_progress' && (
+      {draftStatus === 'paused' && (
+        <div className="bg-[#faeeda] mx-4 sm:mx-5 mt-4 rounded-lg p-3.5 flex gap-2">
+          <i className="ti ti-player-pause text-base flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
+          <p className="text-sm m-0" style={{ color: '#633806' }}>
+            The commissioner has paused the draft. Grab a beer, have a smoke, we'll pick back up where we left off!
+          </p>
+        </div>
+      )}
+
+      {(draftStatus === 'in_progress' || draftStatus === 'paused') && (
         <>
           <div className="px-4 sm:px-5 pt-4">
             <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Upcoming picks</p>
@@ -1523,15 +1663,6 @@ export default function LiveDraftPage() {
         </>
       )}
 
-      {draftStatus === 'paused' && (
-        <div className="bg-[#faeeda] mx-4 sm:mx-5 mt-4 rounded-lg p-3.5 flex gap-2">
-          <i className="ti ti-player-pause text-base flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
-          <p className="text-sm m-0" style={{ color: '#633806' }}>
-            The commissioner has paused the draft. Grab a beer, have a smoke, we'll pick back up where we left off!
-          </p>
-        </div>
-      )}
-
       {draftStatus === 'completed' && (
         <div className="bg-royal-pale mx-4 sm:mx-5 mt-4 rounded-lg p-3.5">
           <p className="text-sm m-0" style={{ color: '#0c447c' }}>
@@ -1548,7 +1679,7 @@ export default function LiveDraftPage() {
       ) : (
         <>
           {(draftStatus !== 'not_started' || showDraftOrderPreview) && draftedPlayersBlock}
-          {rostersBlock}
+          {draftStatus !== 'not_started' && rostersBlock}
         </>
       )}
 

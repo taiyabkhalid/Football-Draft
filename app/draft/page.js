@@ -35,7 +35,7 @@ export default function DraftPage() {
   const [searchGender, setSearchGender] = useState('');
   const [searchPreviousTeam, setSearchPreviousTeam] = useState('');
   const [sortBy, setSortBy] = useState('name');
-  const [viewByTeamOpen, setViewByTeamOpen] = useState(true);
+  const [viewByTeamOpen, setViewByTeamOpen] = useState(false);
   const rostersSectionRef = useRef(null);
   const playerSelectionRef = useRef(null);
 
@@ -45,6 +45,10 @@ export default function DraftPage() {
     if (params.get('focus') === 'search') {
       setTimeout(() => {
         playerSelectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // The sticky countdown/on-the-clock strip at the top of this page
+        // otherwise sits on top of the search bars once scrolled into view,
+        // hiding them - nudge back up to compensate.
+        setTimeout(() => window.scrollBy({ top: -90, behavior: 'smooth' }), 350);
       }, 300);
     }
   }, []);
@@ -61,6 +65,8 @@ export default function DraftPage() {
 
   const [drafting, setDrafting] = useState(null);
   const [skipping, setSkipping] = useState(false);
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [skipReason, setSkipReason] = useState('gm_slow');
   const [togglingPause, setTogglingPause] = useState(false);
   const [actionError, setActionError] = useState(null);
   const [viewingTeamId, setViewingTeamId] = useState(null);
@@ -174,6 +180,7 @@ export default function DraftPage() {
     if (draftStatus !== 'not_started') return;
     const timer = setInterval(() => {
       supabase.rpc('start_draft_if_due');
+      supabase.rpc('randomize_draft_order_if_due');
     }, 5000);
     return () => clearInterval(timer);
   }, [draftStatus]);
@@ -523,11 +530,11 @@ export default function DraftPage() {
     setDrafting(null);
   }
 
-  async function skipPick() {
+  async function skipPick(reason) {
     if (profile?.role !== 'commissioner' || !teamOnClock || draftStatus !== 'in_progress') return;
     setSkipping(true);
     setActionError(null);
-    const { error } = await supabase.rpc('skip_current_pick');
+    const { error } = await supabase.rpc('skip_current_pick', { p_reason: reason });
     if (error) {
       setActionError(error.message);
     }
@@ -687,21 +694,33 @@ export default function DraftPage() {
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
                 {profile?.role === 'commissioner' && (
-                  <button
-                    onClick={handleTogglePause}
-                    disabled={togglingPause}
-                    className="rounded-md flex items-center gap-1.5 px-2 py-1.5"
-                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none' }}
-                  >
-                    <i
-                      className={`ti ${draftStatus === 'paused' ? 'ti-player-play' : 'ti-player-pause'} text-sm`}
-                      style={{ color: '#ffffff' }}
-                      aria-hidden="true"
-                    />
-                    <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: '#ffffff' }}>
-                      {draftStatus === 'paused' ? 'Resume Draft' : 'Pause Draft'}
-                    </span>
-                  </button>
+                  <div className="flex flex-col gap-1.5">
+                    <button
+                      onClick={handleTogglePause}
+                      disabled={togglingPause}
+                      className="rounded-md flex items-center gap-1.5 px-2 py-1.5"
+                      style={{ background: 'rgba(255,255,255,0.2)', border: 'none' }}
+                    >
+                      <i
+                        className={`ti ${draftStatus === 'paused' ? 'ti-player-play' : 'ti-player-pause'} text-sm`}
+                        style={{ color: '#ffffff' }}
+                        aria-hidden="true"
+                      />
+                      <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: '#ffffff' }}>
+                        {draftStatus === 'paused' ? 'Resume Draft' : 'Pause Draft'}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setShowSkipConfirm(true)}
+                      disabled={draftStatus === 'paused'}
+                      className="rounded-md px-2 py-1.5"
+                      style={{ background: '#faeeda', border: 'none' }}
+                    >
+                      <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: '#854f0b' }}>
+                        Skip Pick &raquo;
+                      </span>
+                    </button>
+                  </div>
                 )}
                 <p className="text-xl font-medium" style={{ color: '#ffffff' }}>
                   {timerDisplay}
@@ -789,13 +808,13 @@ export default function DraftPage() {
             </div>
           )}
         </>
-      ) : (
+      ) : draftStatus === 'completed' ? (
         <div className="bg-royal-pale mx-4 sm:mx-5 mt-4 rounded-lg p-3.5">
           <p className="text-sm m-0" style={{ color: '#0c447c' }}>
             The draft has ended. Final rosters are below.
           </p>
         </div>
-      )}
+      ) : null}
 
       {/* Team / Round roster viewer */}
       <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-surface px-4 py-3" ref={rostersSectionRef}>
@@ -1509,21 +1528,11 @@ export default function DraftPage() {
           </div>
         </section>
 
-        {(profile?.team_id || profile?.role === 'commissioner') && (() => {
-          const myTeam = profile?.team_id ? teamsById[profile.team_id] : null;
+        {profile?.team_id && (() => {
+          const myTeam = teamsById[profile.team_id];
           const myColor = myTeam?.team_color || '#0074ff';
           return (
             <aside className="w-full lg:w-64 flex-shrink-0 order-3 lg:pl-3 lg:border-l border-line">
-              {profile?.role === 'commissioner' && (
-                <button
-                  onClick={skipPick}
-                  disabled={skipping || draftStatus === 'paused'}
-                  className="text-xs font-medium rounded-md px-3 mb-2"
-                  style={{ background: '#faeeda', color: '#854f0b', border: 'none', height: 38 }}
-                >
-                  {skipping ? 'Skipping…' : draftStatus === 'paused' ? 'Skip pick (paused)' : 'Skip Pick \u00bb'}
-                </button>
-              )}
               {myTeam && (
                 <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1 flex items-center gap-1.5">
                   <FootballIcon color={myColor} size={13} />
@@ -1691,6 +1700,43 @@ export default function DraftPage() {
           </div>
         );
       })}
+      {showSkipConfirm && (
+        <div
+          className="fixed inset-0 flex items-center justify-center px-4"
+          style={{ background: 'rgba(12,35,64,0.55)', zIndex: 100 }}
+          onClick={() => setShowSkipConfirm(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-xl p-5 max-w-sm w-full">
+            <p className="text-sm font-semibold m-0 mb-1" style={{ color: '#0c2340' }}>
+              Skip this pick?
+            </p>
+            <p className="text-xs text-muted mb-3">
+              {teamOnClock?.name} will lose this turn entirely - the draft will run one extra round to make up for it.
+            </p>
+            <label className="field-label">Reason</label>
+            <select value={skipReason} onChange={(e) => setSkipReason(e.target.value)} className="text-xs mb-3">
+              <option value="gm_slow">GM taking too long</option>
+              <option value="commissioner_decision">Commissioner's Decision</option>
+            </select>
+            <div className="flex gap-2">
+              <button onClick={() => setShowSkipConfirm(false)} className="btn-secondary text-xs flex-1">
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await skipPick(skipReason);
+                  setShowSkipConfirm(false);
+                }}
+                disabled={skipping}
+                className="text-xs flex-1 rounded-md font-medium"
+                style={{ background: '#c0392b', color: '#ffffff', border: 'none' }}
+              >
+                {skipping ? 'Skipping…' : 'Confirm skip'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showCompleteModal && (
         <div
           className="fixed inset-0 flex items-center justify-center px-4"
