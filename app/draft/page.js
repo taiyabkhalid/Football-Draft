@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
@@ -17,7 +17,7 @@ function previousTeamLabel(previousTeam) {
   return previousTeam;
 }
 
-export default function DraftPage() {
+function DraftPageContent() {
   const router = useRouter();
 
   const [authChecked, setAuthChecked] = useState(false);
@@ -39,19 +39,8 @@ export default function DraftPage() {
   const rostersSectionRef = useRef(null);
   const playerSelectionRef = useRef(null);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('focus') === 'search') {
-      setTimeout(() => {
-        playerSelectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        // The sticky countdown/on-the-clock strip at the top of this page
-        // otherwise sits on top of the search bars once scrolled into view,
-        // hiding them - nudge back up to compensate.
-        setTimeout(() => window.scrollBy({ top: -90, behavior: 'smooth' }), 350);
-      }, 300);
-    }
-  }, []);
+  const searchParams = useSearchParams();
+  const focusParam = searchParams.get('focus');
 
   function scrollRostersIntoView() {
     setTimeout(() => {
@@ -70,6 +59,26 @@ export default function DraftPage() {
   const [togglingPause, setTogglingPause] = useState(false);
   const [actionError, setActionError] = useState(null);
   const [viewingTeamId, setViewingTeamId] = useState(null);
+  const [mobileListTab, setMobileListTab] = useState('available');
+
+  useEffect(() => {
+    if (focusParam === 'search') {
+      setTimeout(() => {
+        playerSelectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // The sticky countdown/on-the-clock strip at the top of this page
+        // otherwise sits on top of the search bars once scrolled into view,
+        // hiding them - nudge back up to compensate.
+        setTimeout(() => window.scrollBy({ top: -90, behavior: 'smooth' }), 350);
+      }, 300);
+    } else if (focusParam === 'myteam' && profile?.team_id) {
+      setViewByTeamOpen(true);
+      setRosterViewMode('team');
+      setViewingTeamId(profile.team_id);
+      setTimeout(() => {
+        rostersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
+    }
+  }, [focusParam, profile]);
 
   function jumpToTeam(teamId) {
     setViewByTeamOpen(true);
@@ -100,8 +109,11 @@ export default function DraftPage() {
         // Not a GM/commissioner - check if they're a designated draft-day
         // proxy for any team before turning them away.
         const { data: allTeams } = await supabase.from('teams').select('id, proxy_email');
-        const isProxy = (allTeams || []).some(
-          (t) => t.proxy_email?.toLowerCase() === user.email?.toLowerCase()
+        const isProxy = (allTeams || []).some((t) =>
+          (t.proxy_email || '')
+            .split(',')
+            .map((e) => e.trim().toLowerCase())
+            .includes(user.email?.toLowerCase())
         );
         if (!isProxy) {
           router.push('/login');
@@ -404,7 +416,17 @@ export default function DraftPage() {
   }, [teams, players]);
 
   const myProxyTeamIds = useMemo(
-    () => new Set(teams.filter((t) => t.proxy_email?.toLowerCase() === myEmail).map((t) => t.id)),
+    () =>
+      new Set(
+        teams
+          .filter((t) =>
+            (t.proxy_email || '')
+              .split(',')
+              .map((e) => e.trim().toLowerCase())
+              .includes(myEmail)
+          )
+          .map((t) => t.id)
+      ),
     [teams, myEmail]
   );
   const isProxyForClockTeam = Boolean(teamOnClock && myProxyTeamIds.has(teamOnClock.id));
@@ -933,7 +955,13 @@ export default function DraftPage() {
                         <p className="text-sm font-medium text-ink m-0">{viewedTeam?.name}</p>
                         {viewedTeam?.proxy_email && (
                           <p className="text-xs m-0" style={{ color: '#854f0b' }}>
-                            Proxy: {playersByEmail[viewedTeam.proxy_email]?.full_name || viewedTeam.proxy_email}
+                            Proxy:{' '}
+                            {viewedTeam.proxy_email
+                              .split(',')
+                              .map((e) => e.trim())
+                              .filter(Boolean)
+                              .map((e) => playersByEmail[e]?.full_name || e)
+                              .join(', ')}
                           </p>
                         )}
                       </div>
@@ -948,7 +976,7 @@ export default function DraftPage() {
                           {ownerByTeam[viewingTeamId].name}
                         </p>
                       )}
-                      <div className="grid grid-cols-6 gap-1.5">
+                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
                         {slots.map((entry, i) => {
                           const player = entry?.player;
                           const isClockSlot = isTeamOnClock && i === firstEmptyIndex;
@@ -1077,7 +1105,7 @@ export default function DraftPage() {
                   ))}
                 </div>
                 <div className="bg-white rounded-lg p-3">
-                  <div className="grid grid-cols-6 gap-1.5">
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
                     {roundSlots.map((slot) => {
                       const isSkippedPick = slot.pick && !slot.pick.player_id;
                       const isClockSlot = slot.pickNumber === currentPickNumber && !slot.player && !isSkippedPick;
@@ -1386,8 +1414,36 @@ export default function DraftPage() {
         )}
 
         {/* Main layout: sidebar / card row / my team */}
+        <div className="flex gap-1.5 mb-2 lg:hidden">
+          <button
+            onClick={() => setMobileListTab('available')}
+            className="flex-1 text-xs py-1.5 rounded-md font-medium text-center"
+            style={{
+              background: mobileListTab === 'available' ? '#185fa5' : '#ffffff',
+              color: mobileListTab === 'available' ? '#ffffff' : '#3d4a57',
+              border: '1px solid #d8dde2',
+            }}
+          >
+            Available ({sortedAvailable.length})
+          </button>
+          <button
+            onClick={() => setMobileListTab('myteam')}
+            className="flex-1 text-xs py-1.5 rounded-md font-medium text-center"
+            style={{
+              background: mobileListTab === 'myteam' ? '#185fa5' : '#ffffff',
+              color: mobileListTab === 'myteam' ? '#ffffff' : '#3d4a57',
+              border: '1px solid #d8dde2',
+            }}
+          >
+            Your team{rosterByTeam[profile?.team_id] ? ` (${rosterByTeam[profile.team_id].pickCount})` : ''}
+          </button>
+        </div>
         <div className="flex flex-col lg:flex-row pt-3">
-        <aside className="w-full lg:w-64 flex-shrink-0 order-2 lg:order-1 lg:pr-3 lg:border-r border-line min-h-0">
+        <aside
+          className={`w-full lg:w-64 flex-shrink-0 order-2 lg:order-1 lg:pr-3 lg:border-r border-line min-h-0 ${
+            mobileListTab === 'available' ? 'block' : 'hidden'
+          } lg:block`}
+        >
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-2">
             Players ({sortedAvailable.length} available)
           </p>
@@ -1532,7 +1588,11 @@ export default function DraftPage() {
           const myTeam = teamsById[profile.team_id];
           const myColor = myTeam?.team_color || '#0074ff';
           return (
-            <aside className="w-full lg:w-64 flex-shrink-0 order-3 lg:pl-3 lg:border-l border-line">
+            <aside
+              className={`w-full lg:w-64 flex-shrink-0 order-3 lg:pl-3 lg:border-l border-line ${
+                mobileListTab === 'myteam' ? 'block' : 'hidden'
+              } lg:block`}
+            >
               {myTeam && (
                 <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1 flex items-center gap-1.5">
                   <FootballIcon color={myColor} size={13} />
@@ -1557,7 +1617,15 @@ export default function DraftPage() {
                       </div>
                     )}
                   <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
-                    {rosterByTeam[profile.team_id].players.map((p) => (
+                    {rosterByTeam[profile.team_id].players
+                      .slice()
+                      .sort((a, b) => {
+                        if (!a.draft_pick_number && !b.draft_pick_number) return 0;
+                        if (!a.draft_pick_number) return -1;
+                        if (!b.draft_pick_number) return 1;
+                        return a.draft_pick_number - b.draft_pick_number;
+                      })
+                      .map((p) => (
                       <div
                         key={p.id}
                         onClick={() => openProfile(p.id)}
@@ -1571,6 +1639,11 @@ export default function DraftPage() {
                         <p className="text-[11px] m-0" style={{ color: '#5a6b7d' }}>
                           Off: {p.offensive_position} &middot; Def: {p.defensive_position}
                         </p>
+                        {p.draft_pick_number && (
+                          <p className="text-[11px] m-0" style={{ color: '#5a6b7d' }}>
+                            Rnd {getRound(p.draft_pick_number, numTeams)} &middot; Overall Pick# {p.draft_pick_number}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1766,5 +1839,13 @@ export default function DraftPage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function DraftPage() {
+  return (
+    <Suspense fallback={null}>
+      <DraftPageContent />
+    </Suspense>
   );
 }

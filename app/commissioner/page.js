@@ -463,11 +463,23 @@ export default function CommissionerToolsPage() {
     if (!email) return;
     setSettingProxyTeamId(teamId);
     setProxyMessage(null);
-    const { error } = await supabase.from('teams').update({ proxy_email: email }).eq('id', teamId);
+    let newValue = email;
+    if (myIsPrimary) {
+      const team = teams.find((t) => t.id === teamId);
+      const existing = (team?.proxy_email || '')
+        .split(',')
+        .map((e) => e.trim())
+        .filter(Boolean);
+      if (!existing.some((e) => e.toLowerCase() === email.toLowerCase())) {
+        existing.push(email);
+      }
+      newValue = existing.join(', ');
+    }
+    const { error } = await supabase.from('teams').update({ proxy_email: newValue }).eq('id', teamId);
     if (error) {
       setProxyMessage({ type: 'error', text: error.message });
     } else {
-      setProxyMessage({ type: 'success', text: 'Proxy set.' });
+      setProxyMessage({ type: 'success', text: myIsPrimary ? 'Proxy added.' : 'Proxy set.' });
       fetchData();
     }
     setSettingProxyTeamId(null);
@@ -481,6 +493,27 @@ export default function CommissionerToolsPage() {
       setProxyMessage({ type: 'error', text: error.message });
     } else {
       setProxyMessage({ type: 'success', text: 'Proxy cleared.' });
+      fetchData();
+    }
+    setClearingProxyTeamId(null);
+  }
+
+  async function handleRemoveOneProxy(teamId, emailToRemove) {
+    setClearingProxyTeamId(teamId);
+    setProxyMessage(null);
+    const team = teams.find((t) => t.id === teamId);
+    const remaining = (team?.proxy_email || '')
+      .split(',')
+      .map((e) => e.trim())
+      .filter((e) => e && e.toLowerCase() !== emailToRemove.toLowerCase());
+    const { error } = await supabase
+      .from('teams')
+      .update({ proxy_email: remaining.length ? remaining.join(', ') : null })
+      .eq('id', teamId);
+    if (error) {
+      setProxyMessage({ type: 'error', text: error.message });
+    } else {
+      setProxyMessage({ type: 'success', text: 'Proxy removed.' });
       fetchData();
     }
     setClearingProxyTeamId(null);
@@ -612,6 +645,39 @@ export default function CommissionerToolsPage() {
               : 'Set each team\u2019s draft position, or randomize.'}
           </p>
 
+          <div className="rounded-md bg-white px-3 py-2.5 mb-3 flex items-center justify-between">
+            <p className="text-xs text-muted m-0 pr-3">
+              Auto-randomize the draft order 30 minutes before the draft starts, so it's visible to everyone the
+              moment the pages are open. Turning this on hides manual ordering below, since it's no longer needed.
+            </p>
+            <button
+              onClick={handleToggleAutoRandomize}
+              disabled={savingAutoRandomize || draftLocked}
+              className="flex-shrink-0 rounded-full"
+              style={{
+                width: 44,
+                height: 24,
+                background: settings?.auto_randomize_draft_order ? '#185fa5' : '#d8dde2',
+                border: 'none',
+                position: 'relative',
+              }}
+              aria-label="Toggle auto-randomize draft order"
+            >
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 2,
+                  left: settings?.auto_randomize_draft_order ? 22 : 2,
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  background: '#ffffff',
+                  transition: 'left 0.15s',
+                }}
+              />
+            </button>
+          </div>
+
           {orderMessage && (
             <div
               className="rounded-md px-3 py-2 mb-3 text-xs"
@@ -624,70 +690,39 @@ export default function CommissionerToolsPage() {
             </div>
           )}
 
-          <div className="flex flex-col gap-2 mb-3">
-            {teamOrder.map((t) => (
-              <div key={t.id} className="flex items-center gap-2 bg-white rounded-md px-3 py-2">
-                <FootballIcon color={t.team_color || '#0074ff'} size={14} />
-                <span className="text-xs text-ink flex-1">{t.name}</span>
-                <input
-                  type="number"
-                  min="1"
-                  disabled={draftLocked}
-                  value={t.draft_position ?? ''}
-                  onChange={(e) => {
-                    const val = Number(e.target.value) || '';
-                    setTeamOrder((prev) => prev.map((x) => (x.id === t.id ? { ...x, draft_position: val } : x)));
-                  }}
-                  className="text-xs"
-                  style={{ width: 56 }}
-                />
+          {!settings?.auto_randomize_draft_order && (
+            <>
+              <div className="flex flex-col gap-2 mb-3">
+                {teamOrder.map((t) => (
+                  <div key={t.id} className="flex items-center gap-2 bg-white rounded-md px-3 py-2">
+                    <FootballIcon color={t.team_color || '#0074ff'} size={14} />
+                    <span className="text-xs text-ink flex-1">{t.name}</span>
+                    <input
+                      type="number"
+                      min="1"
+                      disabled={draftLocked}
+                      value={t.draft_position ?? ''}
+                      onChange={(e) => {
+                        const val = Number(e.target.value) || '';
+                        setTeamOrder((prev) => prev.map((x) => (x.id === t.id ? { ...x, draft_position: val } : x)));
+                      }}
+                      className="text-xs"
+                      style={{ width: 56 }}
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <div className="flex gap-2">
-            <button onClick={handleRandomizeOrder} disabled={draftLocked} className="btn-secondary text-xs flex-1">
-              Randomize order
-            </button>
-            <button onClick={handleSaveOrder} disabled={draftLocked || savingOrder} className="btn-primary text-xs flex-1">
-              {savingOrder ? 'Saving…' : 'Save order'}
-            </button>
-          </div>
-
-          <div className="border-t border-line mt-3 pt-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted m-0 pr-3">
-                Auto-randomize the draft order 30 minutes before the draft starts, so it's visible to everyone the
-                moment the pages are open. Manual randomize and Save order above still work right up until then.
-              </p>
-              <button
-                onClick={handleToggleAutoRandomize}
-                disabled={savingAutoRandomize || draftLocked}
-                className="flex-shrink-0 rounded-full"
-                style={{
-                  width: 44,
-                  height: 24,
-                  background: settings?.auto_randomize_draft_order ? '#185fa5' : '#d8dde2',
-                  border: 'none',
-                  position: 'relative',
-                }}
-                aria-label="Toggle auto-randomize draft order"
-              >
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: 2,
-                    left: settings?.auto_randomize_draft_order ? 22 : 2,
-                    width: 20,
-                    height: 20,
-                    borderRadius: '50%',
-                    background: '#ffffff',
-                    transition: 'left 0.15s',
-                  }}
-                />
-              </button>
-            </div>
-          </div>
+              <div className="flex gap-2">
+                <button onClick={handleRandomizeOrder} disabled={draftLocked} className="btn-secondary text-xs flex-1">
+                  Randomize order
+                </button>
+                <button onClick={handleSaveOrder} disabled={draftLocked || savingOrder} className="btn-primary text-xs flex-1">
+                  {savingOrder ? 'Saving…' : 'Save order'}
+                </button>
+              </div>
+            </>
+          )}
           </>
           )}
         </div>
@@ -862,7 +897,14 @@ export default function CommissionerToolsPage() {
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((t) => {
               const owner = ownerByTeamId[t.id];
-              const proxyPlayer = t.proxy_email ? players.find((p) => p.email?.toLowerCase() === t.proxy_email.toLowerCase()) : null;
+              const proxyEmails = (t.proxy_email || '')
+                .split(',')
+                .map((e) => e.trim())
+                .filter(Boolean);
+              const proxyPlayers = proxyEmails.map((email) => ({
+                email,
+                player: players.find((p) => p.email?.toLowerCase() === email.toLowerCase()),
+              }));
               return (
                 <div key={t.id} className="bg-white rounded-md px-3 py-2">
                   <div className="flex items-center gap-2 mb-1">
@@ -874,12 +916,23 @@ export default function CommissionerToolsPage() {
                       </span>
                     </div>
                   </div>
-                  {t.proxy_email && (
-                    <p className="text-[11px] m-0 mb-1.5" style={{ color: '#854f0b' }}>
-                      Proxy: {proxyPlayer?.full_name || t.proxy_email}
-                      {proxyPlayer?.team_id && proxyPlayer.team_id !== t.id ? ` (drafted on ${teamsById[proxyPlayer.team_id]?.name})` : ''}
+                  {proxyPlayers.map(({ email, player }) => (
+                    <p key={email} className="text-[11px] m-0 mb-1.5 flex items-center gap-1.5" style={{ color: '#854f0b' }}>
+                      <span>
+                        Proxy: {player?.full_name || email}
+                        {player?.team_id && player.team_id !== t.id ? ` (drafted on ${teamsById[player.team_id]?.name})` : ''}
+                      </span>
+                      {myIsPrimary && (
+                        <button
+                          onClick={() => handleRemoveOneProxy(t.id, email)}
+                          className="text-[10px] underline"
+                          style={{ color: '#791f1f' }}
+                        >
+                          remove
+                        </button>
+                      )}
                     </p>
-                  )}
+                  ))}
 
                   <div className="flex gap-1.5 flex-wrap">
                     {owner ? (
@@ -905,7 +958,7 @@ export default function CommissionerToolsPage() {
                         Assign GM
                       </button>
                     )}
-                    {t.proxy_email ? (
+                    {proxyEmails.length > 0 && !myIsPrimary ? (
                       <button
                         onClick={() => handleClearProxy(t.id)}
                         disabled={clearingProxyTeamId === t.id}
@@ -914,7 +967,7 @@ export default function CommissionerToolsPage() {
                       >
                         {clearingProxyTeamId === t.id ? '…' : 'Remove proxy'}
                       </button>
-                    ) : (
+                    ) : (proxyEmails.length === 0 || myIsPrimary) ? (
                       <button
                         onClick={() => setExpandedProxyTeamId(expandedProxyTeamId === t.id ? null : t.id)}
                         className="text-[11px] font-medium rounded-md py-1"
@@ -922,7 +975,7 @@ export default function CommissionerToolsPage() {
                       >
                         Add proxy
                       </button>
-                    )}
+                    ) : null}
                     {owner && (
                       <button
                         onClick={() => handleClearGm(t.id, t.name)}

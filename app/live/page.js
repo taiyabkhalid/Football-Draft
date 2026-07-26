@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
@@ -8,24 +9,33 @@ import FootballIcon, { lightenColor } from '../../lib/FootballIcon';
 import PrintRosterButton from '../../lib/PrintRosterButton';
 
 const PUB_LINES_YES = [
+  "I'm just here to throw interceptions.",
   'Already planning the post-game pint.',
-  'First one to the pub after the game, guaranteed.',
+  'My cardio starts next week.',
   'Has a permanent tab running at the local.',
-  'Will be first in line for a cold one after the whistle.',
-  'Knows the Greene King bartender by name!',
-  "Post-game pub session? Wouldn't miss it.",
-  'Already texting the group chat about pub plans.',
-  'Views the pub as part of the sport.',
-  'Never skips the post-game debrief over a pint.',
-  'Has a favorite seat reserved at the pub.',
-  "I'll be in the pub with or without you.",
-  "Can't wait to talk shit about other teams at the pub.",
-  "Pub o'clock is their favorite part of game day.",
+  "Guess I'm their first bad decision.",
   '{gmName} owes me a pint!',
-  'Treats the post-game pint as a tradition, not an option.',
+  "Let's make bad decisions together.",
+  'Knows the Greene King bartender by name!',
+  'I already blame Stef.',
+  'Views the pub as part of the sport.',
+  "Don't worry, I'm coachable. Probably.",
+  'Has a favorite seat reserved at the pub.',
+  "Just throw it deep. We'll figure it out.",
+  "Can't wait to talk shit about other teams at the pub.",
+  "I've lowered everyone's expectations.",
   'Ready to relive every play over a beer.',
+  "I'm built for one good play.",
+  'Will be first in line for a cold one after the whistle.',
+  'First one to the pub after the game, guaranteed.',
+  "Post-game pub session? Wouldn't miss it.",
   'The real MVP of the pub.',
+  'Already texting the group chat about pub plans.',
+  'Never skips the post-game debrief over a pint.',
+  'Treats the post-game pint as a tradition, not an option.',
+  "Pub o'clock is their favorite part of game day.",
   'Has never turned down a post-game round.',
+  "I'll be in the pub with or without you.",
   'Counting down to kickoff and last call equally.',
   'Will be raising a glass no matter the score.',
 ];
@@ -67,6 +77,28 @@ function pubLineFor(player, allPlayers, gmName) {
 const ALL_POSITIONS = ['QB', 'WR', 'C', 'CB', 'Safety', 'LB', 'Rush'];
 const OFFENSIVE_POSITIONS = ['QB', 'WR', 'C'];
 
+const SKIP_MESSAGES_GM_SLOW = [
+  'Skipped. Apparently the toilet couldn\u2019t wait.',
+  'GM went missing. Clock wins.',
+  'Skipped while the GM was "just one minute away."',
+];
+
+const SKIP_MESSAGES_COMMISSIONER = [
+  'Draft waits for no one.',
+  'Another victim of the draft clock.',
+  'Auto-skip activated. Better luck next round.',
+];
+
+function skipReasonMessage(reason, pickNumber) {
+  // Deterministic based on the pick number rather than truly random, so
+  // every spectator sees the exact same message for the same skip instead
+  // of each viewer/render rolling its own answer.
+  if (reason === 'gm_slow') return SKIP_MESSAGES_GM_SLOW[pickNumber % SKIP_MESSAGES_GM_SLOW.length];
+  if (reason === 'commissioner_decision')
+    return SKIP_MESSAGES_COMMISSIONER[pickNumber % SKIP_MESSAGES_COMMISSIONER.length];
+  return null;
+}
+
 function previousTeamLabel(previousTeam) {
   if (!previousTeam) return 'New to Go Mammoth';
   if (previousTeam === 'Other') return 'Played in a different league';
@@ -74,7 +106,7 @@ function previousTeamLabel(previousTeam) {
 }
 
 
-export default function LiveDraftPage() {
+function LiveDraftPageContent() {
   const [teams, setTeams] = useState([]);
   const [players, setPlayers] = useState([]);
   const [inactivePlayers, setInactivePlayers] = useState([]);
@@ -131,7 +163,9 @@ export default function LiveDraftPage() {
     setLoading(false);
   }, []);
 
-  const focusHandledRef = useRef(false);
+  const searchParams = useSearchParams();
+  const focusParam = searchParams.get('focus');
+
   useEffect(() => {
     async function checkMyTeam() {
       const {
@@ -147,18 +181,17 @@ export default function LiveDraftPage() {
       // panel and mode instead of leaving View Rosters collapsed. Wait for
       // loading to finish so draftStatus is actually known before deciding
       // whether "search" means the standalone pre-draft panel or the full
-      // View Rosters search tab.
-      if (typeof window !== 'undefined' && !loading && !focusHandledRef.current) {
-        focusHandledRef.current = true;
-        const params = new URLSearchParams(window.location.search);
-        const focus = params.get('focus');
-        if (focus === 'team' && playerRow?.team_id) {
+      // View Rosters search tab. Reacting to focusParam directly (rather
+      // than a one-time window.location read) means this correctly re-fires
+      // even when clicking a menu link while already on this page.
+      if (!loading) {
+        if (focusParam === 'team' && playerRow?.team_id) {
           setViewByTeamOpen(true);
           setRosterViewMode('team');
           setTimeout(() => {
             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
           }, 300);
-        } else if (focus === 'search') {
+        } else if (focusParam === 'search') {
           if (draftStatus === 'not_started') {
             setSearchPanelOpen(true);
             setTimeout(() => {
@@ -175,7 +208,7 @@ export default function LiveDraftPage() {
       }
     }
     checkMyTeam();
-  }, [loading, draftStatus]);
+  }, [loading, draftStatus, focusParam]);
 
   useEffect(() => {
     fetchAll();
@@ -828,12 +861,9 @@ export default function LiveDraftPage() {
           const isPoppedOutSkip =
             showPopout && activeReveal && slot.pickNumber === activeReveal.pick_number && !activeReveal.player_id;
 
-          const skipReasonMessage =
-            slot.pick?.skip_reason === 'gm_slow'
-              ? 'The GM went to the toilet and never came back.'
-              : slot.pick?.skip_reason === 'commissioner_decision'
-              ? "Commissioner's Decision"
-              : null;
+          const skipMessage = slot.pick?.skip_reason
+            ? skipReasonMessage(slot.pick.skip_reason, slot.pickNumber)
+            : null;
 
           if (isPoppedOut) {
             const player = playersById[activeReveal.player_id];
@@ -937,8 +967,8 @@ export default function LiveDraftPage() {
                     <i className="ti ti-x text-faint text-xl" aria-hidden="true" />
                   </div>
                   <p className="text-xs text-muted m-0 leading-snug">Skipped</p>
-                  {skipReasonMessage && (
-                    <p className="text-[10px] text-faint m-0 mt-0.5 italic px-1">{skipReasonMessage}</p>
+                  {skipMessage && (
+                    <p className="text-[10px] text-faint m-0 mt-0.5 italic px-1">{skipMessage}</p>
                   )}
                 </>
               ) : isClockSlot ? (
@@ -1285,7 +1315,13 @@ export default function LiveDraftPage() {
                       <p className="text-sm font-medium text-ink m-0">{viewedTeam?.name}</p>
                       {viewedTeam?.proxy_email && (
                         <p className="text-xs m-0" style={{ color: '#854f0b' }}>
-                          Proxy: {playersByEmail[viewedTeam.proxy_email]?.full_name || viewedTeam.proxy_email}
+                          Proxy:{' '}
+                          {viewedTeam.proxy_email
+                            .split(',')
+                            .map((e) => e.trim())
+                            .filter(Boolean)
+                            .map((e) => playersByEmail[e]?.full_name || e)
+                            .join(', ')}
                         </p>
                       )}
                     </div>
@@ -1300,7 +1336,7 @@ export default function LiveDraftPage() {
                         {ownerByTeam[viewingTeamId].name}
                       </p>
                     )}
-                    <div className="grid grid-cols-6 gap-1.5">
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
                       {slots.map((entry, i) => {
                         const player = entry?.player;
                         const isClockSlot = isTeamOnClock && i === firstEmptyIndex;
@@ -1429,7 +1465,7 @@ export default function LiveDraftPage() {
                 ))}
               </div>
               <div className="bg-white rounded-lg p-3">
-                <div className="grid grid-cols-6 gap-1.5">
+                <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
                   {roundSlots.map((slot) => {
                     const isSkippedPick = slot.pick && !slot.pick.player_id;
                     const isClockSlot = slot.pickNumber === currentPickNumber && !slot.player && !isSkippedPick;
@@ -1472,9 +1508,7 @@ export default function LiveDraftPage() {
                             <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
                             {slot.pick?.skip_reason && (
                               <p className="text-[8px] text-faint m-0 mt-0.5 italic px-1 leading-tight">
-                                {slot.pick.skip_reason === 'gm_slow'
-                                  ? 'The GM went to the toilet and never came back.'
-                                  : "Commissioner's Decision"}
+                                {skipReasonMessage(slot.pick.skip_reason, slot.pickNumber)}
                               </p>
                             )}
                           </>
@@ -1859,5 +1893,13 @@ export default function LiveDraftPage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function LiveDraftPage() {
+  return (
+    <Suspense fallback={null}>
+      <LiveDraftPageContent />
+    </Suspense>
   );
 }
