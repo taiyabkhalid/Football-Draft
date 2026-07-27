@@ -944,10 +944,30 @@ function LiveDraftPageContent() {
             );
           }
 
+          if (isPoppedOutSkip) {
+            return (
+              <div
+                key={slot.pickNumber}
+                ref={currentPickRef}
+                className="flex-none rounded-2xl p-4 flex flex-col items-center text-center justify-center"
+                style={{ width: 210, border: '4px solid #c0392b', background: '#ffffff' }}
+              >
+                <div className="w-16 h-16 rounded-full bg-surface flex items-center justify-center mb-2.5">
+                  <i className="ti ti-x text-3xl" style={{ color: '#c0392b' }} aria-hidden="true" />
+                </div>
+                <p className="text-[19px] font-medium m-0" style={{ color: '#0c2340' }}>Skipped</p>
+                {skipMessage && (
+                  <p className="text-[13px] italic m-0 mt-1.5" style={{ color: '#5a6b7d' }}>{skipMessage}</p>
+                )}
+              </div>
+            );
+          }
+
+
           return (
             <div
               key={slot.pickNumber}
-              ref={isPoppedOutSkip ? currentPickRef : !activeReveal && slot.pickNumber === currentPickNumber ? currentPickRef : null}
+              ref={!activeReveal && slot.pickNumber === currentPickNumber ? currentPickRef : null}
               onClick={() => slot.player && openProfile(slot.player.id)}
               className={`flex-none rounded-xl p-3 flex flex-col items-center text-center ${
                 isClockSlot && timeExpired ? 'animate-subtle-flash' : ''
