@@ -125,7 +125,7 @@ function LiveDraftPageContent() {
   function scrollRostersIntoView() {
     setTimeout(() => {
       rostersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 60);
+    }, 150);
   }
 
   const [rosterViewMode, setRosterViewMode] = useState('team'); // 'team' | 'round'
@@ -219,7 +219,15 @@ function LiveDraftPageContent() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'draft_settings' }, fetchAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, fetchAll)
       .subscribe();
-    return () => supabase.removeChannel(channel);
+    // Realtime pushes can occasionally get missed (a brief network blip, a
+    // backgrounded tab, etc.) - this fallback poll guarantees the page
+    // self-corrects within a bounded window rather than staying stale
+    // until some unrelated event happens to trigger a refetch.
+    const pollTimer = setInterval(fetchAll, 10000);
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(pollTimer);
+    };
   }, [fetchAll]);
 
   // ---- Reveal queue ----
@@ -236,6 +244,7 @@ function LiveDraftPageContent() {
   const processingRef = useRef(false);
   const initializedRef = useRef(false);
   const prevStatusForResetRef = useRef(null);
+  const queuedThroughRef = useRef(0);
 
   // If the commissioner resets the draft while this tab is still open (no
   // refresh), all of this local reveal-queue state would otherwise be
@@ -247,6 +256,7 @@ function LiveDraftPageContent() {
     if (prev !== null && prev !== 'not_started' && draftStatus === 'not_started') {
       initializedRef.current = false;
       processingRef.current = false;
+      queuedThroughRef.current = 0;
       setRevealedCount(null);
       setQueue([]);
       setActiveReveal(null);
@@ -272,11 +282,19 @@ function LiveDraftPageContent() {
 
   useEffect(() => {
     if (revealedCount === null) return;
-    const alreadyQueuedThrough = revealedCount + queue.length;
-    if (picks.length > alreadyQueuedThrough) {
-      setQueue((q) => [...q, ...picks.slice(alreadyQueuedThrough, picks.length)]);
+    // queuedThroughRef only ever increases when items are actually pushed
+    // onto the queue - unlike revealedCount + queue.length, it can't
+    // transiently double-count a pick that's finished its hold-timer
+    // countdown toward revealedCount but hasn't been shifted off the
+    // queue array yet, which was silently dropping a second pick (e.g. a
+    // skip) that arrived during that window from ever being queued at all.
+    if (queuedThroughRef.current < revealedCount) queuedThroughRef.current = revealedCount;
+    if (picks.length > queuedThroughRef.current) {
+      const newItems = picks.slice(queuedThroughRef.current, picks.length);
+      queuedThroughRef.current = picks.length;
+      setQueue((q) => [...q, ...newItems]);
     }
-  }, [picks, revealedCount, queue.length]);
+  }, [picks, revealedCount]);
 
   useEffect(() => {
     if (processingRef.current || queue.length === 0) return;
@@ -284,29 +302,35 @@ function LiveDraftPageContent() {
     const next = queue[0];
 
     async function run() {
-      setActiveReveal(next);
-      setShowPopout(false);
-      let chimeMs = 2000;
-      const audio = audioRef.current;
-      if (audio) {
-        try {
-          audio.currentTime = 0;
-          await audio.play();
-          if (audio.duration && isFinite(audio.duration)) chimeMs = audio.duration * 1000;
-        } catch (e) {
-          // Autoplay can be blocked before the visitor interacts with the
-          // page at all - the reveal still proceeds on its own timing.
+      try {
+        setActiveReveal(next);
+        setShowPopout(false);
+        let chimeMs = 2000;
+        const audio = audioRef.current;
+        if (audio) {
+          try {
+            audio.currentTime = 0;
+            await audio.play();
+            if (audio.duration && isFinite(audio.duration)) chimeMs = audio.duration * 1000;
+          } catch (e) {
+            // Autoplay can be blocked before the visitor interacts with the
+            // page at all - the reveal still proceeds on its own timing.
+          }
         }
+        await new Promise((resolve) => setTimeout(resolve, chimeMs * 0.75));
+        setShowPopout(true);
+        setRevealedCount((c) => (c ?? 0) + 1);
+        // Hold at least 5 seconds before considering the next queued pick -
+        // if nothing else is queued when that ends, this pick just stays
+        // featured (persistently) until a genuinely new one arrives.
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      } finally {
+        // No matter what happens above - a thrown error, a rejected
+        // promise, anything - the queue must always advance and unlock,
+        // or every reveal after this one silently stops working.
+        setQueue((q) => q.slice(1));
+        processingRef.current = false;
       }
-      await new Promise((resolve) => setTimeout(resolve, chimeMs * 0.75));
-      setShowPopout(true);
-      setRevealedCount((c) => (c ?? 0) + 1);
-      // Hold at least 5 seconds before considering the next queued pick -
-      // if nothing else is queued when that ends, this pick just stays
-      // featured (persistently) until a genuinely new one arrives.
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      setQueue((q) => q.slice(1));
-      processingRef.current = false;
     }
     run();
   }, [queue]);
@@ -1036,6 +1060,7 @@ function LiveDraftPageContent() {
       <div
         className="mx-4 sm:mx-5 mt-4 rounded-xl border border-line bg-surface px-4 py-3"
         ref={rostersSectionRef}
+        style={{ scrollMarginTop: 120 }}
       >
       <button
         onClick={() => {

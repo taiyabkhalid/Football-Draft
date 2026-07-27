@@ -45,7 +45,7 @@ function DraftPageContent() {
   function scrollRostersIntoView() {
     setTimeout(() => {
       rostersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 60);
+    }, 150);
   }
 
   const [rosterViewMode, setRosterViewMode] = useState('team'); // 'team' | 'round'
@@ -65,10 +65,6 @@ function DraftPageContent() {
     if (focusParam === 'search') {
       setTimeout(() => {
         playerSelectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        // The sticky countdown/on-the-clock strip at the top of this page
-        // otherwise sits on top of the search bars once scrolled into view,
-        // hiding them - nudge back up to compensate.
-        setTimeout(() => window.scrollBy({ top: -90, behavior: 'smooth' }), 350);
       }, 300);
     } else if (focusParam === 'myteam' && profile?.team_id) {
       setViewByTeamOpen(true);
@@ -155,7 +151,14 @@ function DraftPageContent() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, fetchAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, fetchAll)
       .subscribe();
-    return () => supabase.removeChannel(channel);
+    // Fallback poll in case a realtime event is ever missed - keeps this
+    // page from staying stale (e.g. the clock going out of sync with the
+    // spectator page) for longer than a bounded window.
+    const pollTimer = setInterval(fetchAll, 10000);
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(pollTimer);
+    };
   }, [authChecked, fetchAll]);
 
   // ---- Derived draft state ----
@@ -839,7 +842,11 @@ function DraftPageContent() {
       ) : null}
 
       {/* Team / Round roster viewer */}
-      <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-surface px-4 py-3" ref={rostersSectionRef}>
+      <div
+        className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-surface px-4 py-3"
+        ref={rostersSectionRef}
+        style={{ scrollMarginTop: 120 }}
+      >
         <button
           onClick={() => setViewByTeamOpen((o) => !o)}
           className="w-full flex items-center justify-between"
@@ -1311,7 +1318,11 @@ function DraftPageContent() {
       {/* Player selection - the main drafting area: search/sort, available players, cards, your team.
           Stays visible after the draft ends so GMs can still search/reference rosters and use
           "Add to my team" for leftover or late-registered players. */}
-      <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5" ref={playerSelectionRef}>
+      <div
+        className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5"
+        ref={playerSelectionRef}
+        style={{ scrollMarginTop: 120 }}
+      >
         <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: '#0c447c' }}>
           Player selection
         </p>
@@ -1414,7 +1425,8 @@ function DraftPageContent() {
         )}
 
         {/* Main layout: sidebar / card row / my team */}
-        <div className="flex gap-1.5 mb-2 lg:hidden">
+        <div className="flex flex-col lg:flex-row pt-3">
+        <div className="order-2 lg:hidden flex gap-1.5 mb-2">
           <button
             onClick={() => setMobileListTab('available')}
             className="flex-1 text-xs py-1.5 rounded-md font-medium text-center"
@@ -1424,7 +1436,7 @@ function DraftPageContent() {
               border: '1px solid #d8dde2',
             }}
           >
-            Available ({sortedAvailable.length})
+            Players Available
           </button>
           <button
             onClick={() => setMobileListTab('myteam')}
@@ -1438,9 +1450,8 @@ function DraftPageContent() {
             Your team{rosterByTeam[profile?.team_id] ? ` (${rosterByTeam[profile.team_id].pickCount})` : ''}
           </button>
         </div>
-        <div className="flex flex-col lg:flex-row pt-3">
         <aside
-          className={`w-full lg:w-64 flex-shrink-0 order-2 lg:order-1 lg:pr-3 lg:border-r border-line min-h-0 ${
+          className={`w-full lg:w-64 flex-shrink-0 order-3 lg:order-1 lg:pr-3 lg:border-r border-line min-h-0 ${
             mobileListTab === 'available' ? 'block' : 'hidden'
           } lg:block`}
         >
@@ -1589,21 +1600,32 @@ function DraftPageContent() {
           const myColor = myTeam?.team_color || '#0074ff';
           return (
             <aside
-              className={`w-full lg:w-64 flex-shrink-0 order-3 lg:pl-3 lg:border-l border-line ${
+              className={`w-full lg:w-64 flex-shrink-0 order-4 lg:order-3 lg:pl-3 lg:border-l border-line ${
                 mobileListTab === 'myteam' ? 'block' : 'hidden'
               } lg:block`}
             >
               {myTeam && (
                 <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1 flex items-center gap-1.5">
                   <FootballIcon color={myColor} size={13} />
-                  Your team: {myTeam?.name || '—'}
+                  {myTeam?.name || '—'}
                 </p>
               )}
               {rosterByTeam[profile.team_id] && (
                 <>
-                  <p className="text-xs text-ink mb-2">
-                    {rosterByTeam[profile.team_id].pickCount} of {picksPerTeam[profile.team_id] ?? maxRounds} &middot;{' '}
-                    {rosterByTeam[profile.team_id].femaleCount} of {minFemale} F
+                  <p
+                    className="text-xs mb-2 flex items-center gap-1"
+                    style={{ color: rosterByTeam[profile.team_id].femaleCount >= minFemale ? '#0c2340' : '#c0392b' }}
+                  >
+                    {rosterByTeam[profile.team_id].femaleCount >= minFemale ? (
+                      <>
+                        {rosterByTeam[profile.team_id].femaleCount} of {minFemale} Females Drafted
+                        <i className="ti ti-circle-check text-sm" style={{ color: '#3b6d11' }} aria-hidden="true" />
+                      </>
+                    ) : (
+                      <>
+                        {rosterByTeam[profile.team_id].femaleCount} of {minFemale} required Females drafted!
+                      </>
+                    )}
                   </p>
                   {draftStatus === 'completed' &&
                     (rosterByTeam[profile.team_id].count < minRoster ||
