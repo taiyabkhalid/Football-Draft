@@ -270,11 +270,14 @@ function LiveDraftPageContent() {
       initializedRef.current = true;
       setRevealedCount(picks.length);
       // Even on a fresh visit where nothing is actively being "revealed" this
-      // session, the most recent real pick should still show as the featured
-      // pop-out card - not just the plain on-the-clock card.
-      const lastRealPick = [...picks].reverse().find((p) => p.player_id);
-      if (lastRealPick) {
-        setActiveReveal(lastRealPick);
+      // session, the most recent pick OR skip should still show as the
+      // featured pop-out card - not just the plain on-the-clock card, and
+      // not filtered down to only real picks (that filtering was the exact
+      // bug that made returning to the page after one or more skips show an
+      // old real pick from before them instead of the actual most recent one).
+      const lastEvent = picks.length > 0 ? picks[picks.length - 1] : null;
+      if (lastEvent) {
+        setActiveReveal(lastEvent);
         setShowPopout(true);
       }
     }
@@ -951,17 +954,39 @@ function LiveDraftPageContent() {
           }
 
           if (isPoppedOutSkip) {
+            const skipTeamColor = slot.team?.team_color || '#0074ff';
+            const gmName = owner?.name;
             return (
               <div
                 key={slot.pickNumber}
                 ref={currentPickRef}
-                className="flex-none rounded-2xl p-4 flex flex-col items-center text-center justify-center"
+                className="flex-none rounded-2xl p-4 flex flex-col items-center text-center"
                 style={{ width: 210, border: '4px solid #c0392b', background: '#ffffff' }}
               >
+                <p className="text-[19px] font-medium m-0 mb-2.5 tracking-wide" style={{ color: '#c0392b' }}>
+                  SKIPPED
+                </p>
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <FootballIcon color={skipTeamColor} size={15} />
+                  <span className="text-sm font-medium" style={{ color: '#0c2340' }}>{slot.team?.name}</span>
+                </div>
+                {gmName && (
+                  <p className="text-[13px] m-0 mb-3" style={{ color: '#5a6b7d' }}>
+                    <span
+                      className="text-[10px] font-medium rounded px-1.5 py-px mr-1"
+                      style={{ color: skipTeamColor, background: lightenColor(skipTeamColor, 0.85) }}
+                    >
+                      GM
+                    </span>
+                    {gmName}
+                  </p>
+                )}
                 <div className="w-16 h-16 rounded-full bg-surface flex items-center justify-center mb-2.5">
                   <i className="ti ti-x text-3xl" style={{ color: '#c0392b' }} aria-hidden="true" />
                 </div>
-                <p className="text-[19px] font-medium m-0" style={{ color: '#0c2340' }}>Skipped</p>
+                <p className="text-[19px] font-medium m-0" style={{ color: '#0c2340' }}>
+                  Round {slot.round} &middot; Pick {pickInRound(slot.pickNumber, numTeams)}
+                </p>
                 {skipMessage && (
                   <p className="text-[13px] italic m-0 mt-1.5" style={{ color: '#5a6b7d' }}>{skipMessage}</p>
                 )}
