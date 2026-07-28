@@ -38,6 +38,7 @@ function DraftPageContent() {
   const [searchAvailability, setSearchAvailability] = useState('');
   const [sortBy, setSortBy] = useState('name');
   const [viewByTeamOpen, setViewByTeamOpen] = useState(false);
+  const [upcomingPicksOpen, setUpcomingPicksOpen] = useState(false);
   const rostersSectionRef = useRef(null);
   const playerSelectionRef = useRef(null);
 
@@ -442,6 +443,14 @@ function DraftPageContent() {
     draftStatus === 'in_progress' &&
     (profile?.team_id === teamOnClock.id || isProxyForClockTeam);
 
+  // Same as canDraft but stays true through a pause too, since "you're on
+  // the clock" is still true information even while paused - only the
+  // ability to actually submit a pick is gated to in_progress.
+  const isMyTurnRegardlessOfPause =
+    teamOnClock &&
+    (draftStatus === 'in_progress' || draftStatus === 'paused') &&
+    (profile?.team_id === teamOnClock.id || isProxyForClockTeam);
+
   const picksRemainingForClockTeam = useMemo(() => {
     if (!teamOnClock) return 0;
     return fullPickOrder.filter(
@@ -693,9 +702,9 @@ function DraftPageContent() {
         <>
           {/* Previous / current / next strip — frozen at top so GMs can always see the clock */}
           <div
-            className="flex flex-col sm:flex-row gap-2 px-4 sm:px-5 pt-4 pb-3"
             style={{ position: 'sticky', top: 0, zIndex: 30, background: '#ffffff', boxShadow: '0 2px 6px rgba(12,35,64,0.08)' }}
           >
+          <div className="flex flex-col sm:flex-row gap-2 px-4 sm:px-5 pt-4 pb-3">
             <div className="flex-1 bg-surface rounded-lg p-3">
               <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Previous pick</p>
               {previousPick ? (
@@ -787,6 +796,30 @@ function DraftPageContent() {
               )}
             </div>
           </div>
+          {isMyTurnRegardlessOfPause && (
+            <div className="px-4 sm:px-5 mt-3 pb-3">
+              <div
+                className="w-full rounded-lg px-3 py-2.5 flex items-center gap-2"
+                style={{ background: draftStatus === 'paused' ? '#854f0b' : '#c0392b' }}
+              >
+                <i
+                  className={`ti ${draftStatus === 'paused' ? 'ti-player-pause' : 'ti-alert-triangle'} text-base flex-shrink-0 ${
+                    draftStatus === 'in_progress' ? 'animate-pulse' : ''
+                  }`}
+                  style={{ color: '#ffffff' }}
+                  aria-hidden="true"
+                />
+                <p className="text-xs font-medium m-0" style={{ color: '#ffffff' }}>
+                  {draftStatus === 'paused'
+                    ? `The draft is paused, but you're on the clock${isProxyForClockTeam ? ` for ${teamOnClock?.name}` : ''} - get ready for when it resumes.`
+                    : isProxyForClockTeam
+                    ? `You're picking for ${teamOnClock?.name} as their draft-day proxy! Make your selection before the timer runs out.`
+                    : "You're on the clock! Make your selection before the timer runs out."}
+                </p>
+              </div>
+            </div>
+          )}
+          </div>
 
           {draftStatus === 'paused' && profile?.role !== 'commissioner' && (
             <div className="mx-4 sm:mx-5 mt-3 rounded-lg px-3 py-2.5 flex gap-2" style={{ background: '#faeeda' }}>
@@ -797,45 +830,39 @@ function DraftPageContent() {
             </div>
           )}
 
-          {canDraft && (
-            <div
-              className="mx-4 sm:mx-5 mt-3 rounded-lg px-3 py-2.5 flex items-center gap-2 animate-pulse"
-              style={{ background: '#c0392b' }}
-            >
-              <i className="ti ti-alert-triangle text-base flex-shrink-0" style={{ color: '#ffffff' }} aria-hidden="true" />
-              <p className="text-xs font-medium m-0" style={{ color: '#ffffff' }}>
-                {isProxyForClockTeam
-                  ? `You're picking for ${teamOnClock?.name} as their draft-day proxy! Make your selection before the timer runs out.`
-                  : "You're on the clock! Make your selection before the timer runs out."}
-              </p>
-            </div>
-          )}
-
           {/* Upcoming picks strip */}
           <div className="px-4 sm:px-5 pt-3">
-            <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Upcoming picks</p>
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {upcomingPicks.map((n) => {
-                const color = n.team?.team_color || '#0074ff';
-                return (
-                  <button
-                    key={n.pickNumber}
-                    type="button"
-                    onClick={() => n.team && jumpToTeam(n.team.id)}
-                    className="flex-none rounded-md flex flex-col items-center justify-center text-center px-1.5"
-                    style={{ width: 100, height: 44, background: lightenColor(color, 0.85), color: '#0c2340', border: 'none', cursor: n.team ? 'pointer' : 'default' }}
-                  >
-                    <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
-                      <FootballIcon color={color} size={11} />
-                      <span className="truncate">{n.team?.name || '—'}</span>
-                    </span>
-                    <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
-                      Rnd {n.round} . Pick {pickInRound(n.pickNumber, numTeams)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            <button
+              onClick={() => setUpcomingPicksOpen((o) => !o)}
+              className="w-full flex items-center justify-between mb-1"
+            >
+              <p className="text-[10px] uppercase tracking-wide text-muted m-0">Upcoming picks</p>
+              <i className={`ti ti-chevron-${upcomingPicksOpen ? 'up' : 'down'} text-sm text-muted`} aria-hidden="true" />
+            </button>
+            {upcomingPicksOpen && (
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {upcomingPicks.map((n) => {
+                  const color = n.team?.team_color || '#0074ff';
+                  return (
+                    <button
+                      key={n.pickNumber}
+                      type="button"
+                      onClick={() => n.team && jumpToTeam(n.team.id)}
+                      className="flex-none rounded-md flex flex-col items-center justify-center text-center px-1.5"
+                      style={{ width: 100, height: 44, background: lightenColor(color, 0.85), color: '#0c2340', border: 'none', cursor: n.team ? 'pointer' : 'default' }}
+                    >
+                      <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
+                        <FootballIcon color={color} size={11} />
+                        <span className="truncate">{n.team?.name || '—'}</span>
+                      </span>
+                      <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
+                        Rnd {n.round} . Pick {pickInRound(n.pickNumber, numTeams)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="border-t border-line mx-4 sm:mx-5 mt-1" />
@@ -996,13 +1023,7 @@ function DraftPageContent() {
                       </div>
                       {ownerByTeam[viewingTeamId] && (
                         <p className="text-[11px] m-0 mb-2" style={{ color: '#185fa5' }}>
-                          GM:{' '}
-                          <i
-                            className={ownerByTeam[viewingTeamId].role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'}
-                            style={{ color: teamColor }}
-                            aria-hidden="true"
-                          />{' '}
-                          {ownerByTeam[viewingTeamId].name}
+                          GM: {ownerByTeam[viewingTeamId].name}
                         </p>
                       )}
                       <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
@@ -1480,7 +1501,7 @@ function DraftPageContent() {
               border: '1px solid #d8dde2',
             }}
           >
-            Your team{rosterByTeam[profile?.team_id] ? ` (${rosterByTeam[profile.team_id].pickCount})` : ''}
+            Your team{rosterByTeam[profile?.team_id] ? ` (${rosterByTeam[profile.team_id].count})` : ''}
           </button>
         </div>
         <aside
@@ -1534,9 +1555,28 @@ function DraftPageContent() {
         </aside>
 
         <section className="flex-1 min-w-0 order-1 lg:order-2 lg:px-3">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-2">
-            {draftStatus === 'completed' ? 'Available players' : `Round ${currentRound}, pick ${currentPickNumber}`}
-          </p>
+          <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-muted m-0">
+              {draftStatus === 'completed' ? 'Available players' : `Round ${currentRound}, pick ${currentPickNumber}`}
+            </p>
+            {(draftStatus === 'in_progress' || draftStatus === 'paused') && profile?.team_id && rosterByTeam[profile.team_id] && (
+              <p
+                className="text-[11px] m-0 flex items-center gap-1"
+                style={{ color: rosterByTeam[profile.team_id].femaleCount >= minFemale ? '#0c2340' : '#c0392b' }}
+              >
+                {rosterByTeam[profile.team_id].femaleCount >= minFemale ? (
+                  <>
+                    {rosterByTeam[profile.team_id].femaleCount} of {minFemale} Females Drafted
+                    <i className="ti ti-circle-check text-sm" style={{ color: '#3b6d11' }} aria-hidden="true" />
+                  </>
+                ) : (
+                  <>
+                    {rosterByTeam[profile.team_id].femaleCount} of {minFemale} required Females drafted!
+                  </>
+                )}
+              </p>
+            )}
+          </div>
           <div className="flex gap-3 overflow-x-auto pb-3">
             {boardList.map((p) => {
               const isDrafted = !!p.team_id;

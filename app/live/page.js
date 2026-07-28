@@ -997,18 +997,18 @@ function LiveDraftPageContent() {
                 </p>
                 <div className="flex items-center justify-center gap-1.5 mb-1">
                   <FootballIcon color={skipTeamColor} size={15} />
-                  <span className="text-sm font-medium" style={{ color: '#0c2340' }}>{slot.team?.name}</span>
+                  <span className="text-[13px] font-semibold" style={{ color: '#0c2340' }}>{slot.team?.name}</span>
                 </div>
                 {gmName && (
-                  <p className="text-[13px] m-0 mb-3" style={{ color: '#5a6b7d' }}>
+                  <div className="flex items-center justify-center gap-1 mb-3 w-full">
                     <span
-                      className="text-[10px] font-medium rounded px-1.5 py-px mr-1"
+                      className="text-[10px] font-medium rounded px-1.5 py-px"
                       style={{ color: skipTeamColor, background: lightenColor(skipTeamColor, 0.85) }}
                     >
                       GM
                     </span>
-                    {gmName}
-                  </p>
+                    <span className="text-[13px]" style={{ color: '#5a6b7d' }}>{gmName}</span>
+                  </div>
                 )}
                 <div className="w-16 h-16 rounded-full bg-surface flex items-center justify-center mb-2.5">
                   <i className="ti ti-x text-3xl" style={{ color: '#c0392b' }} aria-hidden="true" />
@@ -1116,7 +1116,7 @@ function LiveDraftPageContent() {
                         Drafted by: {slot.team?.name}
                       </span>
                     </div>
-                    {owner && <span className="text-[10px] text-muted">({owner.name})</span>}
+                    {owner && <span className="text-[10px] text-muted text-center w-full">GM: {owner.name}</span>}
                   </>
                 ) : !isClockSlot ? (
                   <div className="flex flex-col items-center gap-0.5 min-w-0 w-full">
@@ -1432,13 +1432,7 @@ function LiveDraftPageContent() {
                     </div>
                     {ownerByTeam[viewingTeamId] && (
                       <p className="text-[11px] m-0 mb-2" style={{ color: '#185fa5' }}>
-                        GM:{' '}
-                        <i
-                          className={ownerByTeam[viewingTeamId].role === 'commissioner' ? 'ti ti-star-filled' : 'ti ti-star'}
-                          style={{ color: teamColor }}
-                          aria-hidden="true"
-                        />{' '}
-                        {ownerByTeam[viewingTeamId].name}
+                        GM: {ownerByTeam[viewingTeamId].name}
                       </p>
                     )}
                     <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
