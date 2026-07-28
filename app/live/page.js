@@ -116,6 +116,10 @@ function LiveDraftPageContent() {
   const [profiles, setProfiles] = useState([]);
   const [viewingTeamId, setViewingTeamId] = useState(null);
   const [myTeamId, setMyTeamId] = useState(null);
+  const [myEmail, setMyEmail] = useState(null);
+  const [myRole, setMyRole] = useState(null);
+  const [teamRankings, setTeamRankings] = useState([]);
+  const [rankingToast, setRankingToast] = useState(false);
   const [loading, setLoading] = useState(true);
   const [viewByTeamOpen, setViewByTeamOpen] = useState(false);
   const rostersSectionRef = useRef(null);
@@ -172,7 +176,12 @@ function LiveDraftPageContent() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: playerRow } = await supabase.from('players').select('team_id').eq('email', user.email).single();
+      setMyEmail(user.email?.toLowerCase() || null);
+      const [{ data: playerRow }, { data: profileRow }] = await Promise.all([
+        supabase.from('players').select('team_id').eq('email', user.email).single(),
+        supabase.from('profiles').select('role, team_id').eq('email', user.email.toLowerCase()).maybeSingle(),
+      ]);
+      setMyRole(profileRow?.role || null);
       if (playerRow?.team_id) {
         setMyTeamId(playerRow.team_id);
         setViewingTeamId(playerRow.team_id);
@@ -477,6 +486,63 @@ function LiveDraftPageContent() {
     }
     return map;
   }, [profiles, playersByEmail]);
+
+  const myActingTeamId = useMemo(() => {
+    if (!myEmail) return null;
+    if ((myRole === 'gm' || myRole === 'commissioner') && myTeamId) return myTeamId;
+    const proxyTeam = teams.find((t) =>
+      (t.proxy_email || '')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .includes(myEmail)
+    );
+    return proxyTeam?.id || null;
+  }, [myEmail, myRole, myTeamId, teams]);
+
+  const fetchRankings = useCallback(async () => {
+    if (!myActingTeamId) {
+      setTeamRankings([]);
+      return;
+    }
+    const { data } = await supabase
+      .from('team_rankings')
+      .select('*')
+      .eq('team_id', myActingTeamId)
+      .order('rank_order', { ascending: true });
+    setTeamRankings(data || []);
+  }, [myActingTeamId]);
+
+  useEffect(() => {
+    if (!myActingTeamId) return;
+    fetchRankings();
+    const channel = supabase
+      .channel(`team-rankings-${myActingTeamId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'team_rankings', filter: `team_id=eq.${myActingTeamId}` },
+        fetchRankings
+      )
+      .subscribe();
+    const pollTimer = setInterval(fetchRankings, 10000);
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(pollTimer);
+    };
+  }, [myActingTeamId, fetchRankings]);
+
+  const rankedPlayerIds = useMemo(() => new Set(teamRankings.map((r) => r.player_id)), [teamRankings]);
+
+  async function toggleRanking(playerId) {
+    if (!myActingTeamId) return;
+    if (rankedPlayerIds.has(playerId)) {
+      await supabase.rpc('remove_from_rankings', { p_player_id: playerId });
+    } else {
+      await supabase.rpc('add_to_rankings', { p_player_id: playerId });
+      setRankingToast(true);
+      setTimeout(() => setRankingToast(false), 2200);
+    }
+    fetchRankings();
+  }
 
   const roleByEmail = useMemo(() => {
     const map = {};
@@ -848,7 +914,7 @@ function LiveDraftPageContent() {
                   <button
                     key={p.id}
                     onClick={() => openProfile(p.id)}
-                    className="flex-none rounded-xl overflow-hidden flex flex-col items-center text-center"
+                    className="flex-none rounded-xl overflow-hidden flex flex-col items-center text-center relative"
                     style={{
                       width: 130,
                       background: !p.is_active ? '#f1f3f6' : drafted ? '#f1f3f6' : '#ffffff',
@@ -856,6 +922,24 @@ function LiveDraftPageContent() {
                       opacity: !p.is_active ? 0.6 : 1,
                     }}
                   >
+                    {myActingTeamId && !drafted && p.is_active && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleRanking(p.id);
+                        }}
+                        className="absolute top-1.5 right-1.5 z-10"
+                        aria-label={rankedPlayerIds.has(p.id) ? 'Remove from My Rankings' : 'Add to My Rankings'}
+                      >
+                        <i
+                          className={`ti ${rankedPlayerIds.has(p.id) ? 'ti-star-filled' : 'ti-star'} text-base`}
+                          style={{ color: rankedPlayerIds.has(p.id) ? '#f3c37a' : '#8b97a3' }}
+                          aria-hidden="true"
+                        />
+                      </span>
+                    )}
                     {!p.is_active ? (
                       <div className="w-full py-1" style={{ background: '#d8dde2' }}>
                         <p className="text-[10px] font-semibold m-0" style={{ color: '#3d4a57' }}>
@@ -1118,6 +1202,16 @@ function LiveDraftPageContent() {
                     </div>
                     {owner && <span className="text-[10px] text-muted text-center w-full">GM: {owner.name}</span>}
                   </>
+                ) : isSkippedPick ? (
+                  <>
+                    <div className="flex items-center gap-1.5 justify-center">
+                      <FootballIcon color={teamColor} size={16} />
+                      <span className="text-[13px] font-semibold leading-none" style={{ color: '#0c2340' }}>
+                        {slot.team?.name}
+                      </span>
+                    </div>
+                    {owner && <span className="text-[10px] text-muted text-center w-full">GM: {owner.name}</span>}
+                  </>
                 ) : !isClockSlot ? (
                   <div className="flex flex-col items-center gap-0.5 min-w-0 w-full">
                     <div className="flex items-center gap-1.5 justify-center min-w-0 w-full">
@@ -1322,7 +1416,7 @@ function LiveDraftPageContent() {
                     <button
                       key={p.id}
                       onClick={() => openProfile(p.id)}
-                      className="flex-none rounded-xl overflow-hidden flex flex-col items-center text-center"
+                      className="flex-none rounded-xl overflow-hidden flex flex-col items-center text-center relative"
                       style={{
                         width: 130,
                         background: !p.is_active ? '#f1f3f6' : drafted ? '#f1f3f6' : '#ffffff',
@@ -1330,6 +1424,24 @@ function LiveDraftPageContent() {
                         opacity: !p.is_active ? 0.6 : 1,
                       }}
                     >
+                      {myActingTeamId && !drafted && p.is_active && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleRanking(p.id);
+                          }}
+                          className="absolute top-1.5 right-1.5 z-10"
+                          aria-label={rankedPlayerIds.has(p.id) ? 'Remove from My Rankings' : 'Add to My Rankings'}
+                        >
+                          <i
+                            className={`ti ${rankedPlayerIds.has(p.id) ? 'ti-star-filled' : 'ti-star'} text-base`}
+                            style={{ color: rankedPlayerIds.has(p.id) ? '#f3c37a' : '#8b97a3' }}
+                            aria-hidden="true"
+                          />
+                        </span>
+                      )}
                       {!p.is_active ? (
                         <div className="w-full py-1" style={{ background: '#d8dde2' }}>
                           <p className="text-[10px] font-semibold m-0" style={{ color: '#3d4a57' }}>
@@ -1881,13 +1993,28 @@ function LiveDraftPageContent() {
                   <p className="text-[11px] text-muted m-0">{p.gender}</p>
                 </div>
               </div>
-              <button
-                onClick={() => closeProfile(id)}
-                className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center hover:bg-surface"
-                aria-label="Close"
-              >
-                <i className="ti ti-x text-base text-muted" aria-hidden="true" />
-              </button>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {myActingTeamId && !p.team_id && p.is_active !== false && (
+                  <button
+                    onClick={() => toggleRanking(p.id)}
+                    className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-surface"
+                    aria-label={rankedPlayerIds.has(p.id) ? 'Remove from My Rankings' : 'Add to My Rankings'}
+                  >
+                    <i
+                      className={`ti ${rankedPlayerIds.has(p.id) ? 'ti-star-filled' : 'ti-star'} text-base`}
+                      style={{ color: rankedPlayerIds.has(p.id) ? '#f3c37a' : '#8b97a3' }}
+                      aria-hidden="true"
+                    />
+                  </button>
+                )}
+                <button
+                  onClick={() => closeProfile(id)}
+                  className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-surface"
+                  aria-label="Close"
+                >
+                  <i className="ti ti-x text-base text-muted" aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
             <div className="px-4 py-3 flex flex-col gap-2.5">
@@ -1989,6 +2116,18 @@ function LiveDraftPageContent() {
               View final rosters
             </button>
           </div>
+        </div>
+      )}
+
+      {rankingToast && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white rounded-lg px-4 py-2.5 flex items-center gap-2"
+          style={{ boxShadow: '0 8px 24px rgba(12,35,64,0.25)', zIndex: 100 }}
+        >
+          <i className="ti ti-star-filled text-base" style={{ color: '#f3c37a' }} aria-hidden="true" />
+          <p className="text-xs font-medium m-0" style={{ color: '#0c2340' }}>
+            Added to your My Rankings
+          </p>
         </div>
       )}
     </main>

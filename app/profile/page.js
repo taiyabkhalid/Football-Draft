@@ -191,13 +191,13 @@ export default function ProfilePage() {
                 {player.height_inches}" &middot; {player.gender}
               </p>
               {role === 'commissioner' && (
-                <p className="text-[11px] font-medium m-0 mt-1 flex items-center gap-1" style={{ color: '#185fa5' }}>
-                  <i className="ti ti-star-filled text-sm" aria-hidden="true" /> Commish
+                <p className="text-[11px] font-medium m-0 mt-1" style={{ color: '#185fa5' }}>
+                  Commish
                 </p>
               )}
               {role === 'gm' && (
-                <p className="text-[11px] font-medium m-0 mt-1 flex items-center gap-1" style={{ color: '#185fa5' }}>
-                  <i className="ti ti-star text-sm" aria-hidden="true" /> General Manager
+                <p className="text-[11px] font-medium m-0 mt-1" style={{ color: '#185fa5' }}>
+                  General Manager
                 </p>
               )}
             </div>

@@ -1168,7 +1168,6 @@ export default function CommissionerToolsPage() {
                       <span className="text-xs text-ink truncate">{teamsById[g.team_id]?.name || 'No team (admin only)'}</span>
                     </div>
                     <span className="text-xs text-muted flex items-center gap-1 flex-shrink-0">
-                      <i className="ti ti-star-filled" aria-hidden="true" />
                       {g.playerName || g.email}
                       {g.is_primary && (
                         <span

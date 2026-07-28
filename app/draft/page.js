@@ -27,6 +27,8 @@ function DraftPageContent() {
   const [teams, setTeams] = useState([]);
   const [players, setPlayers] = useState([]);
   const [inactivePlayers, setInactivePlayers] = useState([]);
+  const [teamRankings, setTeamRankings] = useState([]);
+  const [rankingToast, setRankingToast] = useState(false);
   const [picks, setPicks] = useState([]);
   const [settings, setSettings] = useState(null);
   const [profiles, setProfiles] = useState([]);
@@ -63,6 +65,7 @@ function DraftPageContent() {
   const [actionError, setActionError] = useState(null);
   const [viewingTeamId, setViewingTeamId] = useState(null);
   const [mobileListTab, setMobileListTab] = useState('available');
+  const [leftColumnTab, setLeftColumnTab] = useState('available');
 
   useEffect(() => {
     if (focusParam === 'search') {
@@ -438,6 +441,71 @@ function DraftPageContent() {
     [teams, myEmail]
   );
   const isProxyForClockTeam = Boolean(teamOnClock && myProxyTeamIds.has(teamOnClock.id));
+  const myActingTeamId = profile?.team_id || [...myProxyTeamIds][0] || null;
+
+  const fetchRankings = useCallback(async () => {
+    if (!myActingTeamId) {
+      setTeamRankings([]);
+      return;
+    }
+    const { data } = await supabase
+      .from('team_rankings')
+      .select('*')
+      .eq('team_id', myActingTeamId)
+      .order('rank_order', { ascending: true });
+    setTeamRankings(data || []);
+  }, [myActingTeamId]);
+
+  useEffect(() => {
+    if (!authChecked || !myActingTeamId) return;
+    fetchRankings();
+    const channel = supabase
+      .channel(`team-rankings-${myActingTeamId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'team_rankings', filter: `team_id=eq.${myActingTeamId}` },
+        fetchRankings
+      )
+      .subscribe();
+    const pollTimer = setInterval(fetchRankings, 10000);
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(pollTimer);
+    };
+  }, [authChecked, myActingTeamId, fetchRankings]);
+
+  const rankedPlayerIds = useMemo(() => new Set(teamRankings.map((r) => r.player_id)), [teamRankings]);
+
+  const allPlayersById = useMemo(() => {
+    const map = {};
+    for (const p of [...players, ...inactivePlayers]) map[p.id] = p;
+    return map;
+  }, [players, inactivePlayers]);
+
+  const rankedPlayersOrdered = useMemo(() => {
+    const withPlayers = teamRankings.map((r) => ({ ...r, player: allPlayersById[r.player_id] })).filter((r) => r.player);
+    const available = withPlayers.filter((r) => !r.player.team_id);
+    const drafted = withPlayers.filter((r) => r.player.team_id);
+    return [...available, ...drafted];
+  }, [teamRankings, allPlayersById]);
+
+  async function toggleRanking(playerId) {
+    if (!myActingTeamId) return;
+    if (rankedPlayerIds.has(playerId)) {
+      await supabase.rpc('remove_from_rankings', { p_player_id: playerId });
+    } else {
+      await supabase.rpc('add_to_rankings', { p_player_id: playerId });
+      setRankingToast(true);
+      setTimeout(() => setRankingToast(false), 2200);
+    }
+    fetchRankings();
+  }
+
+  async function saveRankingOrder(orderedIds) {
+    await supabase.rpc('reorder_rankings', { p_player_ids: orderedIds });
+    fetchRankings();
+  }
+
   const canDraft =
     teamOnClock &&
     draftStatus === 'in_progress' &&
@@ -1480,28 +1548,47 @@ function DraftPageContent() {
 
         {/* Main layout: sidebar / card row / my team */}
         <div className="flex flex-col lg:flex-row pt-3">
-        <div className="order-2 lg:hidden flex gap-1.5 mb-2">
+        <div className="order-2 lg:hidden flex gap-1 mb-2">
           <button
-            onClick={() => setMobileListTab('available')}
-            className="flex-1 text-xs py-1.5 rounded-md font-medium text-center"
+            onClick={() => {
+              setMobileListTab('available');
+              setLeftColumnTab('available');
+            }}
+            className="flex-1 text-[10.5px] py-1.5 px-0.5 rounded-md font-medium text-center"
             style={{
-              background: mobileListTab === 'available' ? '#185fa5' : '#ffffff',
-              color: mobileListTab === 'available' ? '#ffffff' : '#3d4a57',
+              background: mobileListTab === 'available' && leftColumnTab === 'available' ? '#185fa5' : '#ffffff',
+              color: mobileListTab === 'available' && leftColumnTab === 'available' ? '#ffffff' : '#3d4a57',
               border: '1px solid #d8dde2',
             }}
           >
-            Players Available
+            Available ({sortedAvailable.length})
           </button>
+          {myActingTeamId && (
+            <button
+              onClick={() => {
+                setMobileListTab('available');
+                setLeftColumnTab('rankings');
+              }}
+              className="flex-1 text-[10.5px] py-1.5 px-0.5 rounded-md font-medium text-center"
+              style={{
+                background: mobileListTab === 'available' && leftColumnTab === 'rankings' ? '#185fa5' : '#ffffff',
+                color: mobileListTab === 'available' && leftColumnTab === 'rankings' ? '#ffffff' : '#3d4a57',
+                border: '1px solid #d8dde2',
+              }}
+            >
+              My Rankings{teamRankings.length ? ` (${teamRankings.length})` : ''}
+            </button>
+          )}
           <button
             onClick={() => setMobileListTab('myteam')}
-            className="flex-1 text-xs py-1.5 rounded-md font-medium text-center"
+            className="flex-1 text-[10.5px] py-1.5 px-0.5 rounded-md font-medium text-center"
             style={{
               background: mobileListTab === 'myteam' ? '#185fa5' : '#ffffff',
               color: mobileListTab === 'myteam' ? '#ffffff' : '#3d4a57',
               border: '1px solid #d8dde2',
             }}
           >
-            Your team{rosterByTeam[profile?.team_id] ? ` (${rosterByTeam[profile.team_id].count})` : ''}
+            My Team{rosterByTeam[profile?.team_id] ? ` (${rosterByTeam[profile.team_id].count})` : ''}
           </button>
         </div>
         <aside
@@ -1509,9 +1596,34 @@ function DraftPageContent() {
             mobileListTab === 'available' ? 'block' : 'hidden'
           } lg:block`}
         >
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-2">
-            Players ({sortedAvailable.length} available)
-          </p>
+          <div className="flex gap-1.5 mb-2">
+            <button
+              onClick={() => setLeftColumnTab('available')}
+              className="flex-1 text-[11px] py-1.5 rounded-md font-medium text-center"
+              style={{
+                background: leftColumnTab === 'available' ? '#185fa5' : '#ffffff',
+                color: leftColumnTab === 'available' ? '#ffffff' : '#3d4a57',
+                border: '1px solid #d8dde2',
+              }}
+            >
+              Available ({sortedAvailable.length})
+            </button>
+            {myActingTeamId && (
+              <button
+                onClick={() => setLeftColumnTab('rankings')}
+                className="flex-1 text-[11px] py-1.5 rounded-md font-medium text-center"
+                style={{
+                  background: leftColumnTab === 'rankings' ? '#185fa5' : '#ffffff',
+                  color: leftColumnTab === 'rankings' ? '#ffffff' : '#3d4a57',
+                  border: '1px solid #d8dde2',
+                }}
+              >
+                My Rankings{teamRankings.length ? ` (${teamRankings.length})` : ''}
+              </button>
+            )}
+          </div>
+
+          {leftColumnTab === 'available' && (
           <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
             {boardList.map((p) => {
               const isDrafted = !!p.team_id;
@@ -1520,11 +1632,27 @@ function DraftPageContent() {
                 <div
                   key={p.id}
                   onClick={() => openProfile(p.id)}
-                  className={`rounded-md px-2.5 py-2 cursor-pointer hover:brightness-95 ${
+                  className={`relative rounded-md px-2.5 py-2 cursor-pointer hover:brightness-95 ${
                     isInactive ? 'bg-[#e9ecef] opacity-60' : isDrafted ? 'bg-[#e9ecef] opacity-70' : 'bg-surface'
                   }`}
                 >
-                  <p className="text-xs font-medium text-ink m-0">{p.full_name}</p>
+                  {myActingTeamId && !isDrafted && !isInactive && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleRanking(p.id);
+                      }}
+                      className="absolute top-1.5 right-1.5"
+                      aria-label={rankedPlayerIds.has(p.id) ? 'Remove from My Rankings' : 'Add to My Rankings'}
+                    >
+                      <i
+                        className={`ti ${rankedPlayerIds.has(p.id) ? 'ti-star-filled' : 'ti-star'} text-base`}
+                        style={{ color: rankedPlayerIds.has(p.id) ? '#f3c37a' : '#8b97a3' }}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  )}
+                  <p className="text-xs font-medium text-ink m-0 pr-4">{p.full_name}</p>
                   {isInactive ? (
                     <p className="text-[11px] font-medium m-0" style={{ color: '#5a6b7d' }}>
                       Inactive
@@ -1552,6 +1680,118 @@ function DraftPageContent() {
               );
             })}
           </div>
+          )}
+
+          {leftColumnTab === 'rankings' && myActingTeamId && (
+            rankedPlayersOrdered.length === 0 ? (
+              <p className="text-xs text-faint italic">
+                Tap the star on any player card to add them to your rankings.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
+                {rankedPlayersOrdered.map((r) => {
+                  const p = r.player;
+                  const isDrafted = !!p.team_id;
+                  const availableIds = rankedPlayersOrdered.filter((x) => !x.player.team_id).map((x) => x.player_id);
+                  const posInAvailable = availableIds.indexOf(p.id);
+                  const disabled = !canDraft || (mustDraftFemale && p.gender !== 'F') || drafting === p.id;
+                  return (
+                    <div
+                      key={p.id}
+                      className="rounded-md px-2.5 py-2"
+                      style={{ background: isDrafted ? '#e9ecef' : '#f1f3f6', opacity: isDrafted ? 0.65 : 1 }}
+                    >
+                      <div className="flex items-start gap-2">
+                        {!isDrafted && (
+                          <div className="flex flex-col flex-shrink-0">
+                            <button
+                              onClick={() => {
+                                if (posInAvailable <= 0) return;
+                                const ids = rankedPlayersOrdered.map((x) => x.player_id);
+                                const from = ids.indexOf(p.id);
+                                const swapWith = ids.indexOf(availableIds[posInAvailable - 1]);
+                                [ids[from], ids[swapWith]] = [ids[swapWith], ids[from]];
+                                saveRankingOrder(ids);
+                              }}
+                              disabled={posInAvailable <= 0}
+                              aria-label="Move up"
+                              className="disabled:opacity-30"
+                            >
+                              <i className="ti ti-chevron-up text-xs" style={{ color: '#5a6b7d' }} aria-hidden="true" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (posInAvailable >= availableIds.length - 1) return;
+                                const ids = rankedPlayersOrdered.map((x) => x.player_id);
+                                const from = ids.indexOf(p.id);
+                                const swapWith = ids.indexOf(availableIds[posInAvailable + 1]);
+                                [ids[from], ids[swapWith]] = [ids[swapWith], ids[from]];
+                                saveRankingOrder(ids);
+                              }}
+                              disabled={posInAvailable >= availableIds.length - 1}
+                              aria-label="Move down"
+                              className="disabled:opacity-30"
+                            >
+                              <i className="ti ti-chevron-down text-xs" style={{ color: '#5a6b7d' }} aria-hidden="true" />
+                            </button>
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openProfile(p.id)}>
+                          {isDrafted ? (
+                            <>
+                              <p className="text-[10px] font-semibold m-0" style={{ color: '#3d4a57' }}>
+                                Drafted By: {teamsById[p.team_id]?.name || 'Unknown'}
+                              </p>
+                              <p className="text-xs font-medium m-0 italic" style={{ color: '#5a6b7d' }}>
+                                {p.full_name}
+                              </p>
+                              {p.draft_pick_number && (
+                                <p className="text-[10px] italic m-0" style={{ color: '#8b97a3' }}>
+                                  Rnd {getRound(p.draft_pick_number, numTeams)} &middot; Overall Pick# {p.draft_pick_number}
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-xs font-medium text-ink m-0 truncate">{p.full_name}</p>
+                              <p className="text-[10px] text-muted m-0">
+                                {p.offensive_position} / {p.defensive_position} &middot; {p.gender}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {!isDrafted && (
+                        <div className="flex gap-1.5 mt-1.5">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              draftPlayer(p);
+                            }}
+                            disabled={disabled}
+                            className="flex-1 text-[10px] font-medium rounded py-1"
+                            style={{ background: disabled ? '#d8dde2' : '#185fa5', color: '#ffffff', border: 'none' }}
+                          >
+                            {drafting === p.id ? 'Drafting…' : 'Draft Player'}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleRanking(p.id);
+                            }}
+                            className="text-[10px] px-2"
+                            style={{ color: '#8b97a3' }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
         </aside>
 
         <section className="flex-1 min-w-0 order-1 lg:order-2 lg:px-3">
@@ -1587,7 +1827,7 @@ function DraftPageContent() {
                 <div
                   key={p.id}
                   onClick={() => openProfile(p.id)}
-                  className="flex-none rounded-xl p-3.5 flex flex-col cursor-pointer"
+                  className="flex-none rounded-xl p-3.5 flex flex-col cursor-pointer relative"
                   style={{
                     width: 'calc(33.333% - 8px)',
                     minWidth: 190,
@@ -1597,6 +1837,22 @@ function DraftPageContent() {
                     opacity: isInactive ? 0.6 : isDrafted ? 0.65 : 1,
                   }}
                 >
+                  {myActingTeamId && !isDrafted && !isInactive && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleRanking(p.id);
+                      }}
+                      className="absolute top-2.5 right-2.5"
+                      aria-label={rankedPlayerIds.has(p.id) ? 'Remove from My Rankings' : 'Add to My Rankings'}
+                    >
+                      <i
+                        className={`ti ${rankedPlayerIds.has(p.id) ? 'ti-star-filled' : 'ti-star'} text-lg`}
+                        style={{ color: rankedPlayerIds.has(p.id) ? '#f3c37a' : '#8b97a3' }}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  )}
                   <div className="flex gap-2.5 items-start mb-2">
                     {p.headshot_url ? (
                       <img
@@ -1761,8 +2017,21 @@ function DraftPageContent() {
             </aside>
           );
         })()}
+
         </div>
       </div>
+
+      {rankingToast && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white rounded-lg px-4 py-2.5 flex items-center gap-2"
+          style={{ boxShadow: '0 8px 24px rgba(12,35,64,0.25)', zIndex: 100 }}
+        >
+          <i className="ti ti-star-filled text-base" style={{ color: '#f3c37a' }} aria-hidden="true" />
+          <p className="text-xs font-medium m-0" style={{ color: '#0c2340' }}>
+            Added to your My Rankings
+          </p>
+        </div>
+      )}
 
       {/* Read-only player profile popups — multiple can be open at once, stacked */}
       {openProfileIds.map((id, idx) => {
@@ -1798,13 +2067,28 @@ function DraftPageContent() {
                   <p className="text-[11px] text-muted m-0">{p.gender}</p>
                 </div>
               </div>
-              <button
-                onClick={() => closeProfile(id)}
-                className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center hover:bg-surface"
-                aria-label="Close"
-              >
-                <i className="ti ti-x text-base text-muted" aria-hidden="true" />
-              </button>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {myActingTeamId && !p.team_id && p.is_active !== false && (
+                  <button
+                    onClick={() => toggleRanking(p.id)}
+                    className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-surface"
+                    aria-label={rankedPlayerIds.has(p.id) ? 'Remove from My Rankings' : 'Add to My Rankings'}
+                  >
+                    <i
+                      className={`ti ${rankedPlayerIds.has(p.id) ? 'ti-star-filled' : 'ti-star'} text-base`}
+                      style={{ color: rankedPlayerIds.has(p.id) ? '#f3c37a' : '#8b97a3' }}
+                      aria-hidden="true"
+                    />
+                  </button>
+                )}
+                <button
+                  onClick={() => closeProfile(id)}
+                  className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-surface"
+                  aria-label="Close"
+                >
+                  <i className="ti ti-x text-base text-muted" aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
             <div className="px-4 py-3 flex flex-col gap-2.5">
