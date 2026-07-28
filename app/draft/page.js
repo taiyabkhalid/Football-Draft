@@ -494,18 +494,42 @@ function DraftPageContent() {
 
   async function toggleRanking(playerId) {
     if (!myActingTeamId) return;
-    if (rankedPlayerIds.has(playerId)) {
-      await supabase.rpc('remove_from_rankings', { p_player_id: playerId });
+    const currentlyRanked = rankedPlayerIds.has(playerId);
+
+    if (currentlyRanked) {
+      // Optimistically remove immediately - the star reflects this instantly
+      // rather than waiting for the round trip to the database and back.
+      setTeamRankings((prev) => prev.filter((r) => r.player_id !== playerId));
+      const { error } = await supabase.rpc('remove_from_rankings', { p_player_id: playerId });
+      if (error) {
+        console.error('[rankings] remove_from_rankings failed:', error.message);
+      }
     } else {
-      await supabase.rpc('add_to_rankings', { p_player_id: playerId });
-      setRankingToast(true);
-      setTimeout(() => setRankingToast(false), 2200);
+      // Optimistically add to the top locally (matching what add_to_rankings
+      // does server-side: shift everything else down, insert at rank 0).
+      setTeamRankings((prev) => [
+        { team_id: myActingTeamId, player_id: playerId, rank_order: -1 },
+        ...prev.map((r) => ({ ...r, rank_order: r.rank_order + 1 })),
+      ]);
+      const { error } = await supabase.rpc('add_to_rankings', { p_player_id: playerId });
+      if (error) {
+        console.error('[rankings] add_to_rankings failed:', error.message);
+      } else {
+        setRankingToast(true);
+        setTimeout(() => setRankingToast(false), 2200);
+      }
     }
+    // Reconcile with the real server state shortly after - corrects the
+    // optimistic guess if anything above actually failed, without making
+    // the click feel like it did nothing in the meantime.
     fetchRankings();
   }
 
   async function saveRankingOrder(orderedIds) {
-    await supabase.rpc('reorder_rankings', { p_player_ids: orderedIds });
+    const { error } = await supabase.rpc('reorder_rankings', { p_player_ids: orderedIds });
+    if (error) {
+      console.error('[rankings] reorder_rankings failed:', error.message);
+    }
     fetchRankings();
   }
 
@@ -1816,17 +1840,17 @@ function DraftPageContent() {
                           )}
                         </div>
                         {!isDrafted && (
-                          <div className="flex flex-col gap-1 flex-shrink-0">
+                          <div className="flex flex-col items-end gap-1 flex-shrink-0">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 draftPlayer(p);
                               }}
                               disabled={disabled}
-                              className="text-[10px] font-medium rounded px-2.5 py-1"
+                              className="text-[11px] font-medium rounded-md px-3 py-1.5 whitespace-nowrap"
                               style={{ background: disabled ? '#d8dde2' : '#185fa5', color: '#ffffff', border: 'none' }}
                             >
-                              {drafting === p.id ? '…' : 'Draft'}
+                              {drafting === p.id ? 'Drafting…' : 'Draft Player'}
                             </button>
                             <button
                               onClick={(e) => {

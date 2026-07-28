@@ -534,12 +534,26 @@ function LiveDraftPageContent() {
 
   async function toggleRanking(playerId) {
     if (!myActingTeamId) return;
-    if (rankedPlayerIds.has(playerId)) {
-      await supabase.rpc('remove_from_rankings', { p_player_id: playerId });
+    const currentlyRanked = rankedPlayerIds.has(playerId);
+
+    if (currentlyRanked) {
+      setTeamRankings((prev) => prev.filter((r) => r.player_id !== playerId));
+      const { error } = await supabase.rpc('remove_from_rankings', { p_player_id: playerId });
+      if (error) {
+        console.error('[rankings] remove_from_rankings failed:', error.message);
+      }
     } else {
-      await supabase.rpc('add_to_rankings', { p_player_id: playerId });
-      setRankingToast(true);
-      setTimeout(() => setRankingToast(false), 2200);
+      setTeamRankings((prev) => [
+        { team_id: myActingTeamId, player_id: playerId, rank_order: -1 },
+        ...prev.map((r) => ({ ...r, rank_order: r.rank_order + 1 })),
+      ]);
+      const { error } = await supabase.rpc('add_to_rankings', { p_player_id: playerId });
+      if (error) {
+        console.error('[rankings] add_to_rankings failed:', error.message);
+      } else {
+        setRankingToast(true);
+        setTimeout(() => setRankingToast(false), 2200);
+      }
     }
     fetchRankings();
   }
