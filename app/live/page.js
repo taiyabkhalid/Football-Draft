@@ -520,7 +520,17 @@ function LiveDraftPageContent() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'team_rankings', filter: `team_id=eq.${myActingTeamId}` },
-        fetchRankings
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setTeamRankings((prev) =>
+              prev.some((r) => r.player_id === payload.new.player_id) ? prev : [...prev, payload.new]
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setTeamRankings((prev) => prev.filter((r) => r.player_id !== payload.old.player_id));
+          } else if (payload.eventType === 'UPDATE') {
+            setTeamRankings((prev) => prev.map((r) => (r.id === payload.new.id ? payload.new : r)));
+          }
+        }
       )
       .subscribe();
     const pollTimer = setInterval(fetchRankings, 10000);

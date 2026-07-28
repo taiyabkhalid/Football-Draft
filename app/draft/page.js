@@ -465,7 +465,22 @@ function DraftPageContent() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'team_rankings', filter: `team_id=eq.${myActingTeamId}` },
-        fetchRankings
+        (payload) => {
+          // Apply the payload directly instead of re-querying the database.
+          // A fresh SELECT right after a realtime event can still race ahead
+          // of replication and read data that doesn't yet reflect the write,
+          // silently reverting the optimistic star update - the payload
+          // itself is the actual committed row, so there's nothing to race.
+          if (payload.eventType === 'INSERT') {
+            setTeamRankings((prev) =>
+              prev.some((r) => r.player_id === payload.new.player_id) ? prev : [...prev, payload.new]
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setTeamRankings((prev) => prev.filter((r) => r.player_id !== payload.old.player_id));
+          } else if (payload.eventType === 'UPDATE') {
+            setTeamRankings((prev) => prev.map((r) => (r.id === payload.new.id ? payload.new : r)));
+          }
+        }
       )
       .subscribe();
     const pollTimer = setInterval(fetchRankings, 10000);
