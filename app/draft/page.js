@@ -29,6 +29,7 @@ function DraftPageContent() {
   const [inactivePlayers, setInactivePlayers] = useState([]);
   const [teamRankings, setTeamRankings] = useState([]);
   const [rankingToast, setRankingToast] = useState(false);
+  const [draftConfirmation, setDraftConfirmation] = useState(null);
   const [picks, setPicks] = useState([]);
   const [settings, setSettings] = useState(null);
   const [profiles, setProfiles] = useState([]);
@@ -485,7 +486,9 @@ function DraftPageContent() {
   const rankedPlayersOrdered = useMemo(() => {
     const withPlayers = teamRankings.map((r) => ({ ...r, player: allPlayersById[r.player_id] })).filter((r) => r.player);
     const available = withPlayers.filter((r) => !r.player.team_id);
-    const drafted = withPlayers.filter((r) => r.player.team_id);
+    const drafted = withPlayers
+      .filter((r) => r.player.team_id)
+      .sort((a, b) => (a.player.draft_pick_number ?? Infinity) - (b.player.draft_pick_number ?? Infinity));
     return [...available, ...drafted];
   }, [teamRankings, allPlayersById]);
 
@@ -504,6 +507,67 @@ function DraftPageContent() {
   async function saveRankingOrder(orderedIds) {
     await supabase.rpc('reorder_rankings', { p_player_ids: orderedIds });
     fetchRankings();
+  }
+
+  // Press-and-hold drag reordering for My Rankings - Pointer Events handle
+  // mouse and touch under one model, unlike native HTML5 drag-and-drop
+  // which doesn't work reliably on touch devices.
+  const dragOrderRef = useRef(null);
+  const draggingIdRef = useRef(null);
+  const rankRowRefs = useRef({});
+  const [dragPreviewOrder, setDragPreviewOrder] = useState(null);
+  const [draggingId, setDraggingId] = useState(null);
+
+  function handleRankPointerMove(e) {
+    if (!draggingIdRef.current || !dragOrderRef.current) return;
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+    const ids = dragOrderRef.current;
+    let newIndex = ids.length - 1;
+    for (let i = 0; i < ids.length; i++) {
+      const node = rankRowRefs.current[ids[i]];
+      if (!node) continue;
+      const rect = node.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (y < mid) {
+        newIndex = i;
+        break;
+      }
+    }
+    const currentIndex = ids.indexOf(draggingIdRef.current);
+    if (currentIndex !== -1 && newIndex !== currentIndex) {
+      const newOrder = [...ids];
+      newOrder.splice(currentIndex, 1);
+      newOrder.splice(newIndex, 0, draggingIdRef.current);
+      dragOrderRef.current = newOrder;
+      setDragPreviewOrder(newOrder);
+    }
+  }
+
+  function handleRankPointerUp() {
+    document.removeEventListener('pointermove', handleRankPointerMove);
+    document.removeEventListener('pointerup', handleRankPointerUp);
+    document.removeEventListener('touchmove', handleRankPointerMove);
+    document.removeEventListener('touchend', handleRankPointerUp);
+    if (dragOrderRef.current) {
+      const draftedIds = rankedPlayersOrdered.filter((r) => r.player.team_id).map((r) => r.player_id);
+      saveRankingOrder([...dragOrderRef.current, ...draftedIds]);
+    }
+    draggingIdRef.current = null;
+    dragOrderRef.current = null;
+    setDraggingId(null);
+    setDragPreviewOrder(null);
+  }
+
+  function handleRankPointerDown(e, playerId) {
+    e.preventDefault();
+    draggingIdRef.current = playerId;
+    const availableIds = rankedPlayersOrdered.filter((r) => !r.player.team_id).map((r) => r.player_id);
+    dragOrderRef.current = availableIds;
+    setDraggingId(playerId);
+    document.addEventListener('pointermove', handleRankPointerMove);
+    document.addEventListener('pointerup', handleRankPointerUp);
+    document.addEventListener('touchmove', handleRankPointerMove, { passive: false });
+    document.addEventListener('touchend', handleRankPointerUp);
   }
 
   const canDraft =
@@ -634,6 +698,9 @@ function DraftPageContent() {
     const { error } = await supabase.rpc('make_pick', { target_player_id: player.id });
     if (error) {
       setActionError(error.message);
+    } else {
+      setDraftConfirmation(player.full_name);
+      setTimeout(() => setDraftConfirmation(null), 2500);
     }
     setDrafting(null);
   }
@@ -1596,7 +1663,7 @@ function DraftPageContent() {
             mobileListTab === 'available' ? 'block' : 'hidden'
           } lg:block`}
         >
-          <div className="flex gap-1.5 mb-2">
+          <div className="hidden lg:flex gap-1.5 mb-2">
             <button
               onClick={() => setLeftColumnTab('available')}
               className="flex-1 text-[11px] py-1.5 rounded-md font-medium text-center"
@@ -1642,7 +1709,7 @@ function DraftPageContent() {
                         e.stopPropagation();
                         toggleRanking(p.id);
                       }}
-                      className="absolute top-1.5 right-1.5"
+                      className="absolute top-1.5 right-1.5 z-10"
                       aria-label={rankedPlayerIds.has(p.id) ? 'Remove from My Rankings' : 'Add to My Rankings'}
                     >
                       <i
@@ -1689,52 +1756,40 @@ function DraftPageContent() {
               </p>
             ) : (
               <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
-                {rankedPlayersOrdered.map((r) => {
+                {(() => {
+                  const draftedEntries = rankedPlayersOrdered.filter((r) => r.player.team_id);
+                  const availableEntries = dragPreviewOrder
+                    ? dragPreviewOrder.map((pid) => rankedPlayersOrdered.find((r) => r.player_id === pid)).filter(Boolean)
+                    : rankedPlayersOrdered.filter((r) => !r.player.team_id);
+                  return [...availableEntries, ...draftedEntries];
+                })().map((r) => {
                   const p = r.player;
                   const isDrafted = !!p.team_id;
-                  const availableIds = rankedPlayersOrdered.filter((x) => !x.player.team_id).map((x) => x.player_id);
-                  const posInAvailable = availableIds.indexOf(p.id);
                   const disabled = !canDraft || (mustDraftFemale && p.gender !== 'F') || drafting === p.id;
                   return (
                     <div
                       key={p.id}
+                      ref={(node) => {
+                        if (node) rankRowRefs.current[p.id] = node;
+                        else delete rankRowRefs.current[p.id];
+                      }}
                       className="rounded-md px-2.5 py-2"
-                      style={{ background: isDrafted ? '#e9ecef' : '#f1f3f6', opacity: isDrafted ? 0.65 : 1 }}
+                      style={{
+                        background: isDrafted ? '#e9ecef' : '#f1f3f6',
+                        opacity: isDrafted ? 0.65 : draggingId === p.id ? 0.5 : 1,
+                      }}
                     >
-                      <div className="flex items-start gap-2">
+                      <div className="flex items-center gap-2">
                         {!isDrafted && (
-                          <div className="flex flex-col flex-shrink-0">
-                            <button
-                              onClick={() => {
-                                if (posInAvailable <= 0) return;
-                                const ids = rankedPlayersOrdered.map((x) => x.player_id);
-                                const from = ids.indexOf(p.id);
-                                const swapWith = ids.indexOf(availableIds[posInAvailable - 1]);
-                                [ids[from], ids[swapWith]] = [ids[swapWith], ids[from]];
-                                saveRankingOrder(ids);
-                              }}
-                              disabled={posInAvailable <= 0}
-                              aria-label="Move up"
-                              className="disabled:opacity-30"
-                            >
-                              <i className="ti ti-chevron-up text-xs" style={{ color: '#5a6b7d' }} aria-hidden="true" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (posInAvailable >= availableIds.length - 1) return;
-                                const ids = rankedPlayersOrdered.map((x) => x.player_id);
-                                const from = ids.indexOf(p.id);
-                                const swapWith = ids.indexOf(availableIds[posInAvailable + 1]);
-                                [ids[from], ids[swapWith]] = [ids[swapWith], ids[from]];
-                                saveRankingOrder(ids);
-                              }}
-                              disabled={posInAvailable >= availableIds.length - 1}
-                              aria-label="Move down"
-                              className="disabled:opacity-30"
-                            >
-                              <i className="ti ti-chevron-down text-xs" style={{ color: '#5a6b7d' }} aria-hidden="true" />
-                            </button>
-                          </div>
+                          <span
+                            onPointerDown={(e) => handleRankPointerDown(e, p.id)}
+                            onTouchStart={(e) => handleRankPointerDown(e, p.id)}
+                            className="flex-shrink-0 cursor-grab active:cursor-grabbing"
+                            style={{ touchAction: 'none' }}
+                            aria-label="Drag to reorder"
+                          >
+                            <i className="ti ti-grip-vertical text-base" style={{ color: '#8b97a3' }} aria-hidden="true" />
+                          </span>
                         )}
                         <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openProfile(p.id)}>
                           {isDrafted ? (
@@ -1760,32 +1815,32 @@ function DraftPageContent() {
                             </>
                           )}
                         </div>
+                        {!isDrafted && (
+                          <div className="flex flex-col gap-1 flex-shrink-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                draftPlayer(p);
+                              }}
+                              disabled={disabled}
+                              className="text-[10px] font-medium rounded px-2.5 py-1"
+                              style={{ background: disabled ? '#d8dde2' : '#185fa5', color: '#ffffff', border: 'none' }}
+                            >
+                              {drafting === p.id ? '…' : 'Draft'}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleRanking(p.id);
+                              }}
+                              className="text-[10px]"
+                              style={{ color: '#8b97a3' }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      {!isDrafted && (
-                        <div className="flex gap-1.5 mt-1.5">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              draftPlayer(p);
-                            }}
-                            disabled={disabled}
-                            className="flex-1 text-[10px] font-medium rounded py-1"
-                            style={{ background: disabled ? '#d8dde2' : '#185fa5', color: '#ffffff', border: 'none' }}
-                          >
-                            {drafting === p.id ? 'Drafting…' : 'Draft Player'}
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleRanking(p.id);
-                            }}
-                            className="text-[10px] px-2"
-                            style={{ color: '#8b97a3' }}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -1843,7 +1898,7 @@ function DraftPageContent() {
                         e.stopPropagation();
                         toggleRanking(p.id);
                       }}
-                      className="absolute top-2.5 right-2.5"
+                      className="absolute top-2.5 right-2.5 z-10"
                       aria-label={rankedPlayerIds.has(p.id) ? 'Remove from My Rankings' : 'Add to My Rankings'}
                     >
                       <i
@@ -1853,7 +1908,7 @@ function DraftPageContent() {
                       />
                     </button>
                   )}
-                  <div className="flex gap-2.5 items-start mb-2">
+                  <div className={`flex gap-2.5 items-start mb-2 ${myActingTeamId && !isDrafted && !isInactive ? 'mt-4' : ''}`}>
                     {p.headshot_url ? (
                       <img
                         src={p.headshot_url}
@@ -2029,6 +2084,18 @@ function DraftPageContent() {
           <i className="ti ti-star-filled text-base" style={{ color: '#f3c37a' }} aria-hidden="true" />
           <p className="text-xs font-medium m-0" style={{ color: '#0c2340' }}>
             Added to your My Rankings
+          </p>
+        </div>
+      )}
+
+      {draftConfirmation && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-lg px-4 py-2.5 flex items-center gap-2"
+          style={{ boxShadow: '0 8px 24px rgba(12,35,64,0.25)', zIndex: 100, background: '#185fa5' }}
+        >
+          <i className="ti ti-circle-check text-base" style={{ color: '#ffffff' }} aria-hidden="true" />
+          <p className="text-xs font-medium m-0" style={{ color: '#ffffff' }}>
+            You have drafted {draftConfirmation}
           </p>
         </div>
       )}
