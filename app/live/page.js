@@ -241,6 +241,35 @@ function LiveDraftPageContent() {
   const [activeReveal, setActiveReveal] = useState(null);
   const [showPopout, setShowPopout] = useState(false);
   const audioRef = useRef(null);
+
+  // Mobile browsers (iOS Safari in particular) refuse to play audio unless
+  // the call happens directly inside a genuine user gesture - but the chime
+  // is triggered by a realtime database update, not a tap, so it gets
+  // silently blocked on phones. Priming the audio element on the very first
+  // tap anywhere on the page (played instantly then paused) unlocks it for
+  // every later programmatic play() call for the rest of this session.
+  useEffect(() => {
+    function unlockAudio() {
+      const audio = audioRef.current;
+      if (audio) {
+        audio
+          .play()
+          .then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+          })
+          .catch(() => {});
+      }
+      document.removeEventListener('touchstart', unlockAudio);
+      document.removeEventListener('click', unlockAudio);
+    }
+    document.addEventListener('touchstart', unlockAudio, { once: true });
+    document.addEventListener('click', unlockAudio, { once: true });
+    return () => {
+      document.removeEventListener('touchstart', unlockAudio);
+      document.removeEventListener('click', unlockAudio);
+    };
+  }, []);
   const processingRef = useRef(false);
   const initializedRef = useRef(false);
   const prevStatusForResetRef = useRef(null);
@@ -1090,12 +1119,12 @@ function LiveDraftPageContent() {
                     {owner && <span className="text-[10px] text-muted">({owner.name})</span>}
                   </>
                 ) : !isClockSlot ? (
-                  <div className="flex items-center gap-1.5 justify-center min-w-0">
-                    <FootballIcon color={teamColor} size={12} />
-                    <span className="text-[10px] text-muted truncate leading-none">
-                      {slot.team?.name}
-                      {owner ? ` \u00b7 ${owner.name}` : ''}
-                    </span>
+                  <div className="flex flex-col items-center gap-0.5 min-w-0 w-full">
+                    <div className="flex items-center gap-1.5 justify-center min-w-0 w-full">
+                      <FootballIcon color={teamColor} size={12} />
+                      <span className="text-[10px] text-muted truncate leading-none">{slot.team?.name}</span>
+                    </div>
+                    {owner && <span className="text-[9px] text-muted truncate w-full text-center">GM: {owner.name}</span>}
                   </div>
                 ) : null}
               </div>

@@ -26,6 +26,7 @@ function DraftPageContent() {
 
   const [teams, setTeams] = useState([]);
   const [players, setPlayers] = useState([]);
+  const [inactivePlayers, setInactivePlayers] = useState([]);
   const [picks, setPicks] = useState([]);
   const [settings, setSettings] = useState(null);
   const [profiles, setProfiles] = useState([]);
@@ -34,6 +35,7 @@ function DraftPageContent() {
   const [searchPosition, setSearchPosition] = useState('');
   const [searchGender, setSearchGender] = useState('');
   const [searchPreviousTeam, setSearchPreviousTeam] = useState('');
+  const [searchAvailability, setSearchAvailability] = useState('');
   const [sortBy, setSortBy] = useState('name');
   const [viewByTeamOpen, setViewByTeamOpen] = useState(false);
   const rostersSectionRef = useRef(null);
@@ -126,18 +128,20 @@ function DraftPageContent() {
 
   // ---- Data fetching ----
   const fetchAll = useCallback(async () => {
-    const [teamsRes, playersRes, picksRes, settingsRes, profilesRes] = await Promise.all([
+    const [teamsRes, playersRes, picksRes, settingsRes, profilesRes, inactiveRes] = await Promise.all([
       supabase.from('teams').select('*').order('draft_position', { ascending: true }),
       supabase.from('players').select('*').eq('is_active', true),
       supabase.from('draft_picks').select('*').order('pick_number', { ascending: true }),
       supabase.from('draft_settings').select('*').eq('id', 1).single(),
       supabase.from('profiles').select('role, team_id, email'),
+      supabase.from('players').select('*').eq('is_active', false),
     ]);
     setTeams(teamsRes.data || []);
     setPlayers(playersRes.data || []);
     setPicks(picksRes.data || []);
     setSettings(settingsRes.data || null);
     setProfiles(profilesRes.data || []);
+    setInactivePlayers(inactiveRes.data || []);
   }, []);
 
   useEffect(() => {
@@ -454,12 +458,16 @@ function DraftPageContent() {
   }, [teamOnClock, rosterByTeam, minFemale, picksRemainingForClockTeam]);
 
   const hasActiveSearch =
-    searchName.trim() !== '' || searchPosition !== '' || searchGender !== '' || searchPreviousTeam !== '';
+    searchName.trim() !== '' ||
+    searchPosition !== '' ||
+    searchGender !== '' ||
+    searchPreviousTeam !== '' ||
+    searchAvailability !== '';
 
   const previousTeamOptions = useMemo(() => {
-    const set = new Set(players.map((p) => p.previous_team).filter(Boolean));
+    const set = new Set([...players, ...inactivePlayers].map((p) => p.previous_team).filter(Boolean));
     return Array.from(set).sort();
-  }, [players]);
+  }, [players, inactivePlayers]);
 
   function sortList(list, key) {
     const sorted = [...list];
@@ -477,7 +485,12 @@ function DraftPageContent() {
       searchPosition === '' || p.offensive_position === searchPosition || p.defensive_position === searchPosition;
     const genderOk = searchGender === '' || p.gender === searchGender;
     const prevTeamOk = searchPreviousTeam === '' || p.previous_team === searchPreviousTeam;
-    return nameOk && posOk && genderOk && prevTeamOk;
+    const availabilityOk =
+      searchAvailability === '' ||
+      (searchAvailability === 'not_available' && !p.is_active) ||
+      (searchAvailability === 'drafted' && p.is_active !== false && !!p.team_id) ||
+      (searchAvailability === 'available' && p.is_active !== false && !p.team_id);
+    return nameOk && posOk && genderOk && prevTeamOk && availabilityOk;
   }
 
   // Combined AND-filtering: a player must satisfy every active filter to be shown at all
@@ -492,12 +505,12 @@ function DraftPageContent() {
     const eligible = base.filter((p) => p.gender === 'F');
     const ineligible = base.filter((p) => p.gender !== 'F');
     return [...eligible, ...ineligible];
-  }, [availablePlayers, hasActiveSearch, searchName, searchPosition, searchGender, searchPreviousTeam, sortBy, mustDraftFemale]);
+  }, [availablePlayers, hasActiveSearch, searchName, searchPosition, searchGender, searchPreviousTeam, searchAvailability, sortBy, mustDraftFemale]);
 
   const matchIdSet = useMemo(() => {
     if (!hasActiveSearch) return new Set();
     return new Set(availablePlayers.filter(matchesSearch).map((p) => p.id));
-  }, [availablePlayers, hasActiveSearch, searchName, searchPosition, searchGender, searchPreviousTeam]);
+  }, [availablePlayers, hasActiveSearch, searchName, searchPosition, searchGender, searchPreviousTeam, searchAvailability]);
 
   // Drafted players stay visible on the board — shown at the end, in the order they were picked
   // (manually-added players, with no pick number, are sorted to the very end) — rather than
@@ -507,11 +520,20 @@ function DraftPageContent() {
       .filter((p) => p.team_id)
       .filter((p) => !hasActiveSearch || matchesSearch(p))
       .sort((a, b) => (a.draft_pick_number ?? Infinity) - (b.draft_pick_number ?? Infinity));
-  }, [players, hasActiveSearch, searchName, searchPosition, searchGender, searchPreviousTeam]);
+  }, [players, hasActiveSearch, searchName, searchPosition, searchGender, searchPreviousTeam, searchAvailability]);
+
+  // Inactive (commish-deactivated) players stay visible too, same reasoning
+  // as drafted players above - grayed out on their cards, not hidden.
+  const inactivePlayersInOrder = useMemo(() => {
+    return sortList(
+      inactivePlayers.filter((p) => !hasActiveSearch || matchesSearch(p)),
+      'name'
+    );
+  }, [inactivePlayers, hasActiveSearch, searchName, searchPosition, searchGender, searchPreviousTeam, searchAvailability]);
 
   const boardList = useMemo(
-    () => [...sortedAvailable, ...draftedPlayersInOrder],
-    [sortedAvailable, draftedPlayersInOrder]
+    () => [...sortedAvailable, ...draftedPlayersInOrder, ...inactivePlayersInOrder],
+    [sortedAvailable, draftedPlayersInOrder, inactivePlayersInOrder]
   );
 
   function clearSearch() {
@@ -1385,6 +1407,17 @@ function DraftPageContent() {
             ))}
           </select>
           <select
+            value={searchAvailability}
+            onChange={(e) => setSearchAvailability(e.target.value)}
+            className="flex-none text-xs"
+            style={{ width: 130, borderColor: searchAvailability ? '#185fa5' : undefined }}
+          >
+            <option value="">Availability: any</option>
+            <option value="available">Available</option>
+            <option value="drafted">Drafted</option>
+            <option value="not_available">Not Available</option>
+          </select>
+          <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
             className="flex-none text-xs"
@@ -1461,14 +1494,21 @@ function DraftPageContent() {
           <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
             {boardList.map((p) => {
               const isDrafted = !!p.team_id;
+              const isInactive = p.is_active === false;
               return (
                 <div
                   key={p.id}
                   onClick={() => openProfile(p.id)}
-                  className={`rounded-md px-2.5 py-2 cursor-pointer hover:brightness-95 ${isDrafted ? 'bg-[#e9ecef] opacity-70' : 'bg-surface'}`}
+                  className={`rounded-md px-2.5 py-2 cursor-pointer hover:brightness-95 ${
+                    isInactive ? 'bg-[#e9ecef] opacity-60' : isDrafted ? 'bg-[#e9ecef] opacity-70' : 'bg-surface'
+                  }`}
                 >
                   <p className="text-xs font-medium text-ink m-0">{p.full_name}</p>
-                  {isDrafted ? (
+                  {isInactive ? (
+                    <p className="text-[11px] font-medium m-0" style={{ color: '#5a6b7d' }}>
+                      Inactive
+                    </p>
+                  ) : isDrafted ? (
                     <p className="text-[11px] font-medium m-0" style={{ color: '#185fa5' }}>
                       {p.draft_pick_number
                         ? `Drafted \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'} \u00b7 Rnd ${getRound(
@@ -1500,8 +1540,9 @@ function DraftPageContent() {
           <div className="flex gap-3 overflow-x-auto pb-3">
             {boardList.map((p) => {
               const isDrafted = !!p.team_id;
+              const isInactive = p.is_active === false;
               const disabled = !canDraft || (mustDraftFemale && p.gender !== 'F') || drafting === p.id;
-              const isMatch = !isDrafted && matchIdSet.has(p.id);
+              const isMatch = !isDrafted && !isInactive && matchIdSet.has(p.id);
               return (
                 <div
                   key={p.id}
@@ -1511,9 +1552,9 @@ function DraftPageContent() {
                     width: 'calc(33.333% - 8px)',
                     minWidth: 190,
                     height: 230,
-                    background: isDrafted ? '#e9ecef' : isMatch ? '#e6f1fb' : '#f1f3f6',
+                    background: isInactive ? '#e9ecef' : isDrafted ? '#e9ecef' : isMatch ? '#e6f1fb' : '#f1f3f6',
                     border: isMatch ? '1.5px solid #185fa5' : '1.5px solid transparent',
-                    opacity: isDrafted ? 0.65 : 1,
+                    opacity: isInactive ? 0.6 : isDrafted ? 0.65 : 1,
                   }}
                 >
                   <div className="flex gap-2.5 items-start mb-2">
@@ -1551,7 +1592,13 @@ function DraftPageContent() {
                       Injuries: {p.injury_status === 'None' ? 'None' : `${p.injury_status} (${p.weeks_until_recovered || '?'}w)`}
                     </p>
                   )}
-                  {isDrafted ? (
+                  {isInactive ? (
+                    <div className="w-full rounded-lg py-2 mt-auto flex items-center justify-center" style={{ background: '#d8dde2' }}>
+                      <span className="text-[11px] font-medium" style={{ color: '#3d4a57' }}>
+                        Inactive
+                      </span>
+                    </div>
+                  ) : isDrafted ? (
                     <div className="w-full rounded-lg py-2 mt-auto flex items-center justify-center gap-1.5" style={{ background: '#d8dde2' }}>
                       <FootballIcon color={teamsById[p.team_id]?.team_color || '#0074ff'} size={13} />
                       <span className="text-[11px] font-medium" style={{ color: '#3d4a57' }}>
