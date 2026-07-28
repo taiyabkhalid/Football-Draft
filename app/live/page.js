@@ -303,6 +303,12 @@ function LiveDraftPageContent() {
 
     async function run() {
       try {
+        console.log('[reveal-queue] processing pick', {
+          pick_number: next.pick_number,
+          player_id: next.player_id,
+          skip_reason: next.skip_reason,
+          isSkip: !next.player_id,
+        });
         setActiveReveal(next);
         setShowPopout(false);
         let chimeMs = 2000;
@@ -313,13 +319,13 @@ function LiveDraftPageContent() {
             await audio.play();
             if (audio.duration && isFinite(audio.duration)) chimeMs = audio.duration * 1000;
           } catch (e) {
-            // Autoplay can be blocked before the visitor interacts with the
-            // page at all - the reveal still proceeds on its own timing.
+            console.log('[reveal-queue] chime play failed/blocked', e?.message);
           }
         }
         await new Promise((resolve) => setTimeout(resolve, chimeMs * 0.75));
         setShowPopout(true);
         setRevealedCount((c) => (c ?? 0) + 1);
+        console.log('[reveal-queue] showPopout=true for pick', next.pick_number);
         // Hold at least 5 seconds before considering the next queued pick -
         // if nothing else is queued when that ends, this pick just stays
         // featured (persistently) until a genuinely new one arrives.
