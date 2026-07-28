@@ -503,6 +503,7 @@ function DraftPageContent() {
       const { error } = await supabase.rpc('remove_from_rankings', { p_player_id: playerId });
       if (error) {
         console.error('[rankings] remove_from_rankings failed:', error.message);
+        fetchRankings(); // only re-sync on failure - correct the optimistic guess
       }
     } else {
       // Optimistically add to the top locally (matching what add_to_rankings
@@ -514,23 +515,26 @@ function DraftPageContent() {
       const { error } = await supabase.rpc('add_to_rankings', { p_player_id: playerId });
       if (error) {
         console.error('[rankings] add_to_rankings failed:', error.message);
+        fetchRankings(); // only re-sync on failure - correct the optimistic guess
       } else {
         setRankingToast(true);
         setTimeout(() => setRankingToast(false), 2200);
       }
     }
-    // Reconcile with the real server state shortly after - corrects the
-    // optimistic guess if anything above actually failed, without making
-    // the click feel like it did nothing in the meantime.
-    fetchRankings();
+    // Deliberately NOT re-fetching here on the success path - doing so
+    // immediately after a write risked reading data that hadn't fully
+    // settled yet, silently overwriting the correct optimistic state with
+    // stale data and making the star look like it reverted. The optimistic
+    // update above is trusted as correct for this user's own action; other
+    // devices/proxies stay in sync via the realtime subscription instead.
   }
 
   async function saveRankingOrder(orderedIds) {
     const { error } = await supabase.rpc('reorder_rankings', { p_player_ids: orderedIds });
     if (error) {
       console.error('[rankings] reorder_rankings failed:', error.message);
+      fetchRankings();
     }
-    fetchRankings();
   }
 
   // Press-and-hold drag reordering for My Rankings - Pointer Events handle

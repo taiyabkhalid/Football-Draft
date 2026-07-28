@@ -541,6 +541,7 @@ function LiveDraftPageContent() {
       const { error } = await supabase.rpc('remove_from_rankings', { p_player_id: playerId });
       if (error) {
         console.error('[rankings] remove_from_rankings failed:', error.message);
+        fetchRankings();
       }
     } else {
       setTeamRankings((prev) => [
@@ -550,12 +551,14 @@ function LiveDraftPageContent() {
       const { error } = await supabase.rpc('add_to_rankings', { p_player_id: playerId });
       if (error) {
         console.error('[rankings] add_to_rankings failed:', error.message);
+        fetchRankings();
       } else {
         setRankingToast(true);
         setTimeout(() => setRankingToast(false), 2200);
       }
     }
-    fetchRankings();
+    // Deliberately not re-fetching on the success path - see matching
+    // comment on the GM page for why that was causing the star to revert.
   }
 
   const roleByEmail = useMemo(() => {
