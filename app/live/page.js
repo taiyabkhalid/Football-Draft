@@ -285,22 +285,45 @@ function LiveDraftPageContent() {
   }, []);
 
   // Mobile browsers (iOS Safari in particular) create AudioContexts in a
-  // "suspended" state until a genuine user gesture resumes them - but the
-  // chime is triggered by a realtime database update, not a tap, so it
-  // needs to be unlocked ahead of time on the very first tap anywhere on
-  // the page, same idea as before just targeting the AudioContext now.
+  // "suspended" state until a genuine user gesture unlocks them - and on
+  // iOS specifically, merely calling resume() is often NOT enough on its
+  // own; the pipeline only truly unlocks if an actual sound is played
+  // (even a silent one) synchronously within that same gesture. This plays
+  // a near-instant, inaudible buffer on the very first tap anywhere on the
+  // page specifically to satisfy that requirement, in addition to resuming
+  // the context.
   useEffect(() => {
     function unlockAudio() {
-      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume().catch(() => {});
+      let ctx = audioContextRef.current;
+      if (!ctx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          ctx = new AudioContextClass();
+          audioContextRef.current = ctx;
+        }
+      }
+      if (ctx) {
+        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+        try {
+          const silentBuffer = ctx.createBuffer(1, 1, 22050);
+          const source = ctx.createBufferSource();
+          source.buffer = silentBuffer;
+          source.connect(ctx.destination);
+          source.start(0);
+        } catch (e) {
+          console.error('[chime] silent unlock buffer failed:', e.message);
+        }
       }
       document.removeEventListener('touchstart', unlockAudio);
+      document.removeEventListener('touchend', unlockAudio);
       document.removeEventListener('click', unlockAudio);
     }
     document.addEventListener('touchstart', unlockAudio, { once: true });
+    document.addEventListener('touchend', unlockAudio, { once: true });
     document.addEventListener('click', unlockAudio, { once: true });
     return () => {
       document.removeEventListener('touchstart', unlockAudio);
+      document.removeEventListener('touchend', unlockAudio);
       document.removeEventListener('click', unlockAudio);
     };
   }, []);
@@ -310,6 +333,11 @@ function LiveDraftPageContent() {
     const buffer = chimeBufferRef.current;
     if (!ctx || !buffer) return null;
     try {
+      // iOS can silently re-suspend an AudioContext after a stretch of no
+      // audio activity (which is common here - picks can be minutes apart)
+      // - catching that and resuming defensively before playing means a
+      // long gap between chimes doesn't leave it stuck suspended.
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(ctx.destination);
@@ -2169,11 +2197,11 @@ function LiveDraftPageContent() {
 
       {rankingToast && (
         <div
-          className="fixed top-6 left-1/2 -translate-x-1/2 bg-white rounded-lg px-4 py-2.5 flex items-center gap-2"
-          style={{ boxShadow: '0 8px 24px rgba(12,35,64,0.25)', zIndex: 100 }}
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl px-6 py-4 flex items-center gap-3"
+          style={{ boxShadow: '0 12px 32px rgba(12,35,64,0.3)', zIndex: 100 }}
         >
-          <StarIcon filled size={16} />
-          <p className="text-xs font-medium m-0" style={{ color: '#0c2340' }}>
+          <StarIcon filled size={22} />
+          <p className="text-base font-medium m-0" style={{ color: '#0c2340' }}>
             Added to your My Rankings
           </p>
         </div>

@@ -2122,11 +2122,11 @@ function DraftPageContent() {
 
       {rankingToast && (
         <div
-          className="fixed top-6 left-1/2 -translate-x-1/2 bg-white rounded-lg px-4 py-2.5 flex items-center gap-2"
-          style={{ boxShadow: '0 8px 24px rgba(12,35,64,0.25)', zIndex: 100 }}
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl px-6 py-4 flex items-center gap-3"
+          style={{ boxShadow: '0 12px 32px rgba(12,35,64,0.3)', zIndex: 100 }}
         >
-          <StarIcon filled size={16} />
-          <p className="text-xs font-medium m-0" style={{ color: '#0c2340' }}>
+          <StarIcon filled size={22} />
+          <p className="text-base font-medium m-0" style={{ color: '#0c2340' }}>
             Added to your My Rankings
           </p>
         </div>
@@ -2134,11 +2134,11 @@ function DraftPageContent() {
 
       {draftConfirmation && (
         <div
-          className="fixed top-6 left-1/2 -translate-x-1/2 rounded-lg px-4 py-2.5 flex items-center gap-2"
-          style={{ boxShadow: '0 8px 24px rgba(12,35,64,0.25)', zIndex: 100, background: '#185fa5' }}
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl px-6 py-4 flex items-center gap-3"
+          style={{ boxShadow: '0 12px 32px rgba(12,35,64,0.3)', zIndex: 100, background: '#185fa5' }}
         >
-          <i className="ti ti-circle-check text-base" style={{ color: '#ffffff' }} aria-hidden="true" />
-          <p className="text-xs font-medium m-0" style={{ color: '#ffffff' }}>
+          <i className="ti ti-circle-check text-xl" style={{ color: '#ffffff' }} aria-hidden="true" />
+          <p className="text-base font-medium m-0" style={{ color: '#ffffff' }}>
             You have drafted {draftConfirmation}
           </p>
         </div>
