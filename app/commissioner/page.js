@@ -775,32 +775,80 @@ export default function CommissionerToolsPage() {
           )}
 
           <div className="border-t border-line mt-3 pt-3">
-            <p className="text-xs text-muted mb-2">
-              Profiles normally lock 2 hours before the draft and stay locked while it's happening, then unlock again
-              once it's done. Override this to let everyone edit their profile during that window if needed.
-            </p>
-            <button onClick={handleToggleUnlock} disabled={savingUnlock} className="btn-secondary text-xs w-full">
-              {savingUnlock
-                ? 'Saving…'
-                : settings?.profile_edits_unlocked_override
-                ? 'Re-lock profile edits'
-                : 'Unlock profile edits'}
-            </button>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium text-ink m-0">Profile edits unlocked</p>
+                <p className="text-[11px] text-muted m-0 mt-0.5">
+                  Normally locked from 2 hours before the draft until it ends. Turn on to let everyone edit their
+                  profile anyway during that window.
+                </p>
+              </div>
+              <button
+                onClick={handleToggleUnlock}
+                disabled={savingUnlock}
+                className="flex-shrink-0 rounded-full"
+                style={{
+                  width: 44,
+                  height: 24,
+                  background: settings?.profile_edits_unlocked_override ? '#185fa5' : '#d8dde2',
+                  border: 'none',
+                  position: 'relative',
+                }}
+                aria-label="Toggle profile edits unlocked"
+              >
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 2,
+                    left: settings?.profile_edits_unlocked_override ? 22 : 2,
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    background: '#ffffff',
+                    transition: 'left 0.15s',
+                  }}
+                />
+              </button>
+            </div>
           </div>
 
           <div className="border-t border-line mt-3 pt-3">
-            <p className="text-xs text-muted mb-2">
-              New player registration closes 5 minutes before the draft and stays closed while it's happening. If you
-              need to add someone mid-draft, turn this on — it only actually opens registration while the draft is
-              paused, and locks back down the moment you resume.
-            </p>
-            <button onClick={handleToggleRegistration} disabled={savingRegistrationUnlock} className="btn-secondary text-xs w-full">
-              {savingRegistrationUnlock
-                ? 'Saving…'
-                : settings?.registration_unlocked_override
-                ? 'Turn off mid-draft registration'
-                : 'Allow registration while paused'}
-            </button>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium text-ink m-0">Allow registration while paused</p>
+                <p className="text-[11px] text-muted m-0 mt-0.5">
+                  New registration normally closes 5 minutes before the draft and stays closed throughout. Turn on to
+                  let someone register mid-draft — it only actually opens while paused, and locks back down the
+                  moment you resume.
+                </p>
+              </div>
+              <button
+                onClick={handleToggleRegistration}
+                disabled={savingRegistrationUnlock}
+                className="flex-shrink-0 rounded-full"
+                style={{
+                  width: 44,
+                  height: 24,
+                  background: settings?.registration_unlocked_override ? '#185fa5' : '#d8dde2',
+                  border: 'none',
+                  position: 'relative',
+                }}
+                aria-label="Toggle registration while paused"
+              >
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 2,
+                    left: settings?.registration_unlocked_override ? 22 : 2,
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    background: '#ffffff',
+                    transition: 'left 0.15s',
+                  }}
+                />
+              </button>
+            </div>
             {settings?.registration_unlocked_override && draftStatus !== 'paused' && (
               <p className="text-[11px] mt-1.5" style={{ color: '#854f0b' }}>
                 This is on, but registration is only actually open while the draft is paused — pause it to let the
