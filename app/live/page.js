@@ -256,71 +256,61 @@ function LiveDraftPageContent() {
   const [showPopout, setShowPopout] = useState(false);
   const audioContextRef = useRef(null);
   const chimeBufferRef = useRef(null);
+  const chimeArrayBufferRef = useRef(null);
+  const chimeUnlockedRef = useRef(false);
 
-  // Web Audio API instead of an <audio> element, on purpose: an <audio>
-  // element gets registered with the browser/OS as an actual media
-  // session, which is exactly what makes the "Now Playing" / lock-screen
-  // media controls show up for what's meant to be a short, silent-in-the-
-  // background sound effect. A raw AudioBufferSourceNode plays through the
-  // same speakers but isn't treated as "media" by the OS at all, so no
-  // lock-screen controls appear - and it also sidesteps several of the
-  // <audio>-specific mobile autoplay quirks that were causing inconsistent
-  // playback in the first place.
+  // Fetching the raw audio bytes doesn't need an AudioContext at all, so
+  // this can safely happen on mount regardless of gestures - only the
+  // context creation and decode step (below) are gesture-sensitive.
   useEffect(() => {
-    async function loadChime() {
-      try {
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextClass) return;
-        const ctx = new AudioContextClass();
-        audioContextRef.current = ctx;
-        const response = await fetch('/sounds/pick-chime.mp3');
-        const arrayBuffer = await response.arrayBuffer();
-        const decoded = await ctx.decodeAudioData(arrayBuffer);
-        chimeBufferRef.current = decoded;
-      } catch (e) {
-        console.error('[chime] failed to load/decode:', e.message);
-      }
-    }
-    loadChime();
+    fetch('/sounds/pick-chime.mp3')
+      .then((r) => r.arrayBuffer())
+      .then((buf) => {
+        chimeArrayBufferRef.current = buf;
+      })
+      .catch((e) => console.error('[chime] failed to fetch:', e.message));
   }, []);
 
-  // Mobile browsers (iOS Safari in particular) create AudioContexts in a
-  // "suspended" state until a genuine user gesture unlocks them - and on
-  // iOS specifically, merely calling resume() is often NOT enough on its
-  // own; the pipeline only truly unlocks if an actual sound is played
-  // (even a silent one) synchronously within that same gesture. This plays
-  // a near-instant, inaudible buffer on the very first tap anywhere on the
-  // page specifically to satisfy that requirement, in addition to resuming
-  // the context.
+  // iOS Safari can permanently mark an AudioContext as unable to produce
+  // real sound if it was ever instantiated outside a genuine user gesture
+  // - simply calling resume() on it later, or playing a silent buffer
+  // through it later, does not reliably undo that. The only fully robust
+  // fix is to never create the context anywhere except directly inside a
+  // gesture handler in the first place, decode the chime using that same
+  // gesture-created context, and play a silent buffer through it right
+  // there too - all synchronously, within the same tap.
   useEffect(() => {
-    function unlockAudio() {
-      let ctx = audioContextRef.current;
-      if (!ctx) {
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        if (AudioContextClass) {
-          ctx = new AudioContextClass();
-          audioContextRef.current = ctx;
+    async function unlockAudio() {
+      if (chimeUnlockedRef.current) return;
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      try {
+        const ctx = audioContextRef.current || new AudioContextClass();
+        audioContextRef.current = ctx;
+        if (ctx.state === 'suspended') await ctx.resume();
+
+        const silentBuffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = silentBuffer;
+        source.connect(ctx.destination);
+        source.start(0);
+
+        if (!chimeBufferRef.current && chimeArrayBufferRef.current) {
+          // decodeAudioData detaches/consumes the buffer, so decode a copy -
+          // if this gesture fires before the fetch above finishes, the next
+          // gesture (there's almost always more than one before a draft
+          // gets going) picks it up instead.
+          const decoded = await ctx.decodeAudioData(chimeArrayBufferRef.current.slice(0));
+          chimeBufferRef.current = decoded;
         }
+        chimeUnlockedRef.current = true;
+      } catch (e) {
+        console.error('[chime] unlock/decode failed:', e.message);
       }
-      if (ctx) {
-        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-        try {
-          const silentBuffer = ctx.createBuffer(1, 1, 22050);
-          const source = ctx.createBufferSource();
-          source.buffer = silentBuffer;
-          source.connect(ctx.destination);
-          source.start(0);
-        } catch (e) {
-          console.error('[chime] silent unlock buffer failed:', e.message);
-        }
-      }
-      document.removeEventListener('touchstart', unlockAudio);
-      document.removeEventListener('touchend', unlockAudio);
-      document.removeEventListener('click', unlockAudio);
     }
-    document.addEventListener('touchstart', unlockAudio, { once: true });
-    document.addEventListener('touchend', unlockAudio, { once: true });
-    document.addEventListener('click', unlockAudio, { once: true });
+    document.addEventListener('touchstart', unlockAudio);
+    document.addEventListener('touchend', unlockAudio);
+    document.addEventListener('click', unlockAudio);
     return () => {
       document.removeEventListener('touchstart', unlockAudio);
       document.removeEventListener('touchend', unlockAudio);

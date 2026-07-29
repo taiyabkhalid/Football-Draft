@@ -159,7 +159,7 @@ export default function ProfilePage() {
       <div className="max-w-md mx-auto px-4 py-6">
         {(role === 'gm' || role === 'commissioner') && (
           <Link
-            href={draftStatus === 'completed' ? '/draft?focus=results' : '/draft'}
+            href={draftStatus === 'completed' ? '/draft?focus=results' : '/draft?focus=selection'}
             className="block text-center mb-4"
             style={{
               background: draftStatus === 'completed' ? '#185fa5' : '#c0392b',

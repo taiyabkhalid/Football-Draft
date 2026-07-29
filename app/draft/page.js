@@ -77,9 +77,8 @@ function DraftPageContent() {
 
   useEffect(() => {
     if (focusParam === 'search') {
-      setTimeout(() => {
-        playerSelectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 300);
+      setViewByTeamOpen(false);
+      scrollToElement(playerSelectionRef, 300);
     } else if (focusParam === 'myteam' && profile?.team_id) {
       setViewByTeamOpen(true);
       setRosterViewMode('team');
@@ -89,6 +88,14 @@ function DraftPageContent() {
       setViewByTeamOpen(true);
       setRosterViewMode('board');
       scrollToElement(rostersSectionRef, 400);
+    } else if (focusParam === 'selection') {
+      // "My Draft Room" / "Go to Draft Room" - explicitly resets View by
+      // Team closed even if it was left open from a previous visit to this
+      // same route (client-side navigation between two /draft?focus=...
+      // links doesn't remount the page, so state like this can otherwise
+      // persist from an earlier visit rather than genuinely resetting).
+      setViewByTeamOpen(false);
+      scrollToElement(playerSelectionRef, 300);
     }
   }, [focusParam, profile]);
 
@@ -572,6 +579,7 @@ function DraftPageContent() {
 
   function handleRankPointerMove(e) {
     if (!draggingIdRef.current || !dragOrderRef.current) return;
+    if (e.cancelable) e.preventDefault();
     const y = e.touches ? e.touches[0].clientY : e.clientY;
     const ids = dragOrderRef.current;
     let newIndex = ids.length - 1;
@@ -579,8 +587,11 @@ function DraftPageContent() {
       const node = rankRowRefs.current[ids[i]];
       if (!node) continue;
       const rect = node.getBoundingClientRect();
-      const mid = rect.top + rect.height / 2;
-      if (y < mid) {
+      // Comparing against each row's top edge (rather than its midpoint)
+      // means a reorder registers as soon as the drag crosses into the
+      // row above, instead of needing to cross halfway into it - that gap
+      // was exactly what made repositioning feel unresponsive/clunky.
+      if (y < rect.top + rect.height * 0.25) {
         newIndex = i;
         break;
       }
@@ -1814,6 +1825,7 @@ function DraftPageContent() {
                   const p = r.player;
                   const isDrafted = !!p.team_id;
                   const disabled = !canDraft || (mustDraftFemale && p.gender !== 'F') || drafting === p.id;
+                  const isBeingDragged = draggingId === p.id;
                   return (
                     <div
                       key={p.id}
@@ -1821,12 +1833,29 @@ function DraftPageContent() {
                         if (node) rankRowRefs.current[p.id] = node;
                         else delete rankRowRefs.current[p.id];
                       }}
-                      className="rounded-md px-2.5 py-2"
+                      className="rounded-md px-2.5 py-2 relative"
                       style={{
-                        background: isDrafted ? '#e9ecef' : '#f1f3f6',
-                        opacity: isDrafted ? 0.65 : draggingId === p.id ? 0.5 : 1,
+                        background: isDrafted ? '#e9ecef' : isBeingDragged ? '#e6f1fb' : '#f1f3f6',
+                        boxShadow: isBeingDragged ? '0 6px 16px rgba(12,35,64,0.25)' : 'none',
+                        transform: isBeingDragged ? 'scale(1.03)' : 'scale(1)',
+                        touchAction: isBeingDragged ? 'none' : 'auto',
+                        transition: 'transform 0.1s, box-shadow 0.1s',
+                        zIndex: isBeingDragged ? 10 : 1,
+                        opacity: isDrafted ? 0.65 : 1,
                       }}
                     >
+                      {!isDrafted && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleRanking(p.id);
+                          }}
+                          className="lg:hidden absolute top-1.5 right-1.5 z-10"
+                          aria-label="Remove from My Rankings"
+                        >
+                          <StarIcon filled size={16} />
+                        </button>
+                      )}
                       <div className="flex items-center gap-2">
                         {!isDrafted && (
                           <span
@@ -1839,7 +1868,7 @@ function DraftPageContent() {
                             <i className="ti ti-grip-vertical text-base" style={{ color: '#8b97a3' }} aria-hidden="true" />
                           </span>
                         )}
-                        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openProfile(p.id)}>
+                        <div className={`flex-1 min-w-0 cursor-pointer ${!isDrafted ? 'pr-5 lg:pr-0' : ''}`} onClick={() => openProfile(p.id)}>
                           {isDrafted ? (
                             <>
                               <p className="text-[10px] font-semibold m-0" style={{ color: '#3d4a57' }}>
@@ -1864,7 +1893,7 @@ function DraftPageContent() {
                           )}
                         </div>
                         {!isDrafted && (
-                          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          <div className="hidden lg:flex flex-col items-end gap-1 flex-shrink-0">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1889,6 +1918,19 @@ function DraftPageContent() {
                           </div>
                         )}
                       </div>
+                      {!isDrafted && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            draftPlayer(p);
+                          }}
+                          disabled={disabled}
+                          className="lg:hidden w-full text-[11px] font-medium rounded-md px-3 py-1.5 mt-2"
+                          style={{ background: disabled ? '#d8dde2' : '#185fa5', color: '#ffffff', border: 'none' }}
+                        >
+                          {drafting === p.id ? 'Drafting…' : 'Draft Player'}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
