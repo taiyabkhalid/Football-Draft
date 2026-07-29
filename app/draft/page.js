@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
-import FootballIcon, { lightenColor } from '../../lib/FootballIcon';
+import FootballIcon, { lightenColor, StarIcon } from '../../lib/FootballIcon';
 import PrintRosterButton from '../../lib/PrintRosterButton';
 
 const ALL_POSITIONS = ['QB', 'WR', 'C', 'CB', 'Safety', 'LB', 'Rush'];
@@ -1755,11 +1755,7 @@ function DraftPageContent() {
                       className="absolute top-1.5 right-1.5 z-10"
                       aria-label={rankedPlayerIds.has(p.id) ? 'Remove from My Rankings' : 'Add to My Rankings'}
                     >
-                      <i
-                        className={`ti ${rankedPlayerIds.has(p.id) ? 'ti-star-filled' : 'ti-star'} text-base`}
-                        style={{ color: rankedPlayerIds.has(p.id) ? '#f3c37a' : '#8b97a3' }}
-                        aria-hidden="true"
-                      />
+                      <StarIcon filled={rankedPlayerIds.has(p.id)} size={16} />
                     </button>
                   )}
                   <p className="text-xs font-medium text-ink m-0 pr-4">{p.full_name}</p>
@@ -1944,11 +1940,7 @@ function DraftPageContent() {
                       className="absolute top-2.5 right-2.5 z-10"
                       aria-label={rankedPlayerIds.has(p.id) ? 'Remove from My Rankings' : 'Add to My Rankings'}
                     >
-                      <i
-                        className={`ti ${rankedPlayerIds.has(p.id) ? 'ti-star-filled' : 'ti-star'} text-lg`}
-                        style={{ color: rankedPlayerIds.has(p.id) ? '#f3c37a' : '#8b97a3' }}
-                        aria-hidden="true"
-                      />
+                      <StarIcon filled={rankedPlayerIds.has(p.id)} size={19} />
                     </button>
                   )}
                   <div className={`flex gap-2.5 items-start mb-2 ${myActingTeamId && !isDrafted && !isInactive ? 'mt-4' : ''}`}>
@@ -2124,7 +2116,7 @@ function DraftPageContent() {
           className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white rounded-lg px-4 py-2.5 flex items-center gap-2"
           style={{ boxShadow: '0 8px 24px rgba(12,35,64,0.25)', zIndex: 100 }}
         >
-          <i className="ti ti-star-filled text-base" style={{ color: '#f3c37a' }} aria-hidden="true" />
+          <StarIcon filled size={16} />
           <p className="text-xs font-medium m-0" style={{ color: '#0c2340' }}>
             Added to your My Rankings
           </p>
@@ -2184,11 +2176,7 @@ function DraftPageContent() {
                     className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-surface"
                     aria-label={rankedPlayerIds.has(p.id) ? 'Remove from My Rankings' : 'Add to My Rankings'}
                   >
-                    <i
-                      className={`ti ${rankedPlayerIds.has(p.id) ? 'ti-star-filled' : 'ti-star'} text-base`}
-                      style={{ color: rankedPlayerIds.has(p.id) ? '#f3c37a' : '#8b97a3' }}
-                      aria-hidden="true"
-                    />
+                    <StarIcon filled={rankedPlayerIds.has(p.id)} size={17} />
                   </button>
                 )}
                 <button

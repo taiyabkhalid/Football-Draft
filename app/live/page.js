@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
-import FootballIcon, { lightenColor } from '../../lib/FootballIcon';
+import FootballIcon, { lightenColor, StarIcon } from '../../lib/FootballIcon';
 import PrintRosterButton from '../../lib/PrintRosterButton';
 
 const PUB_LINES_YES = [
@@ -960,11 +960,7 @@ function LiveDraftPageContent() {
                         className="absolute top-1.5 right-1.5 z-10"
                         aria-label={rankedPlayerIds.has(p.id) ? 'Remove from My Rankings' : 'Add to My Rankings'}
                       >
-                        <i
-                          className={`ti ${rankedPlayerIds.has(p.id) ? 'ti-star-filled' : 'ti-star'} text-base`}
-                          style={{ color: rankedPlayerIds.has(p.id) ? '#f3c37a' : '#8b97a3' }}
-                          aria-hidden="true"
-                        />
+                        <StarIcon filled={rankedPlayerIds.has(p.id)} size={16} />
                       </span>
                     )}
                     {!p.is_active ? (
@@ -1462,11 +1458,7 @@ function LiveDraftPageContent() {
                           className="absolute top-1.5 right-1.5 z-10"
                           aria-label={rankedPlayerIds.has(p.id) ? 'Remove from My Rankings' : 'Add to My Rankings'}
                         >
-                          <i
-                            className={`ti ${rankedPlayerIds.has(p.id) ? 'ti-star-filled' : 'ti-star'} text-base`}
-                            style={{ color: rankedPlayerIds.has(p.id) ? '#f3c37a' : '#8b97a3' }}
-                            aria-hidden="true"
-                          />
+                          <StarIcon filled={rankedPlayerIds.has(p.id)} size={16} />
                         </span>
                       )}
                       {!p.is_active ? (
@@ -2027,11 +2019,7 @@ function LiveDraftPageContent() {
                     className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-surface"
                     aria-label={rankedPlayerIds.has(p.id) ? 'Remove from My Rankings' : 'Add to My Rankings'}
                   >
-                    <i
-                      className={`ti ${rankedPlayerIds.has(p.id) ? 'ti-star-filled' : 'ti-star'} text-base`}
-                      style={{ color: rankedPlayerIds.has(p.id) ? '#f3c37a' : '#8b97a3' }}
-                      aria-hidden="true"
-                    />
+                    <StarIcon filled={rankedPlayerIds.has(p.id)} size={17} />
                   </button>
                 )}
                 <button
@@ -2151,7 +2139,7 @@ function LiveDraftPageContent() {
           className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white rounded-lg px-4 py-2.5 flex items-center gap-2"
           style={{ boxShadow: '0 8px 24px rgba(12,35,64,0.25)', zIndex: 100 }}
         >
-          <i className="ti ti-star-filled text-base" style={{ color: '#f3c37a' }} aria-hidden="true" />
+          <StarIcon filled size={16} />
           <p className="text-xs font-medium m-0" style={{ color: '#0c2340' }}>
             Added to your My Rankings
           </p>
