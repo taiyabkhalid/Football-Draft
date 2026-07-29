@@ -126,10 +126,17 @@ function LiveDraftPageContent() {
   const searchPanelRef = useRef(null);
   const [searchPanelOpen, setSearchPanelOpen] = useState(false);
 
-  function scrollRostersIntoView() {
+  function scrollToElement(ref, delay = 200, offset = 100) {
     setTimeout(() => {
-      rostersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 150);
+      const el = ref.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
+    }, delay);
+  }
+
+  function scrollRostersIntoView() {
+    scrollToElement(rostersSectionRef, 250);
   }
 
   const [rosterViewMode, setRosterViewMode] = useState('team'); // 'team' | 'round'
@@ -197,21 +204,19 @@ function LiveDraftPageContent() {
         if (focusParam === 'team' && playerRow?.team_id) {
           setViewByTeamOpen(true);
           setRosterViewMode('team');
-          setTimeout(() => {
-            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-          }, 300);
+          scrollToElement(rostersSectionRef, 400);
+        } else if (focusParam === 'results') {
+          setViewByTeamOpen(true);
+          setRosterViewMode('board');
+          scrollToElement(rostersSectionRef, 400);
         } else if (focusParam === 'search') {
           if (draftStatus === 'not_started') {
             setSearchPanelOpen(true);
-            setTimeout(() => {
-              searchPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 300);
+            scrollToElement(searchPanelRef, 400);
           } else {
             setViewByTeamOpen(true);
             setRosterViewMode('search');
-            setTimeout(() => {
-              rostersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 300);
+            scrollToElement(rostersSectionRef, 400);
           }
         }
       }
@@ -249,25 +254,45 @@ function LiveDraftPageContent() {
   const [queue, setQueue] = useState([]);
   const [activeReveal, setActiveReveal] = useState(null);
   const [showPopout, setShowPopout] = useState(false);
-  const audioRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const chimeBufferRef = useRef(null);
 
-  // Mobile browsers (iOS Safari in particular) refuse to play audio unless
-  // the call happens directly inside a genuine user gesture - but the chime
-  // is triggered by a realtime database update, not a tap, so it gets
-  // silently blocked on phones. Priming the audio element on the very first
-  // tap anywhere on the page (played instantly then paused) unlocks it for
-  // every later programmatic play() call for the rest of this session.
+  // Web Audio API instead of an <audio> element, on purpose: an <audio>
+  // element gets registered with the browser/OS as an actual media
+  // session, which is exactly what makes the "Now Playing" / lock-screen
+  // media controls show up for what's meant to be a short, silent-in-the-
+  // background sound effect. A raw AudioBufferSourceNode plays through the
+  // same speakers but isn't treated as "media" by the OS at all, so no
+  // lock-screen controls appear - and it also sidesteps several of the
+  // <audio>-specific mobile autoplay quirks that were causing inconsistent
+  // playback in the first place.
+  useEffect(() => {
+    async function loadChime() {
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        const ctx = new AudioContextClass();
+        audioContextRef.current = ctx;
+        const response = await fetch('/sounds/pick-chime.mp3');
+        const arrayBuffer = await response.arrayBuffer();
+        const decoded = await ctx.decodeAudioData(arrayBuffer);
+        chimeBufferRef.current = decoded;
+      } catch (e) {
+        console.error('[chime] failed to load/decode:', e.message);
+      }
+    }
+    loadChime();
+  }, []);
+
+  // Mobile browsers (iOS Safari in particular) create AudioContexts in a
+  // "suspended" state until a genuine user gesture resumes them - but the
+  // chime is triggered by a realtime database update, not a tap, so it
+  // needs to be unlocked ahead of time on the very first tap anywhere on
+  // the page, same idea as before just targeting the AudioContext now.
   useEffect(() => {
     function unlockAudio() {
-      const audio = audioRef.current;
-      if (audio) {
-        audio
-          .play()
-          .then(() => {
-            audio.pause();
-            audio.currentTime = 0;
-          })
-          .catch(() => {});
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {});
       }
       document.removeEventListener('touchstart', unlockAudio);
       document.removeEventListener('click', unlockAudio);
@@ -279,6 +304,22 @@ function LiveDraftPageContent() {
       document.removeEventListener('click', unlockAudio);
     };
   }, []);
+
+  function playChime() {
+    const ctx = audioContextRef.current;
+    const buffer = chimeBufferRef.current;
+    if (!ctx || !buffer) return null;
+    try {
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+      return buffer.duration * 1000;
+    } catch (e) {
+      console.error('[chime] playback failed:', e.message);
+      return null;
+    }
+  }
   const processingRef = useRef(false);
   const initializedRef = useRef(false);
   const prevStatusForResetRef = useRef(null);
@@ -353,16 +394,9 @@ function LiveDraftPageContent() {
         setActiveReveal(next);
         setShowPopout(false);
         let chimeMs = 2000;
-        const audio = audioRef.current;
-        if (audio) {
-          try {
-            audio.currentTime = 0;
-            await audio.play();
-            if (audio.duration && isFinite(audio.duration)) chimeMs = audio.duration * 1000;
-          } catch (e) {
-            console.log('[reveal-queue] chime play failed/blocked', e?.message);
-          }
-        }
+        const playedDurationMs = playChime();
+        if (playedDurationMs) chimeMs = playedDurationMs;
+        else console.log('[reveal-queue] chime did not play (context/buffer not ready yet)');
         await new Promise((resolve) => setTimeout(resolve, chimeMs * 0.75));
         setShowPopout(true);
         setRevealedCount((c) => (c ?? 0) + 1);
@@ -1012,7 +1046,6 @@ function LiveDraftPageContent() {
         Drafted players
       </p>
 
-      <audio ref={audioRef} src="/sounds/pick-chime.mp3" preload="auto" />
 
       <div className="flex gap-2 overflow-x-auto pb-2 items-center" ref={draftedScrollRef}>
         {allSlots.map((slot) => {
@@ -2136,7 +2169,7 @@ function LiveDraftPageContent() {
 
       {rankingToast && (
         <div
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white rounded-lg px-4 py-2.5 flex items-center gap-2"
+          className="fixed top-6 left-1/2 -translate-x-1/2 bg-white rounded-lg px-4 py-2.5 flex items-center gap-2"
           style={{ boxShadow: '0 8px 24px rgba(12,35,64,0.25)', zIndex: 100 }}
         >
           <StarIcon filled size={16} />

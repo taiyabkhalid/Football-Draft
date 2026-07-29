@@ -48,10 +48,17 @@ function DraftPageContent() {
   const searchParams = useSearchParams();
   const focusParam = searchParams.get('focus');
 
-  function scrollRostersIntoView() {
+  function scrollToElement(ref, delay = 200, offset = 100) {
     setTimeout(() => {
-      rostersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 150);
+      const el = ref.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
+    }, delay);
+  }
+
+  function scrollRostersIntoView() {
+    scrollToElement(rostersSectionRef, 250);
   }
 
   const [rosterViewMode, setRosterViewMode] = useState('team'); // 'team' | 'round'
@@ -77,9 +84,11 @@ function DraftPageContent() {
       setViewByTeamOpen(true);
       setRosterViewMode('team');
       setViewingTeamId(profile.team_id);
-      setTimeout(() => {
-        rostersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 300);
+      scrollToElement(rostersSectionRef, 400);
+    } else if (focusParam === 'results') {
+      setViewByTeamOpen(true);
+      setRosterViewMode('board');
+      scrollToElement(rostersSectionRef, 400);
     }
   }, [focusParam, profile]);
 
@@ -2113,7 +2122,7 @@ function DraftPageContent() {
 
       {rankingToast && (
         <div
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white rounded-lg px-4 py-2.5 flex items-center gap-2"
+          className="fixed top-6 left-1/2 -translate-x-1/2 bg-white rounded-lg px-4 py-2.5 flex items-center gap-2"
           style={{ boxShadow: '0 8px 24px rgba(12,35,64,0.25)', zIndex: 100 }}
         >
           <StarIcon filled size={16} />
@@ -2125,7 +2134,7 @@ function DraftPageContent() {
 
       {draftConfirmation && (
         <div
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-lg px-4 py-2.5 flex items-center gap-2"
+          className="fixed top-6 left-1/2 -translate-x-1/2 rounded-lg px-4 py-2.5 flex items-center gap-2"
           style={{ boxShadow: '0 8px 24px rgba(12,35,64,0.25)', zIndex: 100, background: '#185fa5' }}
         >
           <i className="ti ti-circle-check text-base" style={{ color: '#ffffff' }} aria-hidden="true" />

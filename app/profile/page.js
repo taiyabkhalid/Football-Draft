@@ -159,7 +159,7 @@ export default function ProfilePage() {
       <div className="max-w-md mx-auto px-4 py-6">
         {(role === 'gm' || role === 'commissioner') && (
           <Link
-            href="/draft"
+            href={draftStatus === 'completed' ? '/draft?focus=results' : '/draft'}
             className="block text-center mb-4"
             style={{
               background: draftStatus === 'completed' ? '#185fa5' : '#c0392b',
@@ -172,6 +172,24 @@ export default function ProfilePage() {
             }}
           >
             {draftStatus === 'completed' ? 'Draft Results' : 'Go to Draft Room'}
+          </Link>
+        )}
+
+        {role !== 'gm' && role !== 'commissioner' && draftStatus === 'completed' && (
+          <Link
+            href="/live?focus=results"
+            className="block text-center mb-4"
+            style={{
+              background: '#185fa5',
+              color: '#ffffff',
+              fontWeight: 600,
+              borderRadius: 8,
+              padding: '10px 14px',
+              fontSize: 13,
+              textDecoration: 'none',
+            }}
+          >
+            Draft Results
           </Link>
         )}
 
@@ -333,17 +351,17 @@ export default function ProfilePage() {
           </Link>
         )}
 
-        <Link href="/live" className="btn-primary block text-center mb-4">
-          {draftStatus === 'not_started'
-            ? 'Enter Draft Room'
-            : draftStatus === 'completed'
-            ? 'Draft Results'
-            : (
+        {draftStatus !== 'completed' && (
+          <Link href="/live" className="btn-primary block text-center mb-4">
+            {draftStatus === 'not_started' ? (
+              'Enter Draft Room'
+            ) : (
               <>
                 Watch the live draft <i className="ti ti-arrow-right text-sm" aria-hidden="true" />
               </>
             )}
-        </Link>
+          </Link>
+        )}
 
         <div className="rounded-lg border border-line px-3.5 py-3 mb-4">
           <button
