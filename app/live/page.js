@@ -258,6 +258,26 @@ function LiveDraftPageContent() {
   const chimeBufferRef = useRef(null);
   const chimeArrayBufferRef = useRef(null);
   const chimeUnlockedRef = useRef(false);
+  const [chimeUnlocked, setChimeUnlocked] = useState(false);
+  const [soundMuted, setSoundMuted] = useState(false);
+  const soundMutedRef = useRef(false);
+  useEffect(() => {
+    soundMutedRef.current = soundMuted;
+  }, [soundMuted]);
+  const wantsSoundRef = useRef(false);
+
+  // Read the remembered preference on mount - this is what lets sound
+  // "stay on" across leaving and returning to the page within the same
+  // browser session, without needing to re-find and re-tap the icon.
+  useEffect(() => {
+    try {
+      wantsSoundRef.current = sessionStorage.getItem('chimeSoundWanted') === 'true';
+      if (sessionStorage.getItem('chimeSoundMuted') === 'true') setSoundMuted(true);
+    } catch (e) {
+      // sessionStorage can be unavailable (private browsing, etc.) - sound
+      // just falls back to requiring an explicit tap each visit, no crash.
+    }
+  }, []);
 
   // Fetching the raw audio bytes doesn't need an AudioContext at all, so
   // this can safely happen on mount regardless of gestures - only the
@@ -279,46 +299,91 @@ function LiveDraftPageContent() {
   // gesture handler in the first place, decode the chime using that same
   // gesture-created context, and play a silent buffer through it right
   // there too - all synchronously, within the same tap.
-  useEffect(() => {
-    async function unlockAudio() {
-      if (chimeUnlockedRef.current) return;
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContextClass) return;
-      try {
-        const ctx = audioContextRef.current || new AudioContextClass();
-        audioContextRef.current = ctx;
-        if (ctx.state === 'suspended') await ctx.resume();
+  async function unlockAudio() {
+    if (chimeUnlockedRef.current) return;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    try {
+      const ctx = audioContextRef.current || new AudioContextClass();
+      audioContextRef.current = ctx;
+      if (ctx.state === 'suspended') await ctx.resume();
 
-        const silentBuffer = ctx.createBuffer(1, 1, 22050);
-        const source = ctx.createBufferSource();
-        source.buffer = silentBuffer;
-        source.connect(ctx.destination);
-        source.start(0);
+      const silentBuffer = ctx.createBuffer(1, 1, 22050);
+      const source = ctx.createBufferSource();
+      source.buffer = silentBuffer;
+      source.connect(ctx.destination);
+      source.start(0);
 
-        if (!chimeBufferRef.current && chimeArrayBufferRef.current) {
-          // decodeAudioData detaches/consumes the buffer, so decode a copy -
-          // if this gesture fires before the fetch above finishes, the next
-          // gesture (there's almost always more than one before a draft
-          // gets going) picks it up instead.
-          const decoded = await ctx.decodeAudioData(chimeArrayBufferRef.current.slice(0));
-          chimeBufferRef.current = decoded;
-        }
-        chimeUnlockedRef.current = true;
-      } catch (e) {
-        console.error('[chime] unlock/decode failed:', e.message);
+      if (!chimeBufferRef.current && chimeArrayBufferRef.current) {
+        // decodeAudioData detaches/consumes the buffer, so decode a copy -
+        // if this gesture fires before the fetch above finishes, the next
+        // gesture (there's almost always more than one before a draft
+        // gets going) picks it up instead.
+        const decoded = await ctx.decodeAudioData(chimeArrayBufferRef.current.slice(0));
+        chimeBufferRef.current = decoded;
       }
+      chimeUnlockedRef.current = true;
+      setChimeUnlocked(true);
+      setSoundMuted(false);
+      wantsSoundRef.current = true;
+      try {
+        sessionStorage.setItem('chimeSoundWanted', 'true');
+        sessionStorage.setItem('chimeSoundMuted', 'false');
+      } catch (e) {
+        // sessionStorage can be unavailable - sound still works this visit,
+        // it just won't be remembered for next time.
+      }
+    } catch (e) {
+      console.error('[chime] unlock/decode failed:', e.message);
     }
-    document.addEventListener('touchstart', unlockAudio);
-    document.addEventListener('touchend', unlockAudio);
-    document.addEventListener('click', unlockAudio);
+  }
+
+  // Called by the speaker icon in the header. Before sound has ever been
+  // unlocked this visit, tapping it performs the actual unlock (this click
+  // is itself the required user gesture). Once unlocked, tapping it again
+  // just mutes/unmutes - no need to re-unlock, the AudioContext stays
+  // usable for the rest of the page's lifetime once it's been established.
+  function handleToggleSound() {
+    if (!chimeUnlockedRef.current) {
+      unlockAudio();
+      return;
+    }
+    setSoundMuted((prev) => {
+      const next = !prev;
+      try {
+        sessionStorage.setItem('chimeSoundMuted', String(next));
+      } catch (e) {
+        // sessionStorage unavailable - mute still applies this visit.
+      }
+      return next;
+    });
+  }
+
+  // Every browser requires a genuine user gesture before ANY audio can
+  // play at all, full stop - no code can bypass that, it's a security
+  // restriction, not a bug. The explicit speaker icon in the header is the
+  // primary, guaranteed way to satisfy that. This passive listener is a
+  // secondary convenience layered on top of it: it only does anything if
+  // the person already explicitly turned sound on earlier this session
+  // (wantsSoundRef) - it does NOT silently enable sound on someone's first
+  // incidental tap if they've never asked for it, since that would be
+  // surprising rather than helpful.
+  useEffect(() => {
+    function tryAutoRearm() {
+      if (wantsSoundRef.current && !chimeUnlockedRef.current) unlockAudio();
+    }
+    document.addEventListener('touchstart', tryAutoRearm);
+    document.addEventListener('touchend', tryAutoRearm);
+    document.addEventListener('click', tryAutoRearm);
     return () => {
-      document.removeEventListener('touchstart', unlockAudio);
-      document.removeEventListener('touchend', unlockAudio);
-      document.removeEventListener('click', unlockAudio);
+      document.removeEventListener('touchstart', tryAutoRearm);
+      document.removeEventListener('touchend', tryAutoRearm);
+      document.removeEventListener('click', tryAutoRearm);
     };
   }, []);
 
   function playChime() {
+    if (soundMutedRef.current) return null;
     const ctx = audioContextRef.current;
     const buffer = chimeBufferRef.current;
     if (!ctx || !buffer) return null;
@@ -1962,6 +2027,9 @@ function LiveDraftPageContent() {
         pageLabel={draftStatus === 'completed' ? 'Draft results' : draftStatus === 'paused' ? 'Draft paused' : draftStatus === 'not_started' ? 'Draft room' : 'Live draft'}
         liveIndicator={draftStatus === 'in_progress'}
         pickTimer={draftStatus === 'in_progress' ? timerDisplay : undefined}
+        showSoundToggle={draftStatus !== 'completed'}
+        soundOn={chimeUnlocked && !soundMuted}
+        onToggleSound={handleToggleSound}
       />
 
       {preDraftWaitingRoomBlock}

@@ -50,7 +50,7 @@ function DraftPageContent() {
   const focusParam = searchParams.get('focus');
 
   function scrollToElement(ref, delay = 200) {
-    setTimeout(() => {
+    function doScroll() {
       const el = ref.current;
       if (!el) return;
       // Measuring the sticky header's real height at the moment of
@@ -65,7 +65,14 @@ function DraftPageContent() {
       const offset = stickyHeight + 12;
       const top = el.getBoundingClientRect().top + window.scrollY - offset;
       window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
-    }, delay);
+    }
+    setTimeout(doScroll, delay);
+    // Heavier content (the Board grid especially) can still be laying
+    // itself out on a slower phone by the time the first pass runs, which
+    // shifts things after the fact - a corrective second pass shortly
+    // after catches and fixes that rather than leaving the first (now
+    // slightly wrong) position in place.
+    setTimeout(doScroll, delay + 350);
   }
 
   function scrollRostersIntoView() {

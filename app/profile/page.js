@@ -346,7 +346,10 @@ export default function ProfilePage() {
         )}
 
         {team && (
-          <Link href="/live?focus=team" className="btn-primary block text-center mb-3">
+          <Link
+            href={role === 'gm' || role === 'commissioner' ? '/draft?focus=myteam' : '/live?focus=team'}
+            className="btn-primary block text-center mb-3"
+          >
             View My Team
           </Link>
         )}
