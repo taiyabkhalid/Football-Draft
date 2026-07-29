@@ -1276,7 +1276,7 @@ function DraftPageContent() {
                                   {player.full_name}
                                 </p>
                                 <span className="text-[9px] text-muted mt-0.5">
-                                  Rnd {entry.pick.round} . Overall Pick # {entry.pick.pick_number}
+                                  Rnd {getRound(player.draft_pick_number, numTeams)} . Overall Pick # {player.draft_pick_number}
                                 </span>
                               </>
                             ) : entry?.kind === 'skipped' ? (
@@ -1519,7 +1519,7 @@ function DraftPageContent() {
                                         {slot.player.full_name}
                                       </p>
                                       <p className="text-[9px] m-0" style={{ color: '#5a6b7d' }}>
-                                        {slot.player.gender} &middot; Overall Pick #{slot.pickNumber}
+                                        {slot.player.gender} &middot; Overall Pick #{slot.player.draft_pick_number}
                                       </p>
                                     </button>
                                   ) : isSkipped ? (
