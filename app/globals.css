@@ -54,3 +54,12 @@ button {
 .animate-subtle-flash {
   animation: subtle-flash 2s ease-in-out infinite;
 }
+
+@keyframes press-ring-fill {
+  from { stroke-dashoffset: 56.5; }
+  to { stroke-dashoffset: 0; }
+}
+
+.press-ring-progress {
+  animation: press-ring-fill 400ms linear forwards;
+}

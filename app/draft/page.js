@@ -52,7 +52,10 @@ function DraftPageContent() {
   function scrollToElement(ref, delay = 200) {
     function doScroll() {
       const el = ref.current;
-      if (!el) return;
+      if (!el) {
+        console.log('[scrollToElement] ref.current is null - target not mounted yet, scroll skipped');
+        return;
+      }
       // Measuring the sticky header's real height at the moment of
       // scrolling (rather than a fixed guess) is what actually works
       // reliably here - it varies a lot: mobile stacks the three boxes
@@ -64,6 +67,7 @@ function DraftPageContent() {
       const stickyHeight = stickyHeaderRef.current?.getBoundingClientRect().height || 0;
       const offset = stickyHeight + 12;
       const top = el.getBoundingClientRect().top + window.scrollY - offset;
+      console.log('[scrollToElement] scrolling to', { top: Math.max(top, 0), stickyHeight, offset });
       window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
     }
     setTimeout(doScroll, delay);
@@ -94,19 +98,24 @@ function DraftPageContent() {
   const [leftColumnTab, setLeftColumnTab] = useState('available');
 
   useEffect(() => {
+    console.log('[focus-effect] draft page fired', { focusParam, profileTeamId: profile?.team_id, profileLoaded: !!profile });
     if (focusParam === 'search') {
+      console.log('[focus-effect] -> search branch');
       setViewByTeamOpen(false);
       scrollToElement(playerSelectionRef, 300);
     } else if (focusParam === 'myteam' && profile?.team_id) {
+      console.log('[focus-effect] -> myteam branch');
       setViewByTeamOpen(true);
       setRosterViewMode('team');
       setViewingTeamId(profile.team_id);
       scrollToElement(rostersSectionRef, 400);
     } else if (focusParam === 'results') {
+      console.log('[focus-effect] -> results branch');
       setViewByTeamOpen(true);
       setRosterViewMode('board');
       scrollToElement(rostersSectionRef, 400);
     } else if (focusParam === 'selection') {
+      console.log('[focus-effect] -> selection branch');
       // "My Draft Room" / "Go to Draft Room" - explicitly resets View by
       // Team closed even if it was left open from a previous visit to this
       // same route (client-side navigation between two /draft?focus=...
@@ -114,6 +123,10 @@ function DraftPageContent() {
       // persist from an earlier visit rather than genuinely resetting).
       setViewByTeamOpen(false);
       scrollToElement(playerSelectionRef, 300);
+    } else if (focusParam === 'myteam' && !profile?.team_id) {
+      console.log('[focus-effect] -> myteam requested but profile.team_id not yet available, waiting for profile to load');
+    } else {
+      console.log('[focus-effect] -> no branch matched focusParam:', focusParam);
     }
   }, [focusParam, profile]);
 
@@ -586,19 +599,62 @@ function DraftPageContent() {
     }
   }
 
-  // Press-and-hold drag reordering for My Rankings - Pointer Events handle
-  // mouse and touch under one model, unlike native HTML5 drag-and-drop
-  // which doesn't work reliably on touch devices.
+  // Press-and-hold-then-drag reordering for My Rankings - Pointer Events
+  // handle mouse and touch under one model. A deliberate hold before the
+  // drag activates (rather than starting instantly on touch) avoids
+  // hijacking an ordinary tap or scroll gesture, and gives a clear visual
+  // moment (the filling ring) that tells the person exactly when they can
+  // start moving the row - the earlier instant-drag version made ordinary
+  // taps and scroll attempts feel like they'd sometimes "grabbed" the row
+  // by accident, and other times not respond to a genuine attempt to drag.
+  const LONG_PRESS_MS = 400;
+  const MOVE_CANCEL_THRESHOLD = 10;
   const dragOrderRef = useRef(null);
   const draggingIdRef = useRef(null);
+  const activatedRef = useRef(false);
+  const pressStartPosRef = useRef({ x: 0, y: 0 });
+  const pressTimerRef = useRef(null);
   const rankRowRefs = useRef({});
   const [dragPreviewOrder, setDragPreviewOrder] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
+  const [pressingId, setPressingId] = useState(null);
+
+  function activateDrag(playerId) {
+    activatedRef.current = true;
+    draggingIdRef.current = playerId;
+    const availableIds = rankedPlayersOrdered.filter((r) => !r.player.team_id).map((r) => r.player_id);
+    dragOrderRef.current = availableIds;
+    setPressingId(null);
+    setDraggingId(playerId);
+  }
+
+  function cleanupPressListeners() {
+    document.removeEventListener('pointermove', handleRankPointerMove);
+    document.removeEventListener('pointerup', handleRankPointerUp);
+    document.removeEventListener('touchmove', handleRankPointerMove);
+    document.removeEventListener('touchend', handleRankPointerUp);
+  }
 
   function handleRankPointerMove(e) {
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+
+    if (!activatedRef.current) {
+      // Still in the "holding, not yet activated" phase - moving more than
+      // a small threshold means this was a scroll or a tap, not a deliberate
+      // hold-to-drag, so cancel the pending activation entirely.
+      const dx = Math.abs(x - pressStartPosRef.current.x);
+      const dy = Math.abs(y - pressStartPosRef.current.y);
+      if (dx > MOVE_CANCEL_THRESHOLD || dy > MOVE_CANCEL_THRESHOLD) {
+        clearTimeout(pressTimerRef.current);
+        setPressingId(null);
+        cleanupPressListeners();
+      }
+      return;
+    }
+
     if (!draggingIdRef.current || !dragOrderRef.current) return;
     if (e.cancelable) e.preventDefault();
-    const y = e.touches ? e.touches[0].clientY : e.clientY;
     const ids = dragOrderRef.current;
     let newIndex = ids.length - 1;
     for (let i = 0; i < ids.length; i++) {
@@ -625,14 +681,14 @@ function DraftPageContent() {
   }
 
   function handleRankPointerUp() {
-    document.removeEventListener('pointermove', handleRankPointerMove);
-    document.removeEventListener('pointerup', handleRankPointerUp);
-    document.removeEventListener('touchmove', handleRankPointerMove);
-    document.removeEventListener('touchend', handleRankPointerUp);
-    if (dragOrderRef.current) {
+    clearTimeout(pressTimerRef.current);
+    cleanupPressListeners();
+    setPressingId(null);
+    if (activatedRef.current && dragOrderRef.current) {
       const draftedIds = rankedPlayersOrdered.filter((r) => r.player.team_id).map((r) => r.player_id);
       saveRankingOrder([...dragOrderRef.current, ...draftedIds]);
     }
+    activatedRef.current = false;
     draggingIdRef.current = null;
     dragOrderRef.current = null;
     setDraggingId(null);
@@ -641,10 +697,12 @@ function DraftPageContent() {
 
   function handleRankPointerDown(e, playerId) {
     e.preventDefault();
-    draggingIdRef.current = playerId;
-    const availableIds = rankedPlayersOrdered.filter((r) => !r.player.team_id).map((r) => r.player_id);
-    dragOrderRef.current = availableIds;
-    setDraggingId(playerId);
+    activatedRef.current = false;
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+    pressStartPosRef.current = { x, y };
+    setPressingId(playerId);
+    pressTimerRef.current = setTimeout(() => activateDrag(playerId), LONG_PRESS_MS);
     document.addEventListener('pointermove', handleRankPointerMove);
     document.addEventListener('pointerup', handleRankPointerUp);
     document.addEventListener('touchmove', handleRankPointerMove, { passive: false });
@@ -1864,31 +1922,41 @@ function DraftPageContent() {
                         opacity: isDrafted ? 0.65 : 1,
                       }}
                     >
-                      {!isDrafted && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleRanking(p.id);
-                          }}
-                          className="lg:hidden absolute top-1.5 right-1.5 z-10"
-                          aria-label="Remove from My Rankings"
-                        >
-                          <StarIcon filled size={16} />
-                        </button>
-                      )}
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-start gap-2">
                         {!isDrafted && (
                           <span
                             onPointerDown={(e) => handleRankPointerDown(e, p.id)}
                             onTouchStart={(e) => handleRankPointerDown(e, p.id)}
                             className="flex-shrink-0 cursor-grab active:cursor-grabbing"
-                            style={{ touchAction: 'none' }}
-                            aria-label="Drag to reorder"
+                            style={{ touchAction: 'none', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            aria-label="Press and hold to drag and reorder"
                           >
-                            <i className="ti ti-grip-vertical text-base" style={{ color: '#8b97a3' }} aria-hidden="true" />
+                            {pressingId === p.id ? (
+                              <svg width="22" height="22" viewBox="0 0 22 22">
+                                <circle cx="11" cy="11" r="9" fill="none" stroke="#b5d4f4" strokeWidth="2.5" />
+                                <circle
+                                  className="press-ring-progress"
+                                  cx="11"
+                                  cy="11"
+                                  r="9"
+                                  fill="none"
+                                  stroke="#185fa5"
+                                  strokeWidth="2.5"
+                                  strokeDasharray="56.5"
+                                  strokeLinecap="round"
+                                  transform="rotate(-90 11 11)"
+                                />
+                              </svg>
+                            ) : (
+                              <i
+                                className="ti ti-grip-vertical text-base"
+                                style={{ color: isBeingDragged ? '#185fa5' : '#8b97a3' }}
+                                aria-hidden="true"
+                              />
+                            )}
                           </span>
                         )}
-                        <div className={`flex-1 min-w-0 cursor-pointer ${!isDrafted ? 'pr-5 lg:pr-0' : ''}`} onClick={() => openProfile(p.id)}>
+                        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openProfile(p.id)}>
                           {isDrafted ? (
                             <>
                               <p className="text-[10px] font-semibold m-0" style={{ color: '#3d4a57' }}>
@@ -1913,7 +1981,39 @@ function DraftPageContent() {
                           )}
                         </div>
                         {!isDrafted && (
-                          <div className="hidden lg:flex flex-col items-end gap-1 flex-shrink-0">
+                          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleRanking(p.id);
+                                }}
+                                className="lg:hidden text-[10px]"
+                                style={{ color: '#8b97a3' }}
+                              >
+                                Remove
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleRanking(p.id);
+                                }}
+                                className="lg:hidden"
+                                aria-label="Remove from My Rankings"
+                              >
+                                <StarIcon filled size={16} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleRanking(p.id);
+                                }}
+                                className="hidden lg:block text-[10px]"
+                                style={{ color: '#8b97a3' }}
+                              >
+                                Remove
+                              </button>
+                            </div>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1925,32 +2025,9 @@ function DraftPageContent() {
                             >
                               {drafting === p.id ? 'Drafting…' : 'Draft Player'}
                             </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleRanking(p.id);
-                              }}
-                              className="text-[10px]"
-                              style={{ color: '#8b97a3' }}
-                            >
-                              Remove
-                            </button>
                           </div>
                         )}
                       </div>
-                      {!isDrafted && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            draftPlayer(p);
-                          }}
-                          disabled={disabled}
-                          className="lg:hidden w-full text-[11px] font-medium rounded-md px-3 py-1.5 mt-2"
-                          style={{ background: disabled ? '#d8dde2' : '#185fa5', color: '#ffffff', border: 'none' }}
-                        >
-                          {drafting === p.id ? 'Drafting…' : 'Draft Player'}
-                        </button>
-                      )}
                     </div>
                   );
                 })}

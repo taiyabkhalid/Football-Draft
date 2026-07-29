@@ -129,8 +129,12 @@ function LiveDraftPageContent() {
   function scrollToElement(ref, delay = 200, offset = 20) {
     setTimeout(() => {
       const el = ref.current;
-      if (!el) return;
+      if (!el) {
+        console.log('[scrollToElement] ref.current is null - target not mounted yet, scroll skipped');
+        return;
+      }
       const top = el.getBoundingClientRect().top + window.scrollY - offset;
+      console.log('[scrollToElement] scrolling to', { top: Math.max(top, 0) });
       window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
     }, delay);
   }
@@ -201,15 +205,19 @@ function LiveDraftPageContent() {
       // than a one-time window.location read) means this correctly re-fires
       // even when clicking a menu link while already on this page.
       if (!loading) {
+        console.log('[focus-effect] live page fired', { focusParam, playerRowTeamId: playerRow?.team_id, draftStatus });
         if (focusParam === 'team' && playerRow?.team_id) {
+          console.log('[focus-effect] -> team branch');
           setViewByTeamOpen(true);
           setRosterViewMode('team');
           scrollToElement(rostersSectionRef, 400);
         } else if (focusParam === 'results') {
+          console.log('[focus-effect] -> results branch');
           setViewByTeamOpen(true);
           setRosterViewMode('board');
           scrollToElement(rostersSectionRef, 400);
         } else if (focusParam === 'search') {
+          console.log('[focus-effect] -> search branch, draftStatus:', draftStatus);
           if (draftStatus === 'not_started') {
             setSearchPanelOpen(true);
             scrollToElement(searchPanelRef, 400);
@@ -218,6 +226,8 @@ function LiveDraftPageContent() {
             setRosterViewMode('search');
             scrollToElement(rostersSectionRef, 400);
           }
+        } else if (focusParam) {
+          console.log('[focus-effect] -> no branch matched focusParam:', focusParam);
         }
       }
     }
@@ -300,19 +310,30 @@ function LiveDraftPageContent() {
   // gesture-created context, and play a silent buffer through it right
   // there too - all synchronously, within the same tap.
   async function unlockAudio() {
-    if (chimeUnlockedRef.current) return;
+    if (chimeUnlockedRef.current) {
+      console.log('[chime] unlockAudio called but already unlocked, skipping');
+      return;
+    }
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return;
+    if (!AudioContextClass) {
+      console.log('[chime] no AudioContext class available on this browser at all');
+      return;
+    }
     try {
       const ctx = audioContextRef.current || new AudioContextClass();
       audioContextRef.current = ctx;
-      if (ctx.state === 'suspended') await ctx.resume();
+      console.log('[chime] context created/reused, state:', ctx.state);
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+        console.log('[chime] resume() completed, state now:', ctx.state);
+      }
 
       const silentBuffer = ctx.createBuffer(1, 1, 22050);
       const source = ctx.createBufferSource();
       source.buffer = silentBuffer;
       source.connect(ctx.destination);
       source.start(0);
+      console.log('[chime] silent unlock buffer played');
 
       if (!chimeBufferRef.current && chimeArrayBufferRef.current) {
         // decodeAudioData detaches/consumes the buffer, so decode a copy -
@@ -321,11 +342,15 @@ function LiveDraftPageContent() {
         // gets going) picks it up instead.
         const decoded = await ctx.decodeAudioData(chimeArrayBufferRef.current.slice(0));
         chimeBufferRef.current = decoded;
+        console.log('[chime] chime buffer decoded, duration:', decoded.duration);
+      } else if (!chimeArrayBufferRef.current) {
+        console.log('[chime] chime raw bytes not fetched yet - will decode on next gesture instead');
       }
       chimeUnlockedRef.current = true;
       setChimeUnlocked(true);
       setSoundMuted(false);
       wantsSoundRef.current = true;
+      console.log('[chime] unlock fully complete');
       try {
         sessionStorage.setItem('chimeSoundWanted', 'true');
         sessionStorage.setItem('chimeSoundMuted', 'false');
@@ -334,7 +359,7 @@ function LiveDraftPageContent() {
         // it just won't be remembered for next time.
       }
     } catch (e) {
-      console.error('[chime] unlock/decode failed:', e.message);
+      console.error('[chime] unlock/decode failed:', e.name, e.message);
     }
   }
 
@@ -383,23 +408,35 @@ function LiveDraftPageContent() {
   }, []);
 
   function playChime() {
-    if (soundMutedRef.current) return null;
+    if (soundMutedRef.current) {
+      console.log('[chime] playChime called but sound is muted, skipping');
+      return null;
+    }
     const ctx = audioContextRef.current;
     const buffer = chimeBufferRef.current;
-    if (!ctx || !buffer) return null;
+    if (!ctx) {
+      console.log('[chime] playChime called but no AudioContext exists yet - never unlocked');
+      return null;
+    }
+    if (!buffer) {
+      console.log('[chime] playChime called but chime buffer not decoded yet');
+      return null;
+    }
     try {
       // iOS can silently re-suspend an AudioContext after a stretch of no
       // audio activity (which is common here - picks can be minutes apart)
       // - catching that and resuming defensively before playing means a
       // long gap between chimes doesn't leave it stuck suspended.
-      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      console.log('[chime] playChime attempting, context state:', ctx.state);
+      if (ctx.state === 'suspended') ctx.resume().catch((e) => console.error('[chime] defensive resume failed:', e.message));
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(ctx.destination);
       source.start(0);
+      console.log('[chime] source.start(0) called successfully');
       return buffer.duration * 1000;
     } catch (e) {
-      console.error('[chime] playback failed:', e.message);
+      console.error('[chime] playback failed:', e.name, e.message);
       return null;
     }
   }
@@ -2031,6 +2068,19 @@ function LiveDraftPageContent() {
         soundOn={chimeUnlocked && !soundMuted}
         onToggleSound={handleToggleSound}
       />
+
+      {!chimeUnlocked && draftStatus !== 'completed' && (
+        <button
+          onClick={unlockAudio}
+          className="w-full flex items-center justify-center gap-2 py-2.5"
+          style={{ background: '#185fa5', border: 'none', cursor: 'pointer' }}
+        >
+          <i className="ti ti-volume text-base" style={{ color: '#ffffff' }} aria-hidden="true" />
+          <span className="text-xs font-medium" style={{ color: '#ffffff' }}>
+            Tap to enable the draft pick chime
+          </span>
+        </button>
+      )}
 
       {preDraftWaitingRoomBlock}
 
