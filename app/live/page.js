@@ -126,7 +126,7 @@ function LiveDraftPageContent() {
   const searchPanelRef = useRef(null);
   const [searchPanelOpen, setSearchPanelOpen] = useState(false);
 
-  function scrollToElement(ref, delay = 200, offset = 100) {
+  function scrollToElement(ref, delay = 200, offset = 20) {
     setTimeout(() => {
       const el = ref.current;
       if (!el) return;

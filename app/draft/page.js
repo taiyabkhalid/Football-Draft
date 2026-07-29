@@ -43,15 +43,26 @@ function DraftPageContent() {
   const [viewByTeamOpen, setViewByTeamOpen] = useState(false);
   const [upcomingPicksOpen, setUpcomingPicksOpen] = useState(false);
   const rostersSectionRef = useRef(null);
+  const stickyHeaderRef = useRef(null);
   const playerSelectionRef = useRef(null);
 
   const searchParams = useSearchParams();
   const focusParam = searchParams.get('focus');
 
-  function scrollToElement(ref, delay = 200, offset = 100) {
+  function scrollToElement(ref, delay = 200) {
     setTimeout(() => {
       const el = ref.current;
       if (!el) return;
+      // Measuring the sticky header's real height at the moment of
+      // scrolling (rather than a fixed guess) is what actually works
+      // reliably here - it varies a lot: mobile stacks the three boxes
+      // vertically (much taller) where desktop shows them side by side,
+      // the "on the clock" reminder banner adds height only when it's
+      // showing, and completely different content renders pre-draft vs
+      // during vs after. A fixed offset can only ever be right for one of
+      // those cases.
+      const stickyHeight = stickyHeaderRef.current?.getBoundingClientRect().height || 0;
+      const offset = stickyHeight + 12;
       const top = el.getBoundingClientRect().top + window.scrollY - offset;
       window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
     }, delay);
@@ -840,6 +851,7 @@ function DraftPageContent() {
       {draftStatus === 'not_started' && (
         <>
           <div
+            ref={stickyHeaderRef}
             className="px-4 sm:px-5 pt-4 pb-3"
             style={{ position: 'sticky', top: 0, zIndex: 30, background: '#ffffff', boxShadow: '0 2px 6px rgba(12,35,64,0.08)' }}
           >
@@ -900,6 +912,7 @@ function DraftPageContent() {
         <>
           {/* Previous / current / next strip — frozen at top so GMs can always see the clock */}
           <div
+            ref={stickyHeaderRef}
             style={{ position: 'sticky', top: 0, zIndex: 30, background: '#ffffff', boxShadow: '0 2px 6px rgba(12,35,64,0.08)' }}
           >
           <div className="flex flex-col sm:flex-row gap-2 px-4 sm:px-5 pt-4 pb-3">
