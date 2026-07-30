@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import BrandHeader from '../../lib/BrandHeader';
 
@@ -146,6 +147,13 @@ export default function PlayerLoginPage() {
           <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? 'Signing in…' : 'Log in'}
           </button>
+
+          <p className="text-center text-xs text-muted mt-4">
+            New here?{' '}
+            <Link href="/register" style={{ color: '#185fa5', fontWeight: 500 }}>
+              Register as a player
+            </Link>
+          </p>
         </form>
       </div>
     </main>

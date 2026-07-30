@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
 import FootballIcon, { lightenColor, StarIcon } from '../../lib/FootballIcon';
+import OnboardingTour from '../../lib/OnboardingTour';
 import PrintRosterButton from '../../lib/PrintRosterButton';
 
 const ALL_POSITIONS = ['QB', 'WR', 'C', 'CB', 'Safety', 'LB', 'Rush'];
@@ -153,7 +154,7 @@ function DraftPageContent() {
       }
       const { data: profileRow } = await supabase
         .from('profiles')
-        .select('role, team_id')
+        .select('role, team_id, is_primary, has_seen_gm_tour')
         .eq('id', user.id)
         .maybeSingle();
       if (!profileRow) {
@@ -491,6 +492,103 @@ function DraftPageContent() {
   );
   const isProxyForClockTeam = Boolean(teamOnClock && myProxyTeamIds.has(teamOnClock.id));
   const myActingTeamId = profile?.team_id || [...myProxyTeamIds][0] || null;
+
+  const [tourSlides, setTourSlides] = useState([]);
+  const [tourIsForced, setTourIsForced] = useState(true);
+  const [tourReplayRequested, setTourReplayRequested] = useState(false);
+
+  const CORE_TOUR_SLIDES = [
+    {
+      icon: 'ti-clock',
+      title: 'This box is your clock',
+      body: "It always shows who just picked, who's on the clock, and who's up next.",
+    },
+    {
+      icon: 'ti-cards',
+      title: 'Browse and draft here',
+      body: 'Search, sort, and tap Draft when it\u2019s your turn.',
+    },
+    {
+      icon: 'ti-star',
+      iconBg: '#faf3e3',
+      iconColor: '#f3c37a',
+      title: 'Star and rank your top picks now',
+      body: 'Build a ranked list before the clock even starts \u2014 find your "starred" list under My Rankings.',
+    },
+  ];
+  const COMMISSIONER_TOUR_SLIDE = {
+    icon: 'ti-settings',
+    title: 'Commissioner Tools',
+    body: 'Pause and resume the draft, skip a slow pick, and manage settings from Commissioner Tools in the menu.',
+  };
+
+  // Determines what onboarding (if anything) this specific person needs to
+  // see - the primary commissioner never sees any of this, a first-time
+  // visitor gets the full mandatory sequence (core + commissioner slide if
+  // applicable + a proxy slide if they're also newly proxying), and
+  // someone who's already done the core tour but is proxying for a team
+  // they haven't been notified about yet just gets that one proxy slide.
+  useEffect(() => {
+    if (!profile || profile.is_primary || !myEmail) return;
+    async function determineTour() {
+      const slides = [];
+      const needsCore = !profile.has_seen_gm_tour;
+      if (needsCore) {
+        slides.push(...CORE_TOUR_SLIDES);
+        if (profile.role === 'commissioner') slides.push(COMMISSIONER_TOUR_SLIDE);
+      }
+      for (const teamId of myProxyTeamIds) {
+        const { data } = await supabase
+          .from('proxy_tour_seen')
+          .select('team_id')
+          .eq('email', myEmail)
+          .eq('team_id', teamId)
+          .maybeSingle();
+        if (!data) {
+          const team = teamsById[teamId];
+          const gmName = ownerByTeam[teamId]?.name;
+          slides.push({
+            icon: 'ti-user-shield',
+            title: `You're a proxy for ${team?.name || 'a team'}`,
+            body: `You're drafting on behalf of ${team?.name || 'this team'}${gmName ? `, filling in for ${gmName}` : ''}.`,
+            proxyTeamId: teamId,
+          });
+          break;
+        }
+      }
+      if (slides.length > 0) {
+        setTourIsForced(true);
+        setTourSlides(slides);
+      }
+    }
+    determineTour();
+  }, [profile, myProxyTeamIds, myEmail, teamsById, ownerByTeam]);
+
+  async function handleTourComplete() {
+    const hadCoreSlides = tourSlides.some((s) => !s.proxyTeamId);
+    const proxySlide = tourSlides.find((s) => s.proxyTeamId);
+    if (hadCoreSlides && !tourReplayRequested) {
+      await supabase.rpc('mark_gm_tour_seen');
+    }
+    if (proxySlide) {
+      await supabase.from('proxy_tour_seen').insert({ email: myEmail, team_id: proxySlide.proxyTeamId });
+    }
+    setTourSlides([]);
+    setTourReplayRequested(false);
+  }
+
+  function handleTourSkip() {
+    setTourSlides([]);
+    setTourReplayRequested(false);
+  }
+
+  function handleReplayTour() {
+    const slides = [...CORE_TOUR_SLIDES];
+    if (profile?.role === 'commissioner') slides.push(COMMISSIONER_TOUR_SLIDE);
+    setTourIsForced(false);
+    setTourReplayRequested(true);
+    setTourSlides(slides);
+  }
 
   const fetchRankings = useCallback(async () => {
     if (!myActingTeamId) {
@@ -982,7 +1080,7 @@ function DraftPageContent() {
               </div>
               {profile?.role === 'commissioner' && (
                 <p className="text-[10px] text-muted mt-2 mb-0">
-                  You can still change this order in Commish Tools right up until the draft starts.
+                  You can still change this order in Commissioner Tools right up until the draft starts.
                 </p>
               )}
             </div>
@@ -2063,23 +2161,30 @@ function DraftPageContent() {
             <p className="text-[11px] font-bold uppercase tracking-wide text-muted m-0">
               {draftStatus === 'completed' ? 'Available players' : `Round ${currentRound}, pick ${currentPickNumber}`}
             </p>
-            {(draftStatus === 'in_progress' || draftStatus === 'paused') && profile?.team_id && rosterByTeam[profile.team_id] && (
-              <p
-                className="text-[11px] m-0 flex items-center gap-1"
-                style={{ color: rosterByTeam[profile.team_id].femaleCount >= minFemale ? '#0c2340' : '#c0392b' }}
-              >
-                {rosterByTeam[profile.team_id].femaleCount >= minFemale ? (
-                  <>
-                    {rosterByTeam[profile.team_id].femaleCount} of {minFemale} Females Drafted
-                    <i className="ti ti-circle-check text-sm" style={{ color: '#3b6d11' }} aria-hidden="true" />
-                  </>
-                ) : (
-                  <>
-                    {rosterByTeam[profile.team_id].femaleCount} of {minFemale} required Females drafted!
-                  </>
-                )}
-              </p>
-            )}
+            <div className="flex items-center gap-3">
+              {!profile?.is_primary && (
+                <button onClick={handleReplayTour} className="text-[11px]" style={{ color: '#8b97a3' }}>
+                  How this works
+                </button>
+              )}
+              {(draftStatus === 'in_progress' || draftStatus === 'paused') && profile?.team_id && rosterByTeam[profile.team_id] && (
+                <p
+                  className="text-[11px] m-0 flex items-center gap-1"
+                  style={{ color: rosterByTeam[profile.team_id].femaleCount >= minFemale ? '#0c2340' : '#c0392b' }}
+                >
+                  {rosterByTeam[profile.team_id].femaleCount >= minFemale ? (
+                    <>
+                      {rosterByTeam[profile.team_id].femaleCount} of {minFemale} Females Drafted
+                      <i className="ti ti-circle-check text-sm" style={{ color: '#3b6d11' }} aria-hidden="true" />
+                    </>
+                  ) : (
+                    <>
+                      {rosterByTeam[profile.team_id].femaleCount} of {minFemale} required Females drafted!
+                    </>
+                  )}
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-3">
             {boardList.map((p) => {
@@ -2303,6 +2408,15 @@ function DraftPageContent() {
             You have drafted {draftConfirmation}
           </p>
         </div>
+      )}
+
+      {tourSlides.length > 0 && (
+        <OnboardingTour
+          slides={tourSlides}
+          forced={tourIsForced}
+          onComplete={handleTourComplete}
+          onSkip={handleTourSkip}
+        />
       )}
 
       {pendingRankingDraft && (

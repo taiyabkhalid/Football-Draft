@@ -414,6 +414,15 @@ export default function RegisterPage() {
           </div>
         )}
 
+        {mode !== 'edit' && (
+          <p className="text-xs text-muted mb-6">
+            Already registered?{' '}
+            <Link href="/login" style={{ color: '#185fa5', fontWeight: 500 }}>
+              Log in instead
+            </Link>
+          </p>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-8">
           <section>
             <div className="flex items-center gap-2 mb-3">

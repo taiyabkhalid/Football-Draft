@@ -526,22 +526,14 @@ function LiveDraftPageContent() {
 
     async function run() {
       try {
-        console.log('[reveal-queue] processing pick', {
-          pick_number: next.pick_number,
-          player_id: next.player_id,
-          skip_reason: next.skip_reason,
-          isSkip: !next.player_id,
-        });
         setActiveReveal(next);
         setShowPopout(false);
         let chimeMs = 2000;
         const playedDurationMs = playChime();
         if (playedDurationMs) chimeMs = playedDurationMs;
-        else console.log('[reveal-queue] chime did not play (context/buffer not ready yet)');
         await new Promise((resolve) => setTimeout(resolve, chimeMs * 0.75));
         setShowPopout(true);
         setRevealedCount((c) => (c ?? 0) + 1);
-        console.log('[reveal-queue] showPopout=true for pick', next.pick_number);
         // Hold at least 5 seconds before considering the next queued pick -
         // if nothing else is queued when that ends, this pick just stays
         // featured (persistently) until a genuinely new one arrives.

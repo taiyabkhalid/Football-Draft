@@ -136,6 +136,14 @@ export default function ProfilePage() {
     !settings?.profile_edits_unlocked_override &&
     (draftStatus === 'in_progress' || draftStatus === 'paused' || withinTwoHoursOfDraft);
 
+  // Separate 30-minute threshold, matching the same timing the hamburger
+  // menu's "Watch Draft" label switches at - this button's wording should
+  // change at the same point, not just once the draft is technically live.
+  const withinThirtyMinutesOfDraft =
+    draftDatetime && Date.now() >= draftDatetime.getTime() - 30 * 60 * 1000;
+  const showWatchWording =
+    draftStatus === 'in_progress' || draftStatus === 'paused' || (draftStatus === 'not_started' && withinThirtyMinutesOfDraft);
+
   return (
     <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
       <BrandHeader pageLabel="Your profile" />
@@ -258,7 +266,7 @@ export default function ProfilePage() {
                   textAlign: 'center',
                 }}
               >
-                Commish tools
+                Commissioner tools
               </Link>
             )}
           </div>
@@ -356,12 +364,12 @@ export default function ProfilePage() {
 
         {draftStatus !== 'completed' && (
           <Link href="/live" className="btn-primary block text-center mb-4">
-            {draftStatus === 'not_started' ? (
-              'Enter Draft Room'
-            ) : (
+            {showWatchWording ? (
               <>
                 Watch the live draft <i className="ti ti-arrow-right text-sm" aria-hidden="true" />
               </>
+            ) : (
+              'Enter Draft Room'
             )}
           </Link>
         )}
