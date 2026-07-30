@@ -593,6 +593,20 @@ function DraftPageContent() {
   }
 
   async function saveRankingOrder(orderedIds) {
+    // Update the local order instantly, matching the pattern already used
+    // for the star toggle - the round trip plus up to N separate realtime
+    // events (reorder_rankings updates one row at a time server-side) is
+    // what was making this feel laggy/unresponsive, even though the actual
+    // database work completes in single-digit milliseconds. This makes the
+    // reorder itself the source of truth immediately; the network call
+    // below just persists it.
+    setTeamRankings((prev) => {
+      const byId = {};
+      prev.forEach((r) => {
+        byId[r.player_id] = r;
+      });
+      return orderedIds.map((pid, i) => ({ ...(byId[pid] || {}), player_id: pid, rank_order: i }));
+    });
     const { error } = await supabase.rpc('reorder_rankings', { p_player_ids: orderedIds });
     if (error) {
       console.error('[rankings] reorder_rankings failed:', error.message);
@@ -600,26 +614,118 @@ function DraftPageContent() {
     }
   }
 
-  // Reordering My Rankings via simple up/down swap, rather than drag and
-  // drop. Two different drag implementations (instant-start, then a
-  // long-press-to-activate version) both proved unreliable on real
-  // devices - sometimes not responding to a genuine attempt to drag,
-  // sometimes registering a move without actually committing it. Arrow
-  // buttons aren't as slick, but they behave identically on every device
-  // every time, with no gesture-timing risk at all - worth the tradeoff
-  // for something people are relying on live, during an actual draft.
+  // Press-and-hold-then-drag reordering for My Rankings - Pointer Events
+  // handle mouse and touch under one model. A deliberate hold before the
+  // drag activates (rather than starting instantly on touch) avoids
+  // hijacking an ordinary tap or scroll gesture, and gives a clear visual
+  // moment (the filling ring) that tells the person exactly when they can
+  // start moving the row. The earlier version of this felt broken because
+  // saveRankingOrder (called on release) had no optimistic update yet - the
+  // live preview while dragging was always instant, but letting go handed
+  // off to a save that could take a moment to actually reflect, which
+  // looked exactly like "it drags to the right spot but doesn't commit."
+  // That's fixed now, so the release should feel instant too.
+  const LONG_PRESS_MS = 400;
+  const MOVE_CANCEL_THRESHOLD = 10;
+  const dragOrderRef = useRef(null);
+  const draggingIdRef = useRef(null);
+  const activatedRef = useRef(false);
+  const pressStartPosRef = useRef({ x: 0, y: 0 });
+  const pressTimerRef = useRef(null);
   const rankRowRefs = useRef({});
+  const [dragPreviewOrder, setDragPreviewOrder] = useState(null);
+  const [draggingId, setDraggingId] = useState(null);
+  const [pressingId, setPressingId] = useState(null);
 
-  function moveRankedPlayer(playerId, direction) {
+  function activateDrag(playerId) {
+    activatedRef.current = true;
+    draggingIdRef.current = playerId;
     const availableIds = rankedPlayersOrdered.filter((r) => !r.player.team_id).map((r) => r.player_id);
-    const currentIndex = availableIds.indexOf(playerId);
-    const swapIndex = currentIndex + direction;
-    if (currentIndex === -1 || swapIndex < 0 || swapIndex >= availableIds.length) return;
-    const newOrder = [...availableIds];
-    [newOrder[currentIndex], newOrder[swapIndex]] = [newOrder[swapIndex], newOrder[currentIndex]];
-    const draftedIds = rankedPlayersOrdered.filter((r) => r.player.team_id).map((r) => r.player_id);
-    saveRankingOrder([...newOrder, ...draftedIds]);
+    dragOrderRef.current = availableIds;
+    setPressingId(null);
+    setDraggingId(playerId);
   }
+
+  function cleanupPressListeners() {
+    document.removeEventListener('pointermove', handleRankPointerMove);
+    document.removeEventListener('pointerup', handleRankPointerUp);
+    document.removeEventListener('touchmove', handleRankPointerMove);
+    document.removeEventListener('touchend', handleRankPointerUp);
+  }
+
+  function handleRankPointerMove(e) {
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+
+    if (!activatedRef.current) {
+      // Still in the "holding, not yet activated" phase - moving more than
+      // a small threshold means this was a scroll or a tap, not a deliberate
+      // hold-to-drag, so cancel the pending activation entirely.
+      const dx = Math.abs(x - pressStartPosRef.current.x);
+      const dy = Math.abs(y - pressStartPosRef.current.y);
+      if (dx > MOVE_CANCEL_THRESHOLD || dy > MOVE_CANCEL_THRESHOLD) {
+        clearTimeout(pressTimerRef.current);
+        setPressingId(null);
+        cleanupPressListeners();
+      }
+      return;
+    }
+
+    if (!draggingIdRef.current || !dragOrderRef.current) return;
+    if (e.cancelable) e.preventDefault();
+    const ids = dragOrderRef.current;
+    let newIndex = ids.length - 1;
+    for (let i = 0; i < ids.length; i++) {
+      const node = rankRowRefs.current[ids[i]];
+      if (!node) continue;
+      const rect = node.getBoundingClientRect();
+      // Comparing against each row's top edge (rather than its midpoint)
+      // means a reorder registers as soon as the drag crosses into the
+      // row above, instead of needing to cross halfway into it.
+      if (y < rect.top + rect.height * 0.25) {
+        newIndex = i;
+        break;
+      }
+    }
+    const currentIndex = ids.indexOf(draggingIdRef.current);
+    if (currentIndex !== -1 && newIndex !== currentIndex) {
+      const newOrder = [...ids];
+      newOrder.splice(currentIndex, 1);
+      newOrder.splice(newIndex, 0, draggingIdRef.current);
+      dragOrderRef.current = newOrder;
+      setDragPreviewOrder(newOrder);
+    }
+  }
+
+  function handleRankPointerUp() {
+    clearTimeout(pressTimerRef.current);
+    cleanupPressListeners();
+    setPressingId(null);
+    if (activatedRef.current && dragOrderRef.current) {
+      const draftedIds = rankedPlayersOrdered.filter((r) => r.player.team_id).map((r) => r.player_id);
+      saveRankingOrder([...dragOrderRef.current, ...draftedIds]);
+    }
+    activatedRef.current = false;
+    draggingIdRef.current = null;
+    dragOrderRef.current = null;
+    setDraggingId(null);
+    setDragPreviewOrder(null);
+  }
+
+  function handleRankPointerDown(e, playerId) {
+    e.preventDefault();
+    activatedRef.current = false;
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+    pressStartPosRef.current = { x, y };
+    setPressingId(playerId);
+    pressTimerRef.current = setTimeout(() => activateDrag(playerId), LONG_PRESS_MS);
+    document.addEventListener('pointermove', handleRankPointerMove);
+    document.addEventListener('pointerup', handleRankPointerUp);
+    document.addEventListener('touchmove', handleRankPointerMove, { passive: false });
+    document.addEventListener('touchend', handleRankPointerUp);
+  }
+
 
   const canDraft =
     teamOnClock &&
@@ -1805,12 +1911,17 @@ function DraftPageContent() {
               </p>
             ) : (
               <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
-                {rankedPlayersOrdered.map((r) => {
+                {(() => {
+                  const draftedEntries = rankedPlayersOrdered.filter((r) => r.player.team_id);
+                  const availableEntries = dragPreviewOrder
+                    ? dragPreviewOrder.map((pid) => rankedPlayersOrdered.find((r) => r.player_id === pid)).filter(Boolean)
+                    : rankedPlayersOrdered.filter((r) => !r.player.team_id);
+                  return [...availableEntries, ...draftedEntries];
+                })().map((r) => {
                   const p = r.player;
                   const isDrafted = !!p.team_id;
                   const disabled = !canDraft || (mustDraftFemale && p.gender !== 'F') || drafting === p.id;
-                  const availableIds = rankedPlayersOrdered.filter((x) => !x.player.team_id).map((x) => x.player_id);
-                  const posInAvailable = availableIds.indexOf(p.id);
+                  const isBeingDragged = draggingId === p.id;
                   return (
                     <div
                       key={p.id}
@@ -1819,28 +1930,49 @@ function DraftPageContent() {
                         else delete rankRowRefs.current[p.id];
                       }}
                       className="rounded-md px-2.5 py-2"
-                      style={{ background: isDrafted ? '#e9ecef' : '#f1f3f6', opacity: isDrafted ? 0.65 : 1 }}
+                      style={{
+                        background: isDrafted ? '#e9ecef' : isBeingDragged ? '#e6f1fb' : '#f1f3f6',
+                        boxShadow: isBeingDragged ? '0 6px 16px rgba(12,35,64,0.25)' : 'none',
+                        transform: isBeingDragged ? 'scale(1.03)' : 'scale(1)',
+                        touchAction: isBeingDragged ? 'none' : 'auto',
+                        transition: 'transform 0.1s, box-shadow 0.1s',
+                        zIndex: isBeingDragged ? 10 : 1,
+                        opacity: isDrafted ? 0.65 : 1,
+                      }}
                     >
                       <div className="flex items-start gap-2">
                         {!isDrafted && (
-                          <div className="flex flex-col flex-shrink-0">
-                            <button
-                              onClick={() => moveRankedPlayer(p.id, -1)}
-                              disabled={posInAvailable <= 0}
-                              aria-label="Move up"
-                              className="disabled:opacity-30"
-                            >
-                              <i className="ti ti-chevron-up text-sm" style={{ color: '#5a6b7d' }} aria-hidden="true" />
-                            </button>
-                            <button
-                              onClick={() => moveRankedPlayer(p.id, 1)}
-                              disabled={posInAvailable >= availableIds.length - 1}
-                              aria-label="Move down"
-                              className="disabled:opacity-30"
-                            >
-                              <i className="ti ti-chevron-down text-sm" style={{ color: '#5a6b7d' }} aria-hidden="true" />
-                            </button>
-                          </div>
+                          <span
+                            onPointerDown={(e) => handleRankPointerDown(e, p.id)}
+                            onTouchStart={(e) => handleRankPointerDown(e, p.id)}
+                            className="flex-shrink-0 cursor-grab active:cursor-grabbing"
+                            style={{ touchAction: 'none', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            aria-label="Press and hold to drag and reorder"
+                          >
+                            {pressingId === p.id ? (
+                              <svg width="22" height="22" viewBox="0 0 22 22">
+                                <circle cx="11" cy="11" r="9" fill="none" stroke="#b5d4f4" strokeWidth="2.5" />
+                                <circle
+                                  className="press-ring-progress"
+                                  cx="11"
+                                  cy="11"
+                                  r="9"
+                                  fill="none"
+                                  stroke="#185fa5"
+                                  strokeWidth="2.5"
+                                  strokeDasharray="56.5"
+                                  strokeLinecap="round"
+                                  transform="rotate(-90 11 11)"
+                                />
+                              </svg>
+                            ) : (
+                              <i
+                                className="ti ti-grip-vertical text-base"
+                                style={{ color: isBeingDragged ? '#185fa5' : '#8b97a3' }}
+                                aria-hidden="true"
+                              />
+                            )}
+                          </span>
                         )}
                         <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openProfile(p.id)}>
                           {isDrafted ? (
