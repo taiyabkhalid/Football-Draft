@@ -293,13 +293,32 @@ function LiveDraftPageContent() {
   // this can safely happen on mount regardless of gestures - only the
   // context creation and decode step (below) are gesture-sensitive.
   useEffect(() => {
+    logDebug('page loaded, fetching chime bytes', { url: '/sounds/pick-chime.mp3' });
     fetch('/sounds/pick-chime.mp3')
       .then((r) => r.arrayBuffer())
       .then((buf) => {
         chimeArrayBufferRef.current = buf;
+        logDebug('chime bytes fetched', { byteLength: buf.byteLength });
       })
-      .catch((e) => console.error('[chime] failed to fetch:', e.message));
+      .catch((e) => {
+        logDebug('chime fetch FAILED', { message: e.message });
+        console.error('[chime] failed to fetch:', e.message);
+      });
   }, []);
+
+  // console.log only ever writes to that specific device's local browser
+  // console - genuinely inaccessible on a phone without plugging it into a
+  // computer for remote debugging, which isn't a realistic ask. This
+  // writes the same diagnostic information to the database instead, so it
+  // can be queried directly with SQL after the fact, from any device,
+  // without needing anyone to read anything off their own screen.
+  function logDebug(message, data) {
+    supabase
+      .from('debug_logs')
+      .insert({ category: 'chime', message, data: data || null, user_agent: navigator.userAgent })
+      .then(() => {})
+      .catch(() => {});
+  }
 
   // iOS Safari can permanently mark an AudioContext as unable to produce
   // real sound if it was ever instantiated outside a genuine user gesture
@@ -311,21 +330,21 @@ function LiveDraftPageContent() {
   // there too - all synchronously, within the same tap.
   async function unlockAudio() {
     if (chimeUnlockedRef.current) {
-      console.log('[chime] unlockAudio called but already unlocked, skipping');
+      logDebug('unlockAudio called but already unlocked, skipping');
       return;
     }
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) {
-      console.log('[chime] no AudioContext class available on this browser at all');
+      logDebug('no AudioContext class available on this browser at all');
       return;
     }
     try {
       const ctx = audioContextRef.current || new AudioContextClass();
       audioContextRef.current = ctx;
-      console.log('[chime] context created/reused, state:', ctx.state);
+      logDebug('context created/reused', { state: ctx.state });
       if (ctx.state === 'suspended') {
         await ctx.resume();
-        console.log('[chime] resume() completed, state now:', ctx.state);
+        logDebug('resume() completed', { state: ctx.state });
       }
 
       const silentBuffer = ctx.createBuffer(1, 1, 22050);
@@ -333,7 +352,7 @@ function LiveDraftPageContent() {
       source.buffer = silentBuffer;
       source.connect(ctx.destination);
       source.start(0);
-      console.log('[chime] silent unlock buffer played');
+      logDebug('silent unlock buffer played');
 
       if (!chimeBufferRef.current && chimeArrayBufferRef.current) {
         // decodeAudioData detaches/consumes the buffer, so decode a copy -
@@ -342,15 +361,15 @@ function LiveDraftPageContent() {
         // gets going) picks it up instead.
         const decoded = await ctx.decodeAudioData(chimeArrayBufferRef.current.slice(0));
         chimeBufferRef.current = decoded;
-        console.log('[chime] chime buffer decoded, duration:', decoded.duration);
+        logDebug('chime buffer decoded', { durationSeconds: decoded.duration });
       } else if (!chimeArrayBufferRef.current) {
-        console.log('[chime] chime raw bytes not fetched yet - will decode on next gesture instead');
+        logDebug('chime raw bytes not fetched yet - will decode on next gesture instead');
       }
       chimeUnlockedRef.current = true;
       setChimeUnlocked(true);
       setSoundMuted(false);
       wantsSoundRef.current = true;
-      console.log('[chime] unlock fully complete');
+      logDebug('unlock fully complete');
       try {
         sessionStorage.setItem('chimeSoundWanted', 'true');
         sessionStorage.setItem('chimeSoundMuted', 'false');
@@ -359,6 +378,7 @@ function LiveDraftPageContent() {
         // it just won't be remembered for next time.
       }
     } catch (e) {
+      logDebug('unlock/decode FAILED', { name: e.name, message: e.message });
       console.error('[chime] unlock/decode failed:', e.name, e.message);
     }
   }
@@ -409,17 +429,17 @@ function LiveDraftPageContent() {
 
   function playChime() {
     if (soundMutedRef.current) {
-      console.log('[chime] playChime called but sound is muted, skipping');
+      logDebug('playChime called but sound is muted, skipping');
       return null;
     }
     const ctx = audioContextRef.current;
     const buffer = chimeBufferRef.current;
     if (!ctx) {
-      console.log('[chime] playChime called but no AudioContext exists yet - never unlocked');
+      logDebug('playChime called but no AudioContext exists yet - never unlocked');
       return null;
     }
     if (!buffer) {
-      console.log('[chime] playChime called but chime buffer not decoded yet');
+      logDebug('playChime called but chime buffer not decoded yet');
       return null;
     }
     try {
@@ -427,15 +447,16 @@ function LiveDraftPageContent() {
       // audio activity (which is common here - picks can be minutes apart)
       // - catching that and resuming defensively before playing means a
       // long gap between chimes doesn't leave it stuck suspended.
-      console.log('[chime] playChime attempting, context state:', ctx.state);
-      if (ctx.state === 'suspended') ctx.resume().catch((e) => console.error('[chime] defensive resume failed:', e.message));
+      logDebug('playChime attempting', { state: ctx.state });
+      if (ctx.state === 'suspended') ctx.resume().catch((e) => logDebug('defensive resume failed', { message: e.message }));
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(ctx.destination);
       source.start(0);
-      console.log('[chime] source.start(0) called successfully');
+      logDebug('source.start(0) called successfully');
       return buffer.duration * 1000;
     } catch (e) {
+      logDebug('playback FAILED', { name: e.name, message: e.message });
       console.error('[chime] playback failed:', e.name, e.message);
       return null;
     }
