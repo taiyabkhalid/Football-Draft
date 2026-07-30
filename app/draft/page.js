@@ -171,6 +171,18 @@ function DraftPageContent() {
           router.push('/login');
           return;
         }
+        // Give them a real (role: null) profile row so profile state works
+        // identically for them as it does for a GM from here on - without
+        // this, profile stays null for their whole session, and things
+        // like tour tracking (which reads profile.has_seen_gm_tour) have
+        // nowhere to persist to.
+        await supabase.rpc('ensure_own_profile_row');
+        const { data: newProfileRow } = await supabase
+          .from('profiles')
+          .select('role, team_id, is_primary, has_seen_gm_tour')
+          .eq('id', user.id)
+          .maybeSingle();
+        setProfile(newProfileRow);
       } else {
         setProfile(profileRow);
       }
@@ -499,14 +511,39 @@ function DraftPageContent() {
 
   const CORE_TOUR_SLIDES = [
     {
-      icon: 'ti-clock',
-      title: 'This box is your clock',
-      body: "It always shows who just picked, who's on the clock, and who's up next.",
-    },
-    {
-      icon: 'ti-cards',
       title: 'Browse and draft here',
       body: 'Search, sort, and tap Draft when it\u2019s your turn.',
+      visual: (
+        <img
+          src="/tour-assets/tour-sample-card.svg"
+          alt="Sample player card with a Draft Player button"
+          style={{ width: 200, height: 'auto' }}
+        />
+      ),
+    },
+    {
+      title: 'This box is your clock',
+      body: "It shows who's on the clock, their pick, and how much time is left to draft.",
+      visual: (
+        <div style={{ width: 260, background: '#185fa5', borderRadius: 10, padding: 12, textAlign: 'left', position: 'relative' }}>
+          <p style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'rgba(255,255,255,0.75)', margin: '0 0 4px' }}>
+            On the clock
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <FootballIcon color="#ffffff" size={16} />
+            {/* Deliberately a fixed example, not the viewer's real team - this
+                slide is a generic illustration of what the box looks like,
+                not a live readout, so it stays simple and never needs to be
+                accurate to any specific person or moment. */}
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#ffffff', margin: 0 }}>Storm 2.0</p>
+          </div>
+          <p style={{ fontSize: 10, margin: '6px 0 0', color: 'rgba(255,255,255,0.75)' }}>Round 2 &middot; Pick 4</p>
+          <div style={{ position: 'absolute', top: 10, right: 10, textAlign: 'right' }}>
+            <p style={{ fontSize: 9, margin: 0, color: 'rgba(255,255,255,0.75)' }}>Time left</p>
+            <p style={{ fontSize: 18, fontWeight: 600, margin: 0, color: '#ffffff' }}>0:33</p>
+          </div>
+        </div>
+      ),
     },
     {
       icon: 'ti-star',
@@ -518,9 +555,15 @@ function DraftPageContent() {
   ];
   const COMMISSIONER_TOUR_SLIDE = {
     icon: 'ti-settings',
-    title: 'Commissioner Tools',
-    body: 'Pause and resume the draft, skip a slow pick, and manage settings from Commissioner Tools in the menu.',
+    title: 'Commish Tools',
+    body: 'Pause and resume the draft, skip a slow pick, and manage settings from Commish Tools in the menu.',
   };
+
+  // Team IDs whose proxy notice has been marked seen THIS session, tracked
+  // locally in addition to the database - belt and suspenders against any
+  // read-after-write timing gap, so a re-run of the effect below can never
+  // re-add a slide that was just dismissed a moment ago.
+  const proxySeenThisSessionRef = useRef(new Set());
 
   // Determines what onboarding (if anything) this specific person needs to
   // see - the primary commissioner never sees any of this, a first-time
@@ -538,6 +581,7 @@ function DraftPageContent() {
         if (profile.role === 'commissioner') slides.push(COMMISSIONER_TOUR_SLIDE);
       }
       for (const teamId of myProxyTeamIds) {
+        if (proxySeenThisSessionRef.current.has(teamId)) continue;
         const { data } = await supabase
           .from('proxy_tour_seen')
           .select('team_id')
@@ -569,8 +613,18 @@ function DraftPageContent() {
     const proxySlide = tourSlides.find((s) => s.proxyTeamId);
     if (hadCoreSlides && !tourReplayRequested) {
       await supabase.rpc('mark_gm_tour_seen');
+      // Update local state immediately - this was the actual root cause of
+      // the reported loop. The database was correctly marked as seen, but
+      // this local copy of the profile object never was, so the very next
+      // time this effect re-ran for any unrelated reason (which happens
+      // often during a live draft, since teamsById/ownerByTeam get new
+      // object references on every realtime update), it re-checked a
+      // profile that still said "hasn't seen it" and put the tour right
+      // back up.
+      setProfile((prev) => (prev ? { ...prev, has_seen_gm_tour: true } : prev));
     }
     if (proxySlide) {
+      proxySeenThisSessionRef.current.add(proxySlide.proxyTeamId);
       await supabase.from('proxy_tour_seen').insert({ email: myEmail, team_id: proxySlide.proxyTeamId });
     }
     setTourSlides([]);
@@ -1080,7 +1134,7 @@ function DraftPageContent() {
               </div>
               {profile?.role === 'commissioner' && (
                 <p className="text-[10px] text-muted mt-2 mb-0">
-                  You can still change this order in Commissioner Tools right up until the draft starts.
+                  You can still change this order in Commish Tools right up until the draft starts.
                 </p>
               )}
             </div>

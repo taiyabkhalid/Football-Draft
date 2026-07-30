@@ -1,0 +1,24 @@
+<svg width="240" height="230" viewBox="0 0 240 230" xmlns="http://www.w3.org/2000/svg">
+  <rect x="1" y="1" width="238" height="228" rx="14" fill="#f1f3f6" stroke="#d8dde2" stroke-width="1.5"/>
+
+  <!-- Unfilled star, top-right, matching StarIcon outline state -->
+  <path d="M212 24.3L214.9 30.2L221.4 31.1L216.7 35.6L217.8 42L212 39L206.2 42L207.3 35.6L202.6 31.1L209.1 30.2Z"
+        fill="none" stroke="#8b97a3" stroke-width="1.6" stroke-linejoin="round"/>
+
+  <!-- Placeholder headshot circle (real photo unavailable to this environment - -->
+  <!-- swap the fill/content of this circle for an actual <image> tag once the -->
+  <!-- real headshot is available, or point it at the player's live headshot_url -->
+  <circle cx="46" cy="46" r="26" fill="#ffffff"/>
+  <text x="46" y="53" font-family="system-ui, sans-serif" font-size="20" font-weight="500" fill="#8b97a3" text-anchor="middle">MC</text>
+
+  <!-- Name and details -->
+  <text x="82" y="42" font-family="system-ui, sans-serif" font-size="15" font-weight="500" fill="#0c2340">Maya Chen</text>
+  <text x="82" y="60" font-family="system-ui, sans-serif" font-size="12" fill="#5a6b7d">5'3" &#183; F</text>
+
+  <text x="20" y="98" font-family="system-ui, sans-serif" font-size="12" fill="#3d4a57">Off: QB &#183; Def: CB</text>
+  <text x="20" y="118" font-family="system-ui, sans-serif" font-size="11" fill="#8b97a3">Previous team: Purple Cobras</text>
+
+  <!-- Draft Player button -->
+  <rect x="20" y="182" width="200" height="32" rx="8" fill="#185fa5"/>
+  <text x="120" y="203" font-family="system-ui, sans-serif" font-size="13" font-weight="500" fill="#ffffff" text-anchor="middle">Draft Player</text>
+</svg>

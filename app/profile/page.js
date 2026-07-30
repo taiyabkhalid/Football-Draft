@@ -14,6 +14,7 @@ export default function ProfilePage() {
   const [player, setPlayer] = useState(null);
   const [team, setTeam] = useState(null);
   const [allTeams, setAllTeams] = useState([]);
+  const [proxyTeamId, setProxyTeamId] = useState(null);
   const [settings, setSettings] = useState(null);
   const [role, setRole] = useState(null);
   const [teamNameDraft, setTeamNameDraft] = useState('');
@@ -36,10 +37,11 @@ export default function ProfilePage() {
       return;
     }
 
-    const [{ data: playerRow }, { data: settingsRow }, { data: profileRow }] = await Promise.all([
+    const [{ data: playerRow }, { data: settingsRow }, { data: profileRow }, { data: allTeamsRow }] = await Promise.all([
       supabase.from('players').select('*').eq('email', user.email).single(),
       supabase.from('draft_settings').select('*').eq('id', 1).single(),
       supabase.from('profiles').select('role, team_id').eq('id', user.id).maybeSingle(),
+      supabase.from('teams').select('id, name, proxy_email'),
     ]);
 
     if (!playerRow) {
@@ -51,9 +53,20 @@ export default function ProfilePage() {
     setSettings(settingsRow);
     setRole(profileRow?.role || null);
 
+    // A non-GM player can be designated as a draft-day proxy for a team -
+    // they need the same "go draft" access as an actual GM would, even
+    // though their role is just "player".
+    const myEmailLower = user.email?.toLowerCase() || '';
+    const proxyTeam = (allTeamsRow || []).find((t) =>
+      (t.proxy_email || '')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .includes(myEmailLower)
+    );
+    setProxyTeamId(proxyTeam?.id || null);
+
     if (settingsRow?.draft_status === 'completed') {
-      const { data: teamsData } = await supabase.from('teams').select('*');
-      setAllTeams(teamsData || []);
+      setAllTeams(allTeamsRow || []);
     }
 
     const teamId = profileRow?.team_id || playerRow.team_id;
@@ -165,7 +178,7 @@ export default function ProfilePage() {
       )}
 
       <div className="max-w-md mx-auto px-4 py-6">
-        {(role === 'gm' || role === 'commissioner') && (
+        {(role === 'gm' || role === 'commissioner' || proxyTeamId) && (
           <Link
             href={draftStatus === 'completed' ? '/draft?focus=results' : '/draft?focus=selection'}
             className="block text-center mb-4"
@@ -266,7 +279,7 @@ export default function ProfilePage() {
                   textAlign: 'center',
                 }}
               >
-                Commissioner tools
+                Commish Tools
               </Link>
             )}
           </div>

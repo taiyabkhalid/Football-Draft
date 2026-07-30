@@ -522,7 +522,7 @@ export default function CommissionerToolsPage() {
   if (!checked) {
     return (
       <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
-        <BrandHeader pageLabel="Commissioner tools" />
+        <BrandHeader pageLabel="Commish Tools" />
         <p className="text-center text-muted text-sm p-10">Checking access…</p>
       </main>
     );
@@ -530,7 +530,7 @@ export default function CommissionerToolsPage() {
 
   return (
     <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
-      <BrandHeader pageLabel="Commissioner tools" />
+      <BrandHeader pageLabel="Commish Tools" />
       <div className="max-w-xl mx-auto px-4 py-8">
         <Link
           href="/profile"
@@ -1027,9 +1027,16 @@ export default function CommissionerToolsPage() {
                     {owner && (
                       <button
                         onClick={() => handleClearGm(t.id, t.name)}
-                        disabled={clearingGmTeamId === t.id}
+                        disabled={draftLocked || clearingGmTeamId === t.id}
                         className="text-[11px] font-medium rounded-md py-1"
-                        style={{ background: '#fcebeb', color: '#791f1f', width: 92, textAlign: 'center' }}
+                        style={{
+                          background: '#fcebeb',
+                          color: '#791f1f',
+                          width: 92,
+                          textAlign: 'center',
+                          opacity: draftLocked ? 0.4 : 1,
+                          cursor: draftLocked ? 'not-allowed' : 'pointer',
+                        }}
                       >
                         {clearingGmTeamId === t.id ? '…' : 'Remove GM'}
                       </button>
@@ -1047,7 +1054,14 @@ export default function CommissionerToolsPage() {
                       }}
                       disabled={draftLocked || deletingTeamId === t.id}
                       className="text-[11px] font-medium rounded-md py-1"
-                      style={{ background: '#fcebeb', color: '#791f1f', width: 92, textAlign: 'center' }}
+                      style={{
+                        background: '#fcebeb',
+                        color: '#791f1f',
+                        width: 92,
+                        textAlign: 'center',
+                        opacity: draftLocked ? 0.4 : 1,
+                        cursor: draftLocked ? 'not-allowed' : 'pointer',
+                      }}
                     >
                       {deletingTeamId === t.id ? '…' : 'Delete team'}
                     </button>
