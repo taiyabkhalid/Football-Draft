@@ -19,6 +19,19 @@ export default function ProfilePage() {
   const [role, setRole] = useState(null);
   const [teamNameDraft, setTeamNameDraft] = useState('');
   const [teamColorDraft, setTeamColorDraft] = useState('#0074ff');
+
+  const [gmContact, setGmContact] = useState(null);
+  useEffect(() => {
+    if (!team || settings?.draft_status !== 'completed') {
+      setGmContact(null);
+      return;
+    }
+    async function fetchGmContact() {
+      const { data } = await supabase.rpc('get_my_gm_contact');
+      setGmContact(data?.[0] || null);
+    }
+    fetchGmContact();
+  }, [team, settings?.draft_status]);
   const [savingTeamName, setSavingTeamName] = useState(false);
 
   const [securityOpen, setSecurityOpen] = useState(false);
@@ -148,19 +161,6 @@ export default function ProfilePage() {
   const locked =
     !settings?.profile_edits_unlocked_override &&
     (draftStatus === 'in_progress' || draftStatus === 'paused' || withinTwoHoursOfDraft);
-
-  const [gmContact, setGmContact] = useState(null);
-  useEffect(() => {
-    if (!team || draftStatus !== 'completed') {
-      setGmContact(null);
-      return;
-    }
-    async function fetchGmContact() {
-      const { data } = await supabase.rpc('get_my_gm_contact');
-      setGmContact(data?.[0] || null);
-    }
-    fetchGmContact();
-  }, [team, draftStatus]);
 
   // Separate 30-minute threshold, matching the same timing the hamburger
   // menu's "Watch Draft" label switches at - this button's wording should
