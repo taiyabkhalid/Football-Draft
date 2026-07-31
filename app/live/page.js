@@ -1523,7 +1523,7 @@ function LiveDraftPageContent() {
               Search players
             </button>
             {draftStatus === 'completed' && (
-              <PrintRosterButton teams={teams} pinnedTeamId={myActingTeamId} width={104} compact />
+              <PrintRosterButton teams={teams} pinnedTeamId={myActingTeamId || myTeamId} width={104} compact />
             )}
           </div>
 
