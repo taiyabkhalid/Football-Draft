@@ -522,7 +522,42 @@ function DraftPageContent() {
       return;
     }
     async function fetchContacts() {
-      const { data } = await supabase.rpc('get_team_contacts', { p_team_id: myActingTeamId });
+      supabase
+        .from('debug_logs')
+        .insert({
+          category: 'contacts',
+          message: 'draft.js requesting get_team_contacts',
+          data: { myActingTeamId, myEmail },
+          user_agent: navigator.userAgent,
+        })
+        .then(() => {})
+        .catch(() => {});
+      const { data, error } = await supabase.rpc('get_team_contacts', { p_team_id: myActingTeamId });
+      if (error) {
+        supabase
+          .from('debug_logs')
+          .insert({
+            category: 'contacts',
+            message: 'draft.js get_team_contacts FAILED',
+            data: { myActingTeamId, myEmail, errorMessage: error.message, errorCode: error.code, errorDetails: error.details, errorHint: error.hint },
+            user_agent: navigator.userAgent,
+          })
+          .then(() => {})
+          .catch(() => {});
+        console.error('[contacts] get_team_contacts failed:', error.message);
+        setTeamContacts({});
+        return;
+      }
+      supabase
+        .from('debug_logs')
+        .insert({
+          category: 'contacts',
+          message: 'draft.js get_team_contacts SUCCEEDED',
+          data: { myActingTeamId, myEmail, rowCount: (data || []).length },
+          user_agent: navigator.userAgent,
+        })
+        .then(() => {})
+        .catch(() => {});
       const byId = {};
       (data || []).forEach((c) => {
         byId[c.player_id] = { phone: c.phone, email: c.email };

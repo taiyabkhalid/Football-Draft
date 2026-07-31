@@ -66,16 +66,35 @@ function PrintContent() {
         // than erroring the whole page.
         const contactTeamId = myProfile?.role === 'commissioner' ? null : myProfile?.team_id || teamId;
         if (myProfile?.role === 'commissioner' || contactTeamId) {
-          try {
-            const { data: contactsRes } = await supabase.rpc('get_team_contacts', { p_team_id: contactTeamId });
+          const { data: contactsRes, error } = await supabase.rpc('get_team_contacts', { p_team_id: contactTeamId });
+          if (error) {
+            await supabase.from('debug_logs').insert({
+              category: 'contacts',
+              message: 'print.js get_team_contacts FAILED',
+              data: {
+                contactTeamId,
+                myProfileRole: myProfile?.role,
+                myProfileTeamId: myProfile?.team_id,
+                errorMessage: error.message,
+                errorCode: error.code,
+                errorDetails: error.details,
+                errorHint: error.hint,
+              },
+              user_agent: navigator.userAgent,
+            });
+            console.error('[contacts] print.js get_team_contacts failed:', error.message);
+          } else {
+            await supabase.from('debug_logs').insert({
+              category: 'contacts',
+              message: 'print.js get_team_contacts SUCCEEDED',
+              data: { contactTeamId, myProfileRole: myProfile?.role, rowCount: (contactsRes || []).length },
+              user_agent: navigator.userAgent,
+            });
             const byId = {};
             (contactsRes || []).forEach((c) => {
               byId[c.player_id] = { phone: c.phone, email: c.email };
             });
             setContactsByPlayerId(byId);
-          } catch (e) {
-            // Not authorized for this particular team - the roster/draft
-            // info still renders fine, just without a contacts section.
           }
         }
       }

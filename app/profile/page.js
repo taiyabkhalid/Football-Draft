@@ -27,7 +27,32 @@ export default function ProfilePage() {
       return;
     }
     async function fetchGmContact() {
-      const { data } = await supabase.rpc('get_my_gm_contact');
+      const { data, error } = await supabase.rpc('get_my_gm_contact');
+      if (error) {
+        supabase
+          .from('debug_logs')
+          .insert({
+            category: 'contacts',
+            message: 'profile.js get_my_gm_contact FAILED',
+            data: { errorMessage: error.message, errorCode: error.code, errorDetails: error.details, errorHint: error.hint },
+            user_agent: navigator.userAgent,
+          })
+          .then(() => {})
+          .catch(() => {});
+        console.error('[contacts] get_my_gm_contact failed:', error.message);
+        setGmContact(null);
+        return;
+      }
+      supabase
+        .from('debug_logs')
+        .insert({
+          category: 'contacts',
+          message: 'profile.js get_my_gm_contact result',
+          data: { rowCount: (data || []).length, firstRow: data?.[0] || null },
+          user_agent: navigator.userAgent,
+        })
+        .then(() => {})
+        .catch(() => {});
       setGmContact(data?.[0] || null);
     }
     fetchGmContact();
@@ -306,7 +331,7 @@ export default function ProfilePage() {
                 <FootballIcon color={team.team_color || '#0074ff'} size={16} />
                 <p className="text-sm font-medium text-ink m-0">{team.name}</p>
               </div>
-              {gmContact && (
+              {gmContact && gmContact.email?.toLowerCase() !== player?.email?.toLowerCase() && (
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs m-0" style={{ color: '#3d4a57' }}>GM: {gmContact.full_name}</p>
                   {gmContact.phone && (
