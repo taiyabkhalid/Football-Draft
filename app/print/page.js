@@ -19,34 +19,81 @@ function PrintContent() {
   const [players, setPlayers] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [numTeams, setNumTeams] = useState(0);
+  const [contactsByPlayerId, setContactsByPlayerId] = useState({});
+  const [emailToName, setEmailToName] = useState({});
+  const [viewerRole, setViewerRole] = useState(null);
+  const [viewerTeamId, setViewerTeamId] = useState(null);
 
   useEffect(() => {
     async function fetchAll() {
-      const [teamsRes, playersRes, profilesRes, settingsRes] = await Promise.all([
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const [teamsRes, playersRes, profilesRes, settingsRes, emailMatchRes] = await Promise.all([
         supabase.from('teams').select('*').order('name', { ascending: true }),
-        supabase.from('players').select('*').eq('is_active', true),
+        supabase
+          .from('players')
+          .select(
+            'id, full_name, headshot_url, offensive_position, defensive_position, position_preference, height_feet, height_inches, gender, previous_team, injury_status, weeks_until_recovered, game_time_unavailable, unavailable_mondays, call_on_draft_night, enjoys_pub, is_gm, team_id, draft_pick_number, is_active, created_at'
+          )
+          .eq('is_active', true),
         supabase.from('profiles').select('role, team_id, email'),
         supabase.from('draft_settings').select('num_teams').eq('id', 1).single(),
+        // Separate, narrow query just for matching a profile's email to a
+        // player's name (needed to display "GM: {name}") - kept apart from
+        // the main roster fetch specifically so phone never rides along
+        // with it.
+        supabase.from('players').select('email, full_name'),
       ]);
       setTeams(teamsRes.data || []);
       setPlayers(playersRes.data || []);
       setProfiles(profilesRes.data || []);
       setNumTeams(settingsRes.data?.num_teams || (teamsRes.data || []).length);
+      setEmailToName(Object.fromEntries((emailMatchRes.data || []).map((p) => [p.email, p.full_name])));
+
+      if (user) {
+        const myProfile = (profilesRes.data || []).find((p) => p.email?.toLowerCase() === user.email?.toLowerCase());
+        setViewerRole(myProfile?.role || null);
+        setViewerTeamId(myProfile?.team_id || null);
+
+        // Contact info (phone/email) only ever comes back through this
+        // restricted function, which itself checks the viewer is actually
+        // authorized for whatever team_id is requested - the commissioner
+        // can request every team at once (teamId param is 'all' or absent
+        // with no specific team), anyone else only their own team, and it
+        // simply returns nothing at all if they're not authorized rather
+        // than erroring the whole page.
+        const contactTeamId = myProfile?.role === 'commissioner' ? null : myProfile?.team_id || teamId;
+        if (myProfile?.role === 'commissioner' || contactTeamId) {
+          try {
+            const { data: contactsRes } = await supabase.rpc('get_team_contacts', { p_team_id: contactTeamId });
+            const byId = {};
+            (contactsRes || []).forEach((c) => {
+              byId[c.player_id] = { phone: c.phone, email: c.email };
+            });
+            setContactsByPlayerId(byId);
+          } catch (e) {
+            // Not authorized for this particular team - the roster/draft
+            // info still renders fine, just without a contacts section.
+          }
+        }
+      }
+
       setLoading(false);
     }
     fetchAll();
-  }, []);
+  }, [teamId]);
 
   if (loading) {
     return <p style={{ padding: 24, fontFamily: 'sans-serif' }}>Loading…</p>;
   }
 
   const teamsById = Object.fromEntries(teams.map((t) => [t.id, t]));
-  const playersByEmail = Object.fromEntries(players.map((p) => [p.email, p]));
   const ownerByTeamId = Object.fromEntries(
     profiles
       .filter((p) => p.team_id)
-      .map((p) => [p.team_id, playersByEmail[p.email]?.full_name || p.email])
+      .map((p) => [p.team_id, emailToName[p.email] || p.email])
   );
 
   function rosterFor(team) {
@@ -104,6 +151,31 @@ function PrintContent() {
             ))}
           </tbody>
         </table>
+        {roster.some((p) => contactsByPlayerId[p.id]) && (
+          <div style={{ marginTop: 14 }}>
+            <p style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#8b97a3', margin: '0 0 6px' }}>
+              Team Contacts
+            </p>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th style={th}>Player</th>
+                  <th style={th}>Phone</th>
+                  <th style={th}>Email</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roster.map((p) => (
+                  <tr key={p.id} style={{ borderTop: '1px solid #eef0f2' }}>
+                    <td style={td}>{p.full_name}</td>
+                    <td style={td}>{contactsByPlayerId[p.id]?.phone || '\u2014'}</td>
+                    <td style={td}>{contactsByPlayerId[p.id]?.email || '\u2014'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     );
   }

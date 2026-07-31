@@ -149,6 +149,19 @@ export default function ProfilePage() {
     !settings?.profile_edits_unlocked_override &&
     (draftStatus === 'in_progress' || draftStatus === 'paused' || withinTwoHoursOfDraft);
 
+  const [gmContact, setGmContact] = useState(null);
+  useEffect(() => {
+    if (!team || draftStatus !== 'completed') {
+      setGmContact(null);
+      return;
+    }
+    async function fetchGmContact() {
+      const { data } = await supabase.rpc('get_my_gm_contact');
+      setGmContact(data?.[0] || null);
+    }
+    fetchGmContact();
+  }, [team, draftStatus]);
+
   // Separate 30-minute threshold, matching the same timing the hamburger
   // menu's "Watch Draft" label switches at - this button's wording should
   // change at the same point, not just once the draft is technically live.
@@ -288,10 +301,23 @@ export default function ProfilePage() {
         <div className="bg-surface rounded-lg p-3.5 mb-1.5">
           <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Drafted by</p>
           {team ? (
-            <div className="flex items-center gap-2">
-              <FootballIcon color={team.team_color || '#0074ff'} size={16} />
-              <p className="text-sm font-medium text-ink m-0">{team.name}</p>
-            </div>
+            <>
+              <div className="flex items-center gap-2 mb-2">
+                <FootballIcon color={team.team_color || '#0074ff'} size={16} />
+                <p className="text-sm font-medium text-ink m-0">{team.name}</p>
+              </div>
+              {gmContact && (
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs m-0" style={{ color: '#3d4a57' }}>GM: {gmContact.full_name}</p>
+                  {gmContact.phone && (
+                    <p className="text-xs m-0 flex items-center gap-1 flex-shrink-0" style={{ color: '#3d4a57' }}>
+                      <i className="ti ti-phone text-xs" style={{ color: '#8b97a3' }} aria-hidden="true" />
+                      {gmContact.phone}
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
           ) : (
             <p className="text-xs text-faint m-0" style={{ fontStyle: 'italic' }}>
               Not yet drafted

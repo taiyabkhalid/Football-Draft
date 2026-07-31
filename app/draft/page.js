@@ -196,11 +196,21 @@ function DraftPageContent() {
   const fetchAll = useCallback(async () => {
     const [teamsRes, playersRes, picksRes, settingsRes, profilesRes, inactiveRes] = await Promise.all([
       supabase.from('teams').select('*').order('draft_position', { ascending: true }),
-      supabase.from('players').select('*').eq('is_active', true),
+      supabase
+        .from('players')
+        .select(
+          'id, full_name, headshot_url, offensive_position, defensive_position, position_preference, height_feet, height_inches, gender, previous_team, injury_status, weeks_until_recovered, game_time_unavailable, unavailable_mondays, call_on_draft_night, enjoys_pub, is_gm, team_id, draft_pick_number, is_active, created_at'
+        )
+        .eq('is_active', true),
       supabase.from('draft_picks').select('*').order('pick_number', { ascending: true }),
       supabase.from('draft_settings').select('*').eq('id', 1).single(),
       supabase.from('profiles').select('role, team_id, email'),
-      supabase.from('players').select('*').eq('is_active', false),
+      supabase
+        .from('players')
+        .select(
+          'id, full_name, headshot_url, offensive_position, defensive_position, position_preference, height_feet, height_inches, gender, previous_team, injury_status, weeks_until_recovered, game_time_unavailable, unavailable_mondays, call_on_draft_night, enjoys_pub, is_gm, team_id, draft_pick_number, is_active, created_at'
+        )
+        .eq('is_active', false),
     ]);
     setTeams(teamsRes.data || []);
     setPlayers(playersRes.data || []);
@@ -504,6 +514,23 @@ function DraftPageContent() {
   );
   const isProxyForClockTeam = Boolean(teamOnClock && myProxyTeamIds.has(teamOnClock.id));
   const myActingTeamId = profile?.team_id || [...myProxyTeamIds][0] || null;
+
+  const [teamContacts, setTeamContacts] = useState({});
+  useEffect(() => {
+    if (!myActingTeamId) {
+      setTeamContacts({});
+      return;
+    }
+    async function fetchContacts() {
+      const { data } = await supabase.rpc('get_team_contacts', { p_team_id: myActingTeamId });
+      const byId = {};
+      (data || []).forEach((c) => {
+        byId[c.player_id] = { phone: c.phone, email: c.email };
+      });
+      setTeamContacts(byId);
+    }
+    fetchContacts();
+  }, [myActingTeamId, players]);
 
   const [tourSlides, setTourSlides] = useState([]);
   const [tourIsForced, setTourIsForced] = useState(true);
@@ -2416,10 +2443,25 @@ function DraftPageContent() {
                         className="rounded-md px-2.5 py-2 cursor-pointer hover:brightness-95"
                         style={{ background: lightenColor(myColor, 0.85) }}
                       >
-                        <p className="text-xs font-medium m-0" style={{ color: '#0c2340' }}>{p.full_name}</p>
-                        <p className="text-[11px] m-0" style={{ color: '#5a6b7d' }}>
-                          {p.height_feet}'{p.height_inches}" &middot; {p.gender}
-                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-medium m-0" style={{ color: '#0c2340' }}>{p.full_name}</p>
+                          {teamContacts[p.id]?.phone && p.email?.toLowerCase() !== myEmail && (
+                            <p className="text-[10px] m-0 flex items-center gap-1 flex-shrink-0" style={{ color: '#185fa5' }}>
+                              <i className="ti ti-phone text-xs" aria-hidden="true" />
+                              {teamContacts[p.id].phone}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[11px] m-0" style={{ color: '#5a6b7d' }}>
+                            {p.height_feet}'{p.height_inches}" &middot; {p.gender}
+                          </p>
+                          {teamContacts[p.id]?.email && p.email?.toLowerCase() !== myEmail && (
+                            <p className="text-[10px] m-0 flex-shrink-0" style={{ color: '#185fa5' }}>
+                              {teamContacts[p.id].email}
+                            </p>
+                          )}
+                        </div>
                         <p className="text-[11px] m-0" style={{ color: '#5a6b7d' }}>
                           Off: {p.offensive_position} &middot; Def: {p.defensive_position}
                         </p>

@@ -163,11 +163,21 @@ function LiveDraftPageContent() {
   const fetchAll = useCallback(async () => {
     const [teamsRes, playersRes, picksRes, settingsRes, profilesRes, inactiveRes] = await Promise.all([
       supabase.from('teams').select('*').order('draft_position', { ascending: true }),
-      supabase.from('players').select('*').eq('is_active', true),
+      supabase
+        .from('players')
+        .select(
+          'id, full_name, headshot_url, offensive_position, defensive_position, position_preference, height_feet, height_inches, gender, previous_team, injury_status, weeks_until_recovered, game_time_unavailable, unavailable_mondays, call_on_draft_night, enjoys_pub, is_gm, team_id, draft_pick_number, is_active, created_at'
+        )
+        .eq('is_active', true),
       supabase.from('draft_picks').select('*').order('pick_number', { ascending: true }),
       supabase.from('draft_settings').select('*').eq('id', 1).single(),
       supabase.from('profiles').select('role, team_id, email'),
-      supabase.from('players').select('*').eq('is_active', false),
+      supabase
+        .from('players')
+        .select(
+          'id, full_name, headshot_url, offensive_position, defensive_position, position_preference, height_feet, height_inches, gender, previous_team, injury_status, weeks_until_recovered, game_time_unavailable, unavailable_mondays, call_on_draft_night, enjoys_pub, is_gm, team_id, draft_pick_number, is_active, created_at'
+        )
+        .eq('is_active', false),
     ]);
     setTeams(teamsRes.data || []);
     setPlayers(playersRes.data || []);
