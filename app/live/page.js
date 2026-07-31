@@ -114,6 +114,7 @@ function LiveDraftPageContent() {
   const [settings, setSettings] = useState(null);
   const draftStatus = settings?.draft_status || 'not_started';
   const [profiles, setProfiles] = useState([]);
+  const [emailToName, setEmailToName] = useState({});
   const [viewingTeamId, setViewingTeamId] = useState(null);
   const [myTeamId, setMyTeamId] = useState(null);
   const [myEmail, setMyEmail] = useState(null);
@@ -161,7 +162,7 @@ function LiveDraftPageContent() {
   const draftedScrollRef = useRef(null);
 
   const fetchAll = useCallback(async () => {
-    const [teamsRes, playersRes, picksRes, settingsRes, profilesRes, inactiveRes] = await Promise.all([
+    const [teamsRes, playersRes, picksRes, settingsRes, profilesRes, inactiveRes, emailMatchRes] = await Promise.all([
       supabase.from('teams').select('*').order('draft_position', { ascending: true }),
       supabase
         .from('players')
@@ -178,6 +179,12 @@ function LiveDraftPageContent() {
           'id, full_name, headshot_url, offensive_position, defensive_position, position_preference, height_feet, height_inches, gender, previous_team, injury_status, weeks_until_recovered, game_time_unavailable, unavailable_mondays, call_on_draft_night, enjoys_pub, is_gm, team_id, draft_pick_number, is_active, created_at'
         )
         .eq('is_active', false),
+      // Separate, narrow query just for matching an email to a player's
+      // name (needed for "GM: {name}" and "Proxy: {name}" displays) - kept
+      // apart from the main players fetch specifically so phone/email
+      // never rides along with the general roster data used everywhere
+      // else on this page.
+      supabase.from('players').select('email, full_name'),
     ]);
     setTeams(teamsRes.data || []);
     setPlayers(playersRes.data || []);
@@ -185,6 +192,7 @@ function LiveDraftPageContent() {
     setSettings(settingsRes.data || null);
     setProfiles(profilesRes.data || []);
     setInactivePlayers(inactiveRes.data || []);
+    setEmailToName(Object.fromEntries((emailMatchRes.data || []).map((p) => [p.email?.toLowerCase(), p.full_name])));
     setLoading(false);
   }, []);
 
@@ -649,20 +657,18 @@ function LiveDraftPageContent() {
     return list;
   }, [currentPickNumber, numTeams, teams, draftType]);
 
-  const playersByEmail = useMemo(() => Object.fromEntries(players.map((p) => [p.email, p])), [players]);
 
   const ownerByTeam = useMemo(() => {
     const map = {};
     for (const profile of profiles) {
       if (!profile.team_id) continue;
-      const ownerPlayer = playersByEmail[profile.email];
       map[profile.team_id] = {
-        name: ownerPlayer?.full_name || profile.email,
+        name: emailToName[profile.email?.toLowerCase()] || profile.email,
         role: profile.role,
       };
     }
     return map;
-  }, [profiles, playersByEmail]);
+  }, [profiles, emailToName]);
 
   const myActingTeamId = useMemo(() => {
     if (!myEmail) return null;
@@ -1517,7 +1523,7 @@ function LiveDraftPageContent() {
               Search players
             </button>
             {draftStatus === 'completed' && (
-              <PrintRosterButton teams={teams} width={104} compact />
+              <PrintRosterButton teams={teams} pinnedTeamId={myActingTeamId} width={104} compact />
             )}
           </div>
 
@@ -1732,7 +1738,7 @@ function LiveDraftPageContent() {
                             .split(',')
                             .map((e) => e.trim())
                             .filter(Boolean)
-                            .map((e) => playersByEmail[e]?.full_name || e)
+                            .map((e) => emailToName[e.toLowerCase()] || e)
                             .join(', ')}
                         </p>
                       )}

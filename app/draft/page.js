@@ -35,6 +35,7 @@ function DraftPageContent() {
   const [picks, setPicks] = useState([]);
   const [settings, setSettings] = useState(null);
   const [profiles, setProfiles] = useState([]);
+  const [emailToName, setEmailToName] = useState({});
 
   const [searchName, setSearchName] = useState('');
   const [searchPosition, setSearchPosition] = useState('');
@@ -194,7 +195,7 @@ function DraftPageContent() {
 
   // ---- Data fetching ----
   const fetchAll = useCallback(async () => {
-    const [teamsRes, playersRes, picksRes, settingsRes, profilesRes, inactiveRes] = await Promise.all([
+    const [teamsRes, playersRes, picksRes, settingsRes, profilesRes, inactiveRes, emailMatchRes] = await Promise.all([
       supabase.from('teams').select('*').order('draft_position', { ascending: true }),
       supabase
         .from('players')
@@ -211,6 +212,12 @@ function DraftPageContent() {
           'id, full_name, headshot_url, offensive_position, defensive_position, position_preference, height_feet, height_inches, gender, previous_team, injury_status, weeks_until_recovered, game_time_unavailable, unavailable_mondays, call_on_draft_night, enjoys_pub, is_gm, team_id, draft_pick_number, is_active, created_at'
         )
         .eq('is_active', false),
+      // Separate, narrow query just for matching an email to a player's
+      // name (needed for "GM: {name}" and "Proxy: {name}" displays) - kept
+      // apart from the main players fetch specifically so phone/email
+      // never rides along with the general roster data used everywhere
+      // else on this page.
+      supabase.from('players').select('email, full_name'),
     ]);
     setTeams(teamsRes.data || []);
     setPlayers(playersRes.data || []);
@@ -218,6 +225,7 @@ function DraftPageContent() {
     setSettings(settingsRes.data || null);
     setProfiles(profilesRes.data || []);
     setInactivePlayers(inactiveRes.data || []);
+    setEmailToName(Object.fromEntries((emailMatchRes.data || []).map((p) => [p.email?.toLowerCase(), p.full_name])));
   }, []);
 
   useEffect(() => {
@@ -333,19 +341,17 @@ function DraftPageContent() {
 
   const playersById = useMemo(() => Object.fromEntries(players.map((p) => [p.id, p])), [players]);
   const teamsById = useMemo(() => Object.fromEntries(teams.map((t) => [t.id, t])), [teams]);
-  const playersByEmail = useMemo(() => Object.fromEntries(players.map((p) => [p.email, p])), [players]);
   const ownerByTeam = useMemo(() => {
     const map = {};
     for (const profile of profiles) {
       if (!profile.team_id) continue;
-      const ownerPlayer = playersByEmail[profile.email];
       map[profile.team_id] = {
-        name: ownerPlayer?.full_name || profile.email,
+        name: emailToName[profile.email?.toLowerCase()] || profile.email,
         role: profile.role,
       };
     }
     return map;
-  }, [profiles, playersByEmail]);
+  }, [profiles, emailToName]);
   const roleByEmail = useMemo(() => {
     const map = {};
     for (const profile of profiles) {
@@ -516,6 +522,8 @@ function DraftPageContent() {
   const myActingTeamId = profile?.team_id || [...myProxyTeamIds][0] || null;
 
   const [teamContacts, setTeamContacts] = useState({});
+  const [openEmailPopoverId, setOpenEmailPopoverId] = useState(null);
+  const [copiedEmailId, setCopiedEmailId] = useState(null);
   useEffect(() => {
     if (!myActingTeamId) {
       setTeamContacts({});
@@ -1466,7 +1474,7 @@ function DraftPageContent() {
                 Draft board
               </button>
               {draftStatus === 'completed' && (
-                <PrintRosterButton teams={teams} width={104} compact />
+                <PrintRosterButton teams={teams} pinnedTeamId={myActingTeamId} width={104} compact />
               )}
             </div>
 
@@ -1524,7 +1532,7 @@ function DraftPageContent() {
                               .split(',')
                               .map((e) => e.trim())
                               .filter(Boolean)
-                              .map((e) => playersByEmail[e]?.full_name || e)
+                              .map((e) => emailToName[e.toLowerCase()] || e)
                               .join(', ')}
                           </p>
                         )}
@@ -2492,9 +2500,49 @@ function DraftPageContent() {
                             {p.height_feet}'{p.height_inches}" &middot; {p.gender}
                           </p>
                           {teamContacts[p.id]?.email && p.email?.toLowerCase() !== myEmail && (
-                            <p className="text-[10px] m-0 flex-shrink-0" style={{ color: '#185fa5' }}>
-                              {teamContacts[p.id].email}
-                            </p>
+                            <div
+                              className="relative flex-shrink-0 group"
+                              onMouseEnter={() => setOpenEmailPopoverId(p.id)}
+                              onMouseLeave={() => setOpenEmailPopoverId((cur) => (cur === p.id ? null : cur))}
+                            >
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenEmailPopoverId((cur) => (cur === p.id ? null : p.id));
+                                }}
+                                className="text-[10px] flex items-center gap-1"
+                                style={{ color: '#185fa5' }}
+                              >
+                                <i className="ti ti-mail text-xs" aria-hidden="true" />
+                                Email
+                              </button>
+                              {openEmailPopoverId === p.id && (
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="absolute right-0 top-full mt-1 z-20 rounded-md flex items-center gap-2 whitespace-nowrap"
+                                  style={{ background: '#ffffff', border: '1px solid #d8dde2', boxShadow: '0 4px 12px rgba(12,35,64,0.15)', padding: '6px 8px' }}
+                                >
+                                  <span className="text-[10px]" style={{ color: '#0c2340' }}>
+                                    {teamContacts[p.id].email}
+                                  </span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(teamContacts[p.id].email);
+                                      setCopiedEmailId(p.id);
+                                      setTimeout(() => setCopiedEmailId((cur) => (cur === p.id ? null : cur)), 1500);
+                                    }}
+                                    aria-label="Copy email"
+                                  >
+                                    <i
+                                      className={`ti ${copiedEmailId === p.id ? 'ti-check' : 'ti-copy'} text-xs`}
+                                      style={{ color: copiedEmailId === p.id ? '#3b6d11' : '#8b97a3' }}
+                                      aria-hidden="true"
+                                    />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                         <p className="text-[11px] m-0" style={{ color: '#5a6b7d' }}>
