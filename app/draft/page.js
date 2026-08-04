@@ -556,6 +556,16 @@ function DraftPageContent() {
     return null;
   }, [myManagedTeamIds, currentPickNumber, numTeams, teams, draftType, teamsById]);
 
+  // Which team Your Team panel actually shows. Defaults to auto-following
+  // draftingForTeam (whichever of this person's teams is up next) - the
+  // same logic powering the "You are drafting for" label, reused rather
+  // than duplicated. A manual pick from the switcher overrides that and
+  // sticks until they change it again themselves; it's never silently
+  // reset just because the draft moved on to a different pick.
+  const [selectedTeamOverride, setSelectedTeamOverride] = useState(null);
+  const yourTeamPanelTeamId = selectedTeamOverride || draftingForTeam?.id || myActingTeamId;
+  const [teamSwitcherOpen, setTeamSwitcherOpen] = useState(false);
+
   // Shown starting 30 minutes before the draft, but only once every team
   // actually has a finalized draft position (a manual order can be set at
   // any point, so this can't just check "auto-randomized"); stays visible
@@ -2480,8 +2490,8 @@ function DraftPageContent() {
           </div>
         </section>
 
-        {myActingTeamId && (() => {
-          const myTeam = teamsById[myActingTeamId];
+        {yourTeamPanelTeamId && (() => {
+          const myTeam = teamsById[yourTeamPanelTeamId];
           const myColor = myTeam?.team_color || '#0074ff';
           return (
             <aside
@@ -2489,32 +2499,78 @@ function DraftPageContent() {
                 mobileListTab === 'myteam' ? 'block' : 'hidden'
               } lg:block`}
             >
+              {myManagedTeamIds.size > 1 && (
+                <div className="relative mb-3">
+                  <p className="text-[9px] uppercase tracking-wide text-faint mb-1">Switch team</p>
+                  <button
+                    onClick={() => setTeamSwitcherOpen((o) => !o)}
+                    className="w-full flex items-center justify-between rounded-md"
+                    style={{ background: '#f7f9fb', border: '1px solid #d8dde2', padding: '7px 9px' }}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <FootballIcon color={myColor} size={13} />
+                      <span className="text-[11px] font-semibold" style={{ color: '#0c2340' }}>{myTeam?.name || '—'}</span>
+                    </span>
+                    <i className={`ti ti-chevron-${teamSwitcherOpen ? 'up' : 'down'} text-sm`} style={{ color: '#8b97a3' }} aria-hidden="true" />
+                  </button>
+                  {teamSwitcherOpen && (
+                    <div
+                      className="absolute left-0 right-0 mt-1 rounded-md overflow-hidden"
+                      style={{ background: '#ffffff', border: '1px solid #d8dde2', boxShadow: '0 4px 12px rgba(12,35,64,0.15)', zIndex: 20, maxHeight: 200, overflowY: 'auto' }}
+                    >
+                      {[...myManagedTeamIds].map((tid) => {
+                        const t = teamsById[tid];
+                        if (!t) return null;
+                        return (
+                          <button
+                            key={tid}
+                            onClick={() => {
+                              setSelectedTeamOverride(tid);
+                              setTeamSwitcherOpen(false);
+                            }}
+                            className="w-full flex items-center gap-1.5 text-left"
+                            style={{
+                              padding: '8px 10px',
+                              background: tid === yourTeamPanelTeamId ? '#e6f1fb' : 'transparent',
+                            }}
+                          >
+                            <FootballIcon color={t.team_color || '#0074ff'} size={13} />
+                            <span className="text-[11px]" style={{ color: '#0c2340', fontWeight: tid === yourTeamPanelTeamId ? 600 : 400 }}>
+                              {t.name}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
               {myTeam && (
                 <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1 flex items-center gap-1.5">
                   <FootballIcon color={myColor} size={13} />
                   {myTeam?.name || '—'}
                 </p>
               )}
-              {rosterByTeam[myActingTeamId] && (
+              {rosterByTeam[yourTeamPanelTeamId] && (
                 <>
                   <p
                     className="text-xs mb-2 flex items-center gap-1"
-                    style={{ color: rosterByTeam[myActingTeamId].femaleCount >= minFemale ? '#0c2340' : '#c0392b' }}
+                    style={{ color: rosterByTeam[yourTeamPanelTeamId].femaleCount >= minFemale ? '#0c2340' : '#c0392b' }}
                   >
-                    {rosterByTeam[myActingTeamId].femaleCount >= minFemale ? (
+                    {rosterByTeam[yourTeamPanelTeamId].femaleCount >= minFemale ? (
                       <>
-                        {rosterByTeam[myActingTeamId].femaleCount} of {minFemale} Females Drafted
+                        {rosterByTeam[yourTeamPanelTeamId].femaleCount} of {minFemale} Females Drafted
                         <i className="ti ti-circle-check text-sm" style={{ color: '#3b6d11' }} aria-hidden="true" />
                       </>
                     ) : (
                       <>
-                        {rosterByTeam[myActingTeamId].femaleCount} of {minFemale} required Females drafted!
+                        {rosterByTeam[yourTeamPanelTeamId].femaleCount} of {minFemale} required Females drafted!
                       </>
                     )}
                   </p>
                   {draftStatus === 'completed' &&
-                    (rosterByTeam[myActingTeamId].count < minRoster ||
-                      rosterByTeam[myActingTeamId].femaleCount < minFemale) && (
+                    (rosterByTeam[yourTeamPanelTeamId].count < minRoster ||
+                      rosterByTeam[yourTeamPanelTeamId].femaleCount < minFemale) && (
                       <div className="bg-[#faeeda] rounded-md px-2.5 py-2 mb-2 flex gap-1.5">
                         <i className="ti ti-alert-triangle text-sm flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
                         <p className="text-[11px] m-0" style={{ color: '#633806' }}>
@@ -2524,7 +2580,7 @@ function DraftPageContent() {
                       </div>
                     )}
                   <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
-                    {rosterByTeam[myActingTeamId].players
+                    {rosterByTeam[yourTeamPanelTeamId].players
                       .slice()
                       .sort((a, b) => {
                         if (!a.draft_pick_number && !b.draft_pick_number) return 0;
