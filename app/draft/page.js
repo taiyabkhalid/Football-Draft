@@ -530,6 +530,46 @@ function DraftPageContent() {
   const isProxyForClockTeam = Boolean(teamOnClock && myProxyTeamIds.has(teamOnClock.id));
   const myActingTeamId = profile?.team_id || [...myProxyTeamIds][0] || null;
 
+  // Every team this person is authorized to draft for - their own team (if
+  // they're a GM/commissioner) plus every team they're currently a proxy
+  // for. A single-team case always shows that team; a multi-team case
+  // needs to figure out which of their teams is coming up next.
+  const myManagedTeamIds = useMemo(() => {
+    const ids = new Set(myProxyTeamIds);
+    if (profile?.team_id) ids.add(profile.team_id);
+    return ids;
+  }, [profile, myProxyTeamIds]);
+
+  const draftingForTeam = useMemo(() => {
+    if (myManagedTeamIds.size === 0 || !numTeams) return null;
+    if (myManagedTeamIds.size === 1) {
+      return teamsById[[...myManagedTeamIds][0]] || null;
+    }
+    // Multiple teams - search forward from the current pick for whichever
+    // of them comes up soonest. A full round cycles through every draft
+    // position exactly once, so searching numTeams picks ahead is always
+    // enough to find a match.
+    for (let i = 0; i < numTeams; i++) {
+      const team = getTeamOnTheClock(currentPickNumber + i, numTeams, teams, draftType);
+      if (team && myManagedTeamIds.has(team.id)) return team;
+    }
+    return null;
+  }, [myManagedTeamIds, currentPickNumber, numTeams, teams, draftType, teamsById]);
+
+  // Shown starting 30 minutes before the draft, but only once every team
+  // actually has a finalized draft position (a manual order can be set at
+  // any point, so this can't just check "auto-randomized"); stays visible
+  // through a pause; disappears entirely once the draft is completed -
+  // matching the Round/Pick indicator's own visibility exactly.
+  const draftOrderFinalized = teams.length > 0 && teams.every((t) => t.draft_position !== null && t.draft_position !== undefined);
+  const showDraftingForLabel =
+    draftingForTeam &&
+    draftOrderFinalized &&
+    draftStatus !== 'completed' &&
+    (draftStatus === 'in_progress' ||
+      draftStatus === 'paused' ||
+      (draftStatus === 'not_started' && draftDatetimeMs !== null && draftDatetimeMs - now <= 30 * 60 * 1000));
+
   const [teamContacts, setTeamContacts] = useState({});
   const [openEmailPopoverId, setOpenEmailPopoverId] = useState(null);
   const [copiedEmailId, setCopiedEmailId] = useState(null);
@@ -1901,9 +1941,16 @@ function DraftPageContent() {
         ref={playerSelectionRef}
         style={{ scrollMarginTop: 120 }}
       >
-        <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: '#0c447c' }}>
-          Player selection
-        </p>
+        <div className="flex items-center gap-3.5 mb-3">
+          <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#0c447c' }}>
+            Player selection
+          </p>
+          {!profile?.is_primary && (
+            <button onClick={handleReplayTour} className="text-[11px]" style={{ color: '#8b97a3' }}>
+              How this works
+            </button>
+          )}
+        </div>
 
         <div className="flex gap-2 flex-wrap items-center">
           <div className="relative flex-none" style={{ width: 150 }}>
@@ -2300,34 +2347,21 @@ function DraftPageContent() {
         </aside>
 
         <section className="flex-1 min-w-0 order-1 lg:order-2 lg:px-3">
-          <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+          <div className="flex items-center gap-3.5 mb-2 flex-wrap" style={{ position: 'relative', zIndex: 31 }}>
             <p className="text-[11px] font-bold uppercase tracking-wide text-muted m-0">
               {draftStatus === 'completed' ? 'Available players' : `Round ${currentRound}, pick ${currentPickNumber}`}
             </p>
-            <div className="flex items-center gap-3">
-              {!profile?.is_primary && (
-                <button onClick={handleReplayTour} className="text-[11px]" style={{ color: '#8b97a3' }}>
-                  How this works
-                </button>
-              )}
-              {(draftStatus === 'in_progress' || draftStatus === 'paused') && profile?.team_id && rosterByTeam[profile.team_id] && (
-                <p
-                  className="text-[11px] m-0 flex items-center gap-1"
-                  style={{ color: rosterByTeam[profile.team_id].femaleCount >= minFemale ? '#0c2340' : '#c0392b' }}
-                >
-                  {rosterByTeam[profile.team_id].femaleCount >= minFemale ? (
-                    <>
-                      {rosterByTeam[profile.team_id].femaleCount} of {minFemale} Females Drafted
-                      <i className="ti ti-circle-check text-sm" style={{ color: '#3b6d11' }} aria-hidden="true" />
-                    </>
-                  ) : (
-                    <>
-                      {rosterByTeam[profile.team_id].femaleCount} of {minFemale} required Females drafted!
-                    </>
-                  )}
-                </p>
-              )}
-            </div>
+            {showDraftingForLabel && (
+              <div
+                className="flex items-center gap-1.5 rounded-md flex-shrink-0"
+                style={{ background: '#e6f1fb', padding: '4px 10px' }}
+              >
+                <FootballIcon color={draftingForTeam.team_color || '#0074ff'} size={14} />
+                <span className="text-[12px] font-semibold" style={{ color: '#0c2340' }}>
+                  You are drafting for {draftingForTeam.name}
+                </span>
+              </div>
+            )}
           </div>
           <div className="flex gap-3 overflow-x-auto pb-3">
             {boardList.map((p) => {
@@ -2446,8 +2480,8 @@ function DraftPageContent() {
           </div>
         </section>
 
-        {profile?.team_id && (() => {
-          const myTeam = teamsById[profile.team_id];
+        {myActingTeamId && (() => {
+          const myTeam = teamsById[myActingTeamId];
           const myColor = myTeam?.team_color || '#0074ff';
           return (
             <aside
@@ -2461,26 +2495,26 @@ function DraftPageContent() {
                   {myTeam?.name || '—'}
                 </p>
               )}
-              {rosterByTeam[profile.team_id] && (
+              {rosterByTeam[myActingTeamId] && (
                 <>
                   <p
                     className="text-xs mb-2 flex items-center gap-1"
-                    style={{ color: rosterByTeam[profile.team_id].femaleCount >= minFemale ? '#0c2340' : '#c0392b' }}
+                    style={{ color: rosterByTeam[myActingTeamId].femaleCount >= minFemale ? '#0c2340' : '#c0392b' }}
                   >
-                    {rosterByTeam[profile.team_id].femaleCount >= minFemale ? (
+                    {rosterByTeam[myActingTeamId].femaleCount >= minFemale ? (
                       <>
-                        {rosterByTeam[profile.team_id].femaleCount} of {minFemale} Females Drafted
+                        {rosterByTeam[myActingTeamId].femaleCount} of {minFemale} Females Drafted
                         <i className="ti ti-circle-check text-sm" style={{ color: '#3b6d11' }} aria-hidden="true" />
                       </>
                     ) : (
                       <>
-                        {rosterByTeam[profile.team_id].femaleCount} of {minFemale} required Females drafted!
+                        {rosterByTeam[myActingTeamId].femaleCount} of {minFemale} required Females drafted!
                       </>
                     )}
                   </p>
                   {draftStatus === 'completed' &&
-                    (rosterByTeam[profile.team_id].count < minRoster ||
-                      rosterByTeam[profile.team_id].femaleCount < minFemale) && (
+                    (rosterByTeam[myActingTeamId].count < minRoster ||
+                      rosterByTeam[myActingTeamId].femaleCount < minFemale) && (
                       <div className="bg-[#faeeda] rounded-md px-2.5 py-2 mb-2 flex gap-1.5">
                         <i className="ti ti-alert-triangle text-sm flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
                         <p className="text-[11px] m-0" style={{ color: '#633806' }}>
@@ -2490,7 +2524,7 @@ function DraftPageContent() {
                       </div>
                     )}
                   <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
-                    {rosterByTeam[profile.team_id].players
+                    {rosterByTeam[myActingTeamId].players
                       .slice()
                       .sort((a, b) => {
                         if (!a.draft_pick_number && !b.draft_pick_number) return 0;
