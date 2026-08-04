@@ -177,7 +177,16 @@ function DraftPageContent() {
         // this, profile stays null for their whole session, and things
         // like tour tracking (which reads profile.has_seen_gm_tour) have
         // nowhere to persist to.
-        await supabase.rpc('ensure_own_profile_row');
+        const { error: ensureError } = await supabase.rpc('ensure_own_profile_row');
+        if (ensureError) {
+          await supabase.from('debug_logs').insert({
+            category: 'proxy-profile',
+            message: 'ensure_own_profile_row FAILED',
+            data: { errorMessage: ensureError.message, errorCode: ensureError.code, errorDetails: ensureError.details },
+            user_agent: navigator.userAgent,
+          });
+          console.error('[proxy] ensure_own_profile_row failed:', ensureError.message);
+        }
         const { data: newProfileRow } = await supabase
           .from('profiles')
           .select('role, team_id, is_primary, has_seen_gm_tour')
@@ -709,6 +718,16 @@ function DraftPageContent() {
   function handleReplayTour() {
     const slides = [...CORE_TOUR_SLIDES];
     if (profile?.role === 'commissioner') slides.push(COMMISSIONER_TOUR_SLIDE);
+    const proxyTeamId = [...myProxyTeamIds][0];
+    if (proxyTeamId) {
+      const team = teamsById[proxyTeamId];
+      const gmName = ownerByTeam[proxyTeamId]?.name;
+      slides.push({
+        icon: 'ti-user-shield',
+        title: `You're a proxy for ${team?.name || 'a team'}`,
+        body: `You're drafting on behalf of ${team?.name || 'this team'}${gmName ? `, filling in for ${gmName}` : ''}.`,
+      });
+    }
     setTourIsForced(false);
     setTourReplayRequested(true);
     setTourSlides(slides);
