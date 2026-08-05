@@ -234,7 +234,7 @@ export default function ProfilePage() {
           </Link>
         )}
 
-        {role !== 'gm' && role !== 'commissioner' && draftStatus === 'completed' && (
+        {role !== 'gm' && role !== 'commissioner' && !proxyTeamId && draftStatus === 'completed' && (
           <Link
             href="/live?focus=results"
             className="block text-center mb-4"

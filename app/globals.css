@@ -88,8 +88,8 @@ button {
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(24, 95, 165, 0); }
-  50% { box-shadow: 0 0 0 4px rgba(24, 95, 165, 0.35); }
+  0%, 100% { box-shadow: 0 0 0 0 var(--pulse-color, #185fa5); }
+  50% { box-shadow: 0 0 0 4px var(--pulse-color, #185fa5); }
 }
 .animate-pulse-glow {
   animation: pulse-glow 2.2s ease-in-out infinite;

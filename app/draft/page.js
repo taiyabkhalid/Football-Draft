@@ -498,6 +498,20 @@ function DraftPageContent() {
     if (myManagedTeamIds.size === 1) {
       return teamsById[[...myManagedTeamIds][0]] || null;
     }
+    if (draftStatus === 'completed') {
+      // Nothing is "coming up next" once the draft is over - searching
+      // forward from currentPickNumber here would just return whatever
+      // team the math happens to land on, which looks random but is
+      // actually meaningless. GM/commissioner default to their own team;
+      // a pure proxy with no team of their own defaults to whichever of
+      // their managed teams comes first alphabetically.
+      if (profile?.team_id) return teamsById[profile.team_id] || null;
+      const sorted = [...myManagedTeamIds]
+        .map((id) => teamsById[id])
+        .filter(Boolean)
+        .sort((a, b) => a.name.localeCompare(b.name));
+      return sorted[0] || null;
+    }
     // Multiple teams - search forward from the current pick for whichever
     // of them comes up soonest. A full round cycles through every draft
     // position exactly once, so searching numTeams picks ahead is always
@@ -507,7 +521,7 @@ function DraftPageContent() {
       if (team && myManagedTeamIds.has(team.id)) return team;
     }
     return null;
-  }, [myManagedTeamIds, currentPickNumber, numTeams, teams, draftType, teamsById]);
+  }, [myManagedTeamIds, currentPickNumber, numTeams, teams, draftType, teamsById, draftStatus, profile]);
 
   // Runs all the way to the end of the remaining draft (totalPicks already
   // accounts for skips dynamically, so this list grows on its own if a
@@ -572,7 +586,7 @@ function DraftPageContent() {
     } else {
       console.log('[focus-effect] -> no branch matched focusParam:', focusParam);
     }
-  }, [focusParam, profile, draftingForTeam]);
+  }, [focusParam, profile, draftingForTeam?.id]);
 
   // Which team Your Team panel actually shows. Defaults to auto-following
   // draftingForTeam (whichever of this person's teams is up next) - the
@@ -583,6 +597,18 @@ function DraftPageContent() {
   const [selectedTeamOverride, setSelectedTeamOverride] = useState(null);
   const yourTeamPanelTeamId = selectedTeamOverride || draftingForTeam?.id || myActingTeamId;
   const [teamSwitcherOpen, setTeamSwitcherOpen] = useState(false);
+
+  // A manual pick from the switcher persists through unrelated picks, but
+  // resets back to auto-follow the moment draftingForTeam itself changes
+  // to a genuinely different team - meaning a new turn actually relevant
+  // to this person has arrived, not just some other team's pick happening.
+  const prevDraftingForTeamIdRef = useRef(draftingForTeam?.id);
+  useEffect(() => {
+    if (draftingForTeam?.id !== prevDraftingForTeamIdRef.current) {
+      prevDraftingForTeamIdRef.current = draftingForTeam?.id;
+      setSelectedTeamOverride(null);
+    }
+  }, [draftingForTeam?.id]);
 
   // Shown starting 30 minutes before the draft, but only once every team
   // actually has a finalized draft position (a manual order can be set at
@@ -706,21 +732,19 @@ function DraftPageContent() {
     body: 'Pause and resume the draft, skip a slow pick, and manage settings from Commish Tools in the menu.',
   };
 
-  // Team IDs whose proxy notice has been marked seen THIS session, tracked
-  // locally in addition to the database - belt and suspenders against any
-  // read-after-write timing gap, so a re-run of the effect below can never
-  // re-add a slide that was just dismissed a moment ago.
-  const proxySeenThisSessionRef = useRef(new Set());
-
   // Determines what onboarding (if anything) this specific person needs to
   // see - the primary commissioner never sees any of this, a first-time
   // visitor gets the full mandatory sequence (core + commissioner slide if
   // applicable + a proxy slide if they're also newly proxying), and
   // someone who's already done the core tour but is proxying for a team
-  // they haven't been notified about yet just gets that one proxy slide.
+  // they haven't been notified about yet this session just gets that one
+  // proxy slide. The proxy slide specifically uses sessionStorage rather
+  // than a permanent database record - it's meant as a per-session
+  // reminder of which team you're standing in for, not a one-time-ever
+  // notice, so it naturally reappears after logging out and back in.
   useEffect(() => {
     if (!profile || profile.is_primary || !myEmail) return;
-    async function determineTour() {
+    function determineTour() {
       const slides = [];
       const needsCore = !profile.has_seen_gm_tour;
       if (needsCore) {
@@ -728,14 +752,14 @@ function DraftPageContent() {
         if (profile.role === 'commissioner') slides.push(COMMISSIONER_TOUR_SLIDE);
       }
       for (const teamId of myProxyTeamIds) {
-        if (proxySeenThisSessionRef.current.has(teamId)) continue;
-        const { data } = await supabase
-          .from('proxy_tour_seen')
-          .select('team_id')
-          .eq('email', myEmail)
-          .eq('team_id', teamId)
-          .maybeSingle();
-        if (!data) {
+        let seenThisSession = false;
+        try {
+          seenThisSession = sessionStorage.getItem(`proxyNoticeSeen_${teamId}`) === 'true';
+        } catch (e) {
+          // sessionStorage unavailable - falls through to showing the
+          // notice, which is the safer default here.
+        }
+        if (!seenThisSession) {
           const team = teamsById[teamId];
           const gmName = ownerByTeam[teamId]?.name;
           slides.push({
@@ -771,8 +795,12 @@ function DraftPageContent() {
       setProfile((prev) => (prev ? { ...prev, has_seen_gm_tour: true } : prev));
     }
     if (proxySlide) {
-      proxySeenThisSessionRef.current.add(proxySlide.proxyTeamId);
-      await supabase.from('proxy_tour_seen').insert({ email: myEmail, team_id: proxySlide.proxyTeamId });
+      try {
+        sessionStorage.setItem(`proxyNoticeSeen_${proxySlide.proxyTeamId}`, 'true');
+      } catch (e) {
+        // sessionStorage unavailable - notice may reappear this session,
+        // not a functional break either way.
+      }
     }
     setTourSlides([]);
     setTourReplayRequested(false);
@@ -1232,6 +1260,69 @@ function DraftPageContent() {
     );
   }
 
+  // Shared between the pre-draft countdown view (where this doubles as
+  // the draft order preview - pick 1 through the end IS the draft order
+  // before anything has been picked) and the live/paused view, so both
+  // get the same full scrollable list, styling, and highlighting instead
+  // of two different, drifting implementations.
+  const upcomingPicksBlock = (
+    <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-surface px-4 py-3">
+      <button
+        onClick={() => setUpcomingPicksOpen((o) => !o)}
+        className="w-full flex items-center justify-between"
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
+          Upcoming picks
+        </p>
+        <i className={`ti ti-chevron-${upcomingPicksOpen ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
+      </button>
+      {upcomingPicksOpen && (
+        <div className="flex gap-2 overflow-x-auto pb-1 pt-2 upcoming-picks-scroll">
+          {upcomingPicks.map((n) => {
+            const color = n.team?.team_color || '#0074ff';
+            return (
+              <button
+                key={n.pickNumber}
+                type="button"
+                onClick={() => n.team && jumpToTeam(n.team.id)}
+                className={`flex-none rounded-md flex flex-col items-center justify-center text-center px-1.5 ${
+                  n.isSoonestMine ? 'animate-pulse-glow' : ''
+                }`}
+                style={{
+                  width: 100,
+                  height: 52,
+                  background: n.isSoonestMine ? lightenColor(color, 0.7) : lightenColor(color, 0.85),
+                  color: '#0c2340',
+                  border: n.isSoonestMine
+                    ? `2px solid ${color}`
+                    : n.isMine
+                    ? '3px solid #5a6b7d'
+                    : 'none',
+                  cursor: n.team ? 'pointer' : 'default',
+                  transition: 'background 0.4s, border 0.4s',
+                  '--pulse-color': color,
+                }}
+              >
+                {n.isSoonestMine && (
+                  <span className="text-[9px] font-semibold" style={{ color }}>
+                    Your next pick
+                  </span>
+                )}
+                <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
+                  <FootballIcon color={color} size={11} />
+                  <span className="truncate">{n.team?.name || '—'}</span>
+                </span>
+                <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
+                  Rnd {n.round} . Pick {pickInRound(n.pickNumber, numTeams)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
       <BrandHeader
@@ -1267,34 +1358,14 @@ function DraftPageContent() {
 
           <div className="px-4 sm:px-5">
           {showDraftOrderPreview && (
-            <div className="mt-4 rounded-xl border border-line bg-surface px-4 py-3.5">
-              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#0c447c' }}>
-                Draft order
-              </p>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {teams
-                  .slice()
-                  .sort((a, b) => a.draft_position - b.draft_position)
-                  .map((t) => (
-                    <div
-                      key={t.id}
-                      className="flex-none rounded-md flex flex-col items-center justify-center text-center px-2 py-1.5"
-                      style={{ minWidth: 90, background: lightenColor(t.team_color || '#0074ff', 0.85) }}
-                    >
-                      <span className="text-[10px] text-muted">#{t.draft_position}</span>
-                      <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
-                        <FootballIcon color={t.team_color || '#0074ff'} size={11} />
-                        <span className="truncate">{t.name}</span>
-                      </span>
-                    </div>
-                  ))}
-              </div>
+            <>
+              {upcomingPicksBlock}
               {profile?.role === 'commissioner' && (
-                <p className="text-[10px] text-muted mt-2 mb-0">
+                <p className="text-[10px] text-muted mt-2 mb-0 text-center">
                   You can still change this order in Commish Tools right up until the draft starts.
                 </p>
               )}
-            </div>
+            </>
           )}
           </div>
         </>
@@ -1433,59 +1504,7 @@ function DraftPageContent() {
             </div>
           )}
 
-          {/* Upcoming picks strip */}
-          <div className="px-4 sm:px-5 pt-3">
-            <button
-              onClick={() => setUpcomingPicksOpen((o) => !o)}
-              className="w-full flex items-center justify-between mb-1"
-            >
-              <p className="text-[10px] uppercase tracking-wide text-muted m-0">Upcoming picks</p>
-              <i className={`ti ti-chevron-${upcomingPicksOpen ? 'up' : 'down'} text-sm text-muted`} aria-hidden="true" />
-            </button>
-            {upcomingPicksOpen && (
-              <div className="flex gap-2 overflow-x-auto pb-1 upcoming-picks-scroll">
-                {upcomingPicks.map((n) => {
-                    const color = n.team?.team_color || '#0074ff';
-                    return (
-                      <button
-                        key={n.pickNumber}
-                        type="button"
-                        onClick={() => n.team && jumpToTeam(n.team.id)}
-                        className={`flex-none rounded-md flex flex-col items-center justify-center text-center px-1.5 ${
-                          n.isSoonestMine ? 'animate-pulse-glow' : ''
-                        }`}
-                        style={{
-                          width: 100,
-                          height: 52,
-                          background: n.isSoonestMine ? '#e6f1fb' : lightenColor(color, 0.85),
-                          color: '#0c2340',
-                          border: n.isSoonestMine
-                            ? '1.5px solid #185fa5'
-                            : n.isMine
-                            ? '1.5px solid #5a6b7d'
-                            : 'none',
-                          cursor: n.team ? 'pointer' : 'default',
-                          transition: 'background 0.4s, border 0.4s',
-                        }}
-                      >
-                        {n.isSoonestMine && (
-                          <span className="text-[9px] font-semibold" style={{ color: '#185fa5' }}>
-                            Your next pick
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
-                          <FootballIcon color={color} size={11} />
-                          <span className="truncate">{n.team?.name || '—'}</span>
-                        </span>
-                        <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
-                          Rnd {n.round} . Pick {pickInRound(n.pickNumber, numTeams)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-            )}
-          </div>
+          {upcomingPicksBlock}
 
           <div className="border-t border-line mx-4 sm:mx-5 mt-1" />
 

@@ -53,26 +53,37 @@ function PrintContent() {
       setEmailToName(Object.fromEntries((emailMatchRes.data || []).map((p) => [p.email, p.full_name])));
 
       if (user) {
-        const myProfile = (profilesRes.data || []).find((p) => p.email?.toLowerCase() === user.email?.toLowerCase());
+        const myEmailLower = user.email?.toLowerCase() || '';
+        const myProfile = (profilesRes.data || []).find((p) => p.email?.toLowerCase() === myEmailLower);
         setViewerRole(myProfile?.role || null);
         setViewerTeamId(myProfile?.team_id || null);
 
+        // Every team this viewer is authorized to see contacts for - their
+        // own team (if GM/commissioner) plus every team they're currently
+        // a proxy for. teamsRes already has proxy_email on every row (it's
+        // a select('*')), so this doesn't need an extra fetch.
+        const myAuthorizedTeamIds = new Set();
+        if (myProfile?.team_id) myAuthorizedTeamIds.add(myProfile.team_id);
+        (teamsRes.data || []).forEach((t) => {
+          const proxyEmails = (t.proxy_email || '')
+            .split(',')
+            .map((e) => e.trim().toLowerCase());
+          if (proxyEmails.includes(myEmailLower)) myAuthorizedTeamIds.add(t.id);
+        });
+
         // Contact info (phone/email) only ever comes back through this
         // restricted function, which itself checks the viewer is actually
-        // authorized for whatever team_id is requested - the commissioner
-        // can request every team at once (teamId param is 'all' or absent
-        // with no specific team), anyone else only their own team, and it
-        // simply returns nothing at all if they're not authorized rather
+        // authorized for whatever team_id is requested - it simply returns
+        // nothing at all for a team they're not authorized for, rather
         // than erroring the whole page.
-        const contactTeamId = myProfile?.role === 'commissioner' ? null : myProfile?.team_id || teamId;
-        if (myProfile?.role === 'commissioner' || contactTeamId) {
-          const { data: contactsRes, error } = await supabase.rpc('get_team_contacts', { p_team_id: contactTeamId });
+        async function fetchContactsForTeam(teamIdToFetch) {
+          const { data, error } = await supabase.rpc('get_team_contacts', { p_team_id: teamIdToFetch });
           if (error) {
             await supabase.from('debug_logs').insert({
               category: 'contacts',
               message: 'print.js get_team_contacts FAILED',
               data: {
-                contactTeamId,
+                teamIdToFetch,
                 myProfileRole: myProfile?.role,
                 myProfileTeamId: myProfile?.team_id,
                 errorMessage: error.message,
@@ -83,20 +94,45 @@ function PrintContent() {
               user_agent: navigator.userAgent,
             });
             console.error('[contacts] print.js get_team_contacts failed:', error.message);
-          } else {
-            await supabase.from('debug_logs').insert({
-              category: 'contacts',
-              message: 'print.js get_team_contacts SUCCEEDED',
-              data: { contactTeamId, myProfileRole: myProfile?.role, rowCount: (contactsRes || []).length },
-              user_agent: navigator.userAgent,
-            });
-            const byId = {};
-            (contactsRes || []).forEach((c) => {
-              byId[c.player_id] = { phone: c.phone, email: c.email };
-            });
-            setContactsByPlayerId(byId);
+            return [];
+          }
+          await supabase.from('debug_logs').insert({
+            category: 'contacts',
+            message: 'print.js get_team_contacts SUCCEEDED',
+            data: { teamIdToFetch, myProfileRole: myProfile?.role, rowCount: (data || []).length },
+            user_agent: navigator.userAgent,
+          });
+          return data || [];
+        }
+
+        let allContactRows = [];
+        if (myProfile?.role === 'commissioner') {
+          // Commissioner sees every team at once, on every print view,
+          // including All Teams - one call covers everything.
+          allContactRows = await fetchContactsForTeam(null);
+        } else if (type === 'all') {
+          // Not the commissioner: All Teams still needs one call per team
+          // this viewer is actually authorized for (could be more than one
+          // for a multi-team proxy) - a single p_team_id can't express
+          // "several specific teams" to the RPC, so these run in parallel
+          // and get merged together, leaving every other team on this
+          // same printout correctly showing nothing.
+          const perTeamResults = await Promise.all([...myAuthorizedTeamIds].map(fetchContactsForTeam));
+          allContactRows = perTeamResults.flat();
+        } else {
+          // A specific team's print page - the URL's teamId if the viewer
+          // is authorized for it, otherwise their own team as a fallback.
+          const contactTeamId = myAuthorizedTeamIds.has(teamId) ? teamId : myProfile?.team_id || teamId;
+          if (contactTeamId) {
+            allContactRows = await fetchContactsForTeam(contactTeamId);
           }
         }
+
+        const byId = {};
+        allContactRows.forEach((c) => {
+          byId[c.player_id] = { phone: c.phone, email: c.email };
+        });
+        setContactsByPlayerId(byId);
       }
 
       setLoading(false);

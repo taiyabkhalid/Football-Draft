@@ -2127,9 +2127,11 @@ function LiveDraftPageContent() {
 
       {(draftStatus === 'in_progress' || draftStatus === 'paused') && (
         <>
-          <div className="px-4 sm:px-5 pt-4">
-            <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Upcoming picks</p>
-            <div className="flex gap-2 overflow-x-auto pb-2 upcoming-picks-scroll">
+          <div className="mx-4 sm:mx-5 mt-4 rounded-xl border border-line bg-surface px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide m-0 mb-2" style={{ color: '#5a6b7d' }}>
+              Upcoming picks
+            </p>
+            <div className="flex gap-2 overflow-x-auto pb-1 upcoming-picks-scroll">
               {upcomingPicks.map((n) => {
                 const color = n.team?.team_color || '#0074ff';
                 return (
