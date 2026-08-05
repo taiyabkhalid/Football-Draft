@@ -100,39 +100,6 @@ function DraftPageContent() {
   const [mobileListTab, setMobileListTab] = useState('available');
   const [leftColumnTab, setLeftColumnTab] = useState('available');
 
-  useEffect(() => {
-    console.log('[focus-effect] draft page fired', { focusParam, profileTeamId: profile?.team_id, profileLoaded: !!profile });
-    if (focusParam === 'search') {
-      console.log('[focus-effect] -> search branch');
-      setViewByTeamOpen(false);
-      scrollToElement(playerSelectionRef, 300);
-    } else if (focusParam === 'myteam' && profile?.team_id) {
-      console.log('[focus-effect] -> myteam branch');
-      setViewByTeamOpen(true);
-      setRosterViewMode('team');
-      setViewingTeamId(profile.team_id);
-      scrollToElement(rostersSectionRef, 400);
-    } else if (focusParam === 'results') {
-      console.log('[focus-effect] -> results branch');
-      setViewByTeamOpen(true);
-      setRosterViewMode('board');
-      scrollToElement(rostersSectionRef, 400);
-    } else if (focusParam === 'selection') {
-      console.log('[focus-effect] -> selection branch');
-      // "My Draft Room" / "Go to Draft Room" - explicitly resets View by
-      // Team closed even if it was left open from a previous visit to this
-      // same route (client-side navigation between two /draft?focus=...
-      // links doesn't remount the page, so state like this can otherwise
-      // persist from an earlier visit rather than genuinely resetting).
-      setViewByTeamOpen(false);
-      scrollToElement(playerSelectionRef, 300);
-    } else if (focusParam === 'myteam' && !profile?.team_id) {
-      console.log('[focus-effect] -> myteam requested but profile.team_id not yet available, waiting for profile to load');
-    } else {
-      console.log('[focus-effect] -> no branch matched focusParam:', focusParam);
-    }
-  }, [focusParam, profile]);
-
   function jumpToTeam(teamId) {
     setViewByTeamOpen(true);
     setRosterViewMode('team');
@@ -370,20 +337,6 @@ function DraftPageContent() {
   }, [profiles]);
   const previousPick = picks.length > 0 ? picks[picks.length - 1] : null;
 
-  const upcomingPicks = useMemo(() => {
-    if (!numTeams) return [];
-    const list = [];
-    for (let i = 0; i <= 7; i++) {
-      const pickNum = currentPickNumber + i;
-      list.push({
-        pickNumber: pickNum,
-        round: getRound(pickNum, numTeams),
-        team: getTeamOnTheClock(pickNum, numTeams, teams, draftType),
-      });
-    }
-    return list;
-  }, [currentPickNumber, numTeams, teams, draftType]);
-
   const availablePlayers = useMemo(() => players.filter((p) => !p.team_id), [players]);
 
   // The draft runs until the whole DRAFTABLE pool is allocated, not a fixed
@@ -555,6 +508,71 @@ function DraftPageContent() {
     }
     return null;
   }, [myManagedTeamIds, currentPickNumber, numTeams, teams, draftType, teamsById]);
+
+  // Runs all the way to the end of the remaining draft (totalPicks already
+  // accounts for skips dynamically, so this list grows on its own if a
+  // skip adds an extra turn) rather than a fixed lookahead. Each entry is
+  // flagged as belonging to the viewer's managed team(s) and, among those,
+  // whichever is soonest - the soonest gets the flashing "Your next pick"
+  // treatment, the rest just a plain highlighted border, with no
+  // auto-scrolling to any of them (this is a strategic draft - people want
+  // to watch what happens between now and their turn, not be jumped past it).
+  const upcomingPicks = useMemo(() => {
+    if (!numTeams) return [];
+    const list = [];
+    let foundSoonest = false;
+    for (let pickNum = currentPickNumber; pickNum <= totalPicks; pickNum++) {
+      const team = getTeamOnTheClock(pickNum, numTeams, teams, draftType);
+      const isMine = Boolean(team && myManagedTeamIds.has(team.id));
+      const isSoonestMine = isMine && !foundSoonest;
+      if (isSoonestMine) foundSoonest = true;
+      list.push({
+        pickNumber: pickNum,
+        round: getRound(pickNum, numTeams),
+        team,
+        isMine,
+        isSoonestMine,
+      });
+    }
+    return list;
+  }, [currentPickNumber, numTeams, teams, draftType, totalPicks, myManagedTeamIds]);
+
+  useEffect(() => {
+    console.log('[focus-effect] draft page fired', { focusParam, profileTeamId: profile?.team_id, profileLoaded: !!profile });
+    if (focusParam === 'search') {
+      console.log('[focus-effect] -> search branch');
+      setViewByTeamOpen(false);
+      scrollToElement(playerSelectionRef, 300);
+    } else if (focusParam === 'myteam' && (profile?.team_id || draftingForTeam)) {
+      // GM/commissioner: unchanged, always their own team. Proxy (no team
+      // of their own): falls back to whichever team they're actually
+      // drafting for next, same logic as the label and the Your Team
+      // sidebar - previously this did nothing at all for a proxy.
+      console.log('[focus-effect] -> myteam branch');
+      setViewByTeamOpen(true);
+      setRosterViewMode('team');
+      setViewingTeamId(profile?.team_id || draftingForTeam.id);
+      scrollToElement(rostersSectionRef, 400);
+    } else if (focusParam === 'results') {
+      console.log('[focus-effect] -> results branch');
+      setViewByTeamOpen(true);
+      setRosterViewMode('board');
+      scrollToElement(rostersSectionRef, 400);
+    } else if (focusParam === 'selection') {
+      console.log('[focus-effect] -> selection branch');
+      // "My Draft Room" / "Go to Draft Room" - explicitly resets View by
+      // Team closed even if it was left open from a previous visit to this
+      // same route (client-side navigation between two /draft?focus=...
+      // links doesn't remount the page, so state like this can otherwise
+      // persist from an earlier visit rather than genuinely resetting).
+      setViewByTeamOpen(false);
+      scrollToElement(playerSelectionRef, 300);
+    } else if (focusParam === 'myteam' && !profile?.team_id && !draftingForTeam) {
+      console.log('[focus-effect] -> myteam requested but no team available yet, waiting for data to load');
+    } else {
+      console.log('[focus-effect] -> no branch matched focusParam:', focusParam);
+    }
+  }, [focusParam, profile, draftingForTeam]);
 
   // Which team Your Team panel actually shows. Defaults to auto-following
   // draftingForTeam (whichever of this person's teams is up next) - the
@@ -1303,7 +1321,7 @@ function DraftPageContent() {
                     </p>
                   </div>
                   <p className="text-[10px] text-muted m-0 mt-1">
-                    Round {previousPick.round} &middot; Pick {previousPick.pick_number}
+                    Round {previousPick.round} &middot; Pick {pickInRound(previousPick.pick_number, numTeams)}
                   </p>
                 </>
               ) : (
@@ -1376,7 +1394,7 @@ function DraftPageContent() {
               </div>
               {teamNextOnClock && (
                 <p className="text-[10px] text-muted m-0 mt-1">
-                  Round {nextRound} &middot; Pick {currentPickNumber + 1}
+                  Round {nextRound} &middot; Pick {pickInRound(currentPickNumber + 1, numTeams)}
                 </p>
               )}
             </div>
@@ -1425,28 +1443,47 @@ function DraftPageContent() {
               <i className={`ti ti-chevron-${upcomingPicksOpen ? 'up' : 'down'} text-sm text-muted`} aria-hidden="true" />
             </button>
             {upcomingPicksOpen && (
-              <div className="flex gap-2 overflow-x-auto pb-2">
+              <div className="flex gap-2 overflow-x-auto pb-1 upcoming-picks-scroll">
                 {upcomingPicks.map((n) => {
-                  const color = n.team?.team_color || '#0074ff';
-                  return (
-                    <button
-                      key={n.pickNumber}
-                      type="button"
-                      onClick={() => n.team && jumpToTeam(n.team.id)}
-                      className="flex-none rounded-md flex flex-col items-center justify-center text-center px-1.5"
-                      style={{ width: 100, height: 44, background: lightenColor(color, 0.85), color: '#0c2340', border: 'none', cursor: n.team ? 'pointer' : 'default' }}
-                    >
-                      <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
-                        <FootballIcon color={color} size={11} />
-                        <span className="truncate">{n.team?.name || '—'}</span>
-                      </span>
-                      <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
-                        Rnd {n.round} . Pick {pickInRound(n.pickNumber, numTeams)}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+                    const color = n.team?.team_color || '#0074ff';
+                    return (
+                      <button
+                        key={n.pickNumber}
+                        type="button"
+                        onClick={() => n.team && jumpToTeam(n.team.id)}
+                        className={`flex-none rounded-md flex flex-col items-center justify-center text-center px-1.5 ${
+                          n.isSoonestMine ? 'animate-pulse-glow' : ''
+                        }`}
+                        style={{
+                          width: 100,
+                          height: 52,
+                          background: n.isSoonestMine ? '#e6f1fb' : lightenColor(color, 0.85),
+                          color: '#0c2340',
+                          border: n.isSoonestMine
+                            ? '1.5px solid #185fa5'
+                            : n.isMine
+                            ? '1.5px solid #5a6b7d'
+                            : 'none',
+                          cursor: n.team ? 'pointer' : 'default',
+                          transition: 'background 0.4s, border 0.4s',
+                        }}
+                      >
+                        {n.isSoonestMine && (
+                          <span className="text-[9px] font-semibold" style={{ color: '#185fa5' }}>
+                            Your next pick
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
+                          <FootballIcon color={color} size={11} />
+                          <span className="truncate">{n.team?.name || '—'}</span>
+                        </span>
+                        <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
+                          Rnd {n.round} . Pick {pickInRound(n.pickNumber, numTeams)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
             )}
           </div>
 

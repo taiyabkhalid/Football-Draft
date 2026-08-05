@@ -643,20 +643,6 @@ function LiveDraftPageContent() {
   const playersById = useMemo(() => Object.fromEntries(players.map((p) => [p.id, p])), [players]);
   const teamsById = useMemo(() => Object.fromEntries(teams.map((t) => [t.id, t])), [teams]);
 
-  const upcomingPicks = useMemo(() => {
-    if (!numTeams) return [];
-    const list = [];
-    for (let i = 0; i <= 7; i++) {
-      const pickNum = currentPickNumber + i;
-      list.push({
-        pickNumber: pickNum,
-        round: getRound(pickNum, numTeams),
-        team: getTeamOnTheClock(pickNum, numTeams, teams, draftType),
-      });
-    }
-    return list;
-  }, [currentPickNumber, numTeams, teams, draftType]);
-
 
   const ownerByTeam = useMemo(() => {
     const map = {};
@@ -796,6 +782,23 @@ function LiveDraftPageContent() {
   const skipCount = useMemo(() => picks.filter((p) => !p.player_id).length, [picks]);
   const totalPicks = Math.max(players.length - numTeams, 0) + skipCount;
   const maxRounds = numTeams ? Math.ceil(totalPicks / numTeams) : 0;
+
+  // Runs all the way to the end of the remaining draft (totalPicks already
+  // accounts for skips dynamically) rather than a fixed lookahead - no
+  // personalized highlighting here, that's GM-page-only; this stays a
+  // plain shared view of the whole draft for every viewer.
+  const upcomingPicks = useMemo(() => {
+    if (!numTeams) return [];
+    const list = [];
+    for (let pickNum = currentPickNumber; pickNum <= totalPicks; pickNum++) {
+      list.push({
+        pickNumber: pickNum,
+        round: getRound(pickNum, numTeams),
+        team: getTeamOnTheClock(pickNum, numTeams, teams, draftType),
+      });
+    }
+    return list;
+  }, [currentPickNumber, numTeams, teams, draftType, totalPicks]);
 
   const allSlots = useMemo(() => {
     if (!numTeams) return [];
@@ -2126,7 +2129,7 @@ function LiveDraftPageContent() {
         <>
           <div className="px-4 sm:px-5 pt-4">
             <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Upcoming picks</p>
-            <div className="flex gap-2 overflow-x-auto pb-2">
+            <div className="flex gap-2 overflow-x-auto pb-2 upcoming-picks-scroll">
               {upcomingPicks.map((n) => {
                 const color = n.team?.team_color || '#0074ff';
                 return (

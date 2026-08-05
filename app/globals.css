@@ -63,3 +63,34 @@ button {
 .press-ring-progress {
   animation: press-ring-fill 400ms linear forwards;
 }
+
+/* Visible horizontal scrollbar for the Upcoming Picks strip - the list can
+   now run to dozens of picks in a large draft, so the browser's default
+   (often very thin or hidden until hover) isn't enough of a hint that
+   there's more to scroll to. */
+.upcoming-picks-scroll {
+  scrollbar-width: auto;
+  scrollbar-color: #b5c2cc #eef0f2;
+}
+.upcoming-picks-scroll::-webkit-scrollbar {
+  height: 10px;
+}
+.upcoming-picks-scroll::-webkit-scrollbar-track {
+  background: #eef0f2;
+  border-radius: 5px;
+}
+.upcoming-picks-scroll::-webkit-scrollbar-thumb {
+  background: #b5c2cc;
+  border-radius: 5px;
+}
+.upcoming-picks-scroll::-webkit-scrollbar-thumb:hover {
+  background: #8b97a3;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(24, 95, 165, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(24, 95, 165, 0.35); }
+}
+.animate-pulse-glow {
+  animation: pulse-glow 2.2s ease-in-out infinite;
+}
