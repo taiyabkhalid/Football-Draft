@@ -21,6 +21,7 @@ export default function ProfilePage() {
   const [teamColorDraft, setTeamColorDraft] = useState('#0074ff');
 
   const [gmContact, setGmContact] = useState(null);
+  const [showWatchDraftModal, setShowWatchDraftModal] = useState(false);
   useEffect(() => {
     if (!team || settings?.draft_status !== 'completed') {
       setGmContact(null);
@@ -427,15 +428,93 @@ export default function ProfilePage() {
         )}
 
         {draftStatus !== 'completed' && (
-          <Link href="/live" className="btn-primary block text-center mb-4">
-            {showWatchWording ? (
-              <>
-                Watch the live draft <i className="ti ti-arrow-right text-sm" aria-hidden="true" />
-              </>
-            ) : (
-              'Enter Draft Room'
-            )}
-          </Link>
+          (role === 'gm' || role === 'commissioner' || proxyTeamId) ? (
+            <button
+              onClick={() => setShowWatchDraftModal(true)}
+              className="btn-primary block text-center mb-4 w-full"
+            >
+              {showWatchWording ? (
+                <>
+                  Watch the live draft <i className="ti ti-arrow-right text-sm" aria-hidden="true" />
+                </>
+              ) : (
+                'Enter Draft Room'
+              )}
+            </button>
+          ) : (
+            <Link href="/live" className="btn-primary block text-center mb-4">
+              {showWatchWording ? (
+                <>
+                  Watch the live draft <i className="ti ti-arrow-right text-sm" aria-hidden="true" />
+                </>
+              ) : (
+                'Enter Draft Room'
+              )}
+            </Link>
+          )
+        )}
+
+        {showWatchDraftModal && (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 200 }}
+            className="flex items-center justify-center px-4"
+            onClick={() => setShowWatchDraftModal(false)}
+          >
+            <div
+              className="bg-white rounded-xl p-5"
+              style={{ maxWidth: 340, width: '100%' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-base font-semibold m-0 mb-2" style={{ color: '#0c2340' }}>
+                Heads up
+              </p>
+              <p className="text-sm m-0 mb-4" style={{ color: '#3d4a57' }}>
+                This is the Spectator Room for the draft. You can't make draft selections from here — you'll need to
+                go to My Draft Room to make your picks.
+              </p>
+              <a
+                href="/draft?focus=selection"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowWatchDraftModal(false);
+                  router.push(`/draft?focus=selection&t=${Date.now()}`);
+                }}
+                className="block text-center mb-2"
+                style={{
+                  background: '#185fa5',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  borderRadius: 8,
+                  padding: '9px 14px',
+                  fontSize: 13,
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Go to My Draft Room instead?
+              </a>
+              <a
+                href="/live"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowWatchDraftModal(false);
+                  router.push(`/live?t=${Date.now()}`);
+                }}
+                className="block text-center"
+                style={{
+                  color: '#5a6b7d',
+                  fontWeight: 500,
+                  borderRadius: 8,
+                  padding: '9px 14px',
+                  fontSize: 13,
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Continue to Spectator Room
+              </a>
+            </div>
+          </div>
         )}
 
         <div className="rounded-lg border border-line px-3.5 py-3 mb-4">

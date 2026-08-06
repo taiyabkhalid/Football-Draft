@@ -19,6 +19,7 @@ function PrintContent() {
   const [players, setPlayers] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [numTeams, setNumTeams] = useState(0);
+  const [roundByPlayerId, setRoundByPlayerId] = useState({});
   const [contactsByPlayerId, setContactsByPlayerId] = useState({});
   const [emailToName, setEmailToName] = useState({});
   const [viewerRole, setViewerRole] = useState(null);
@@ -30,7 +31,7 @@ function PrintContent() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      const [teamsRes, playersRes, profilesRes, settingsRes, emailMatchRes] = await Promise.all([
+      const [teamsRes, playersRes, profilesRes, settingsRes, emailMatchRes, picksRes] = await Promise.all([
         supabase.from('teams').select('*').order('name', { ascending: true }),
         supabase
           .from('players')
@@ -45,11 +46,17 @@ function PrintContent() {
         // the main roster fetch specifically so phone never rides along
         // with it.
         supabase.from('players').select('email, full_name'),
+        // The actual stored round for each pick - needed because
+        // recalculating "round" from a player's real (skip-excluding)
+        // pick number disagrees with the actual round for any pick made
+        // during the extended phase (after a skip has occurred).
+        supabase.from('draft_picks').select('player_id, round').not('player_id', 'is', null),
       ]);
       setTeams(teamsRes.data || []);
       setPlayers(playersRes.data || []);
       setProfiles(profilesRes.data || []);
       setNumTeams(settingsRes.data?.num_teams || (teamsRes.data || []).length);
+      setRoundByPlayerId(Object.fromEntries((picksRes.data || []).map((p) => [p.player_id, p.round])));
       setEmailToName(Object.fromEntries((emailMatchRes.data || []).map((p) => [p.email, p.full_name])));
 
       if (user) {
@@ -256,7 +263,7 @@ function PrintContent() {
           {allDrafted.map((p) => (
             <tr key={p.id} style={{ borderTop: '1px solid #eef0f2' }}>
               <td style={td}>{p.draft_pick_number}</td>
-              <td style={td}>{getRound(p.draft_pick_number, numTeams)}</td>
+              <td style={td}>{roundByPlayerId[p.id]}</td>
               <td style={td}>{p.full_name}</td>
               <td style={td}>
                 {p.offensive_position} / {p.defensive_position}

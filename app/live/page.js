@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
-import { getRound, getTeamOnTheClock, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
+import { getRound, getTeamOnTheClock, getTeamOnTheClockExtended, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
 import FootballIcon, { lightenColor, StarIcon } from '../../lib/FootballIcon';
 import PrintRosterButton from '../../lib/PrintRosterButton';
@@ -574,8 +574,24 @@ function LiveDraftPageContent() {
   const draftType = settings?.draft_type || 'snake';
   const currentRound = numTeams ? getRound(currentPickNumber, numTeams) : 1;
   const nextRound = numTeams ? getRound(currentPickNumber + 1, numTeams) : 1;
-  const teamOnClock = numTeams ? getTeamOnTheClock(currentPickNumber, numTeams, teams, draftType) : null;
-  const teamNextOnClock = numTeams ? getTeamOnTheClock(currentPickNumber + 1, numTeams, teams, draftType) : null;
+  // poolSize is duplicated here (matches totalPicks - skipCount further
+  // below) rather than reordering declarations, since it's simple
+  // arithmetic - the number of turns needed if nothing were ever skipped.
+  const poolSize = Math.max(players.length - numTeams, 0);
+  const skipPickNumbers = useMemo(
+    () =>
+      picks
+        .filter((p) => !p.player_id)
+        .map((p) => p.pick_number)
+        .sort((a, b) => a - b),
+    [picks]
+  );
+  const teamOnClock = numTeams
+    ? getTeamOnTheClockExtended(currentPickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers)
+    : null;
+  const teamNextOnClock = numTeams
+    ? getTeamOnTheClockExtended(currentPickNumber + 1, numTeams, teams, draftType, poolSize, skipPickNumbers)
+    : null;
   const pickClockSeconds = settings?.pick_clock_seconds ?? 120;
   const minRoster = settings?.min_roster_size ?? 9;
   const minFemale = settings?.min_female_players ?? 2;
@@ -794,16 +810,16 @@ function LiveDraftPageContent() {
       list.push({
         pickNumber: pickNum,
         round: getRound(pickNum, numTeams),
-        team: getTeamOnTheClock(pickNum, numTeams, teams, draftType),
+        team: getTeamOnTheClockExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers),
       });
     }
     return list;
-  }, [currentPickNumber, numTeams, teams, draftType, totalPicks]);
+  }, [currentPickNumber, numTeams, teams, draftType, totalPicks, poolSize, skipPickNumbers]);
 
   const allSlots = useMemo(() => {
     if (!numTeams) return [];
     return buildFullPickOrder(numTeams, totalPicks, draftType).map((slot) => {
-      const team = teams.find((t) => t.draft_position === slot.draftPosition);
+      const team = getTeamOnTheClockExtended(slot.pickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers);
       const pick = pickByNumber[slot.pickNumber];
       return {
         pickNumber: slot.pickNumber,
@@ -813,7 +829,7 @@ function LiveDraftPageContent() {
         player: pick?.player_id ? playersById[pick.player_id] : null,
       };
     });
-  }, [numTeams, totalPicks, draftType, teams, pickByNumber, playersById]);
+  }, [numTeams, totalPicks, draftType, teams, pickByNumber, playersById, poolSize, skipPickNumbers]);
 
   const picksPerTeam = useMemo(() => {
     const map = {};
@@ -1814,7 +1830,7 @@ function LiveDraftPageContent() {
                                   {player.full_name}
                                 </p>
                                 <span className="text-[9px] text-muted mt-0.5">
-                                  Rnd {getRound(player.draft_pick_number, numTeams)} . Overall Pick # {player.draft_pick_number}
+                                  Rnd {roundByPlayerId[player.id]} . Overall Pick # {player.draft_pick_number}
                                 </span>
                               </>
                             ) : entry?.kind === 'skipped' ? (
@@ -2249,7 +2265,7 @@ function LiveDraftPageContent() {
                 ) : p.draft_pick_number ? (
                   <>
                     <p className="text-xs text-ink m-0">
-                      Drafted &middot; Rnd {getRound(p.draft_pick_number, numTeams)} . Overall Pick# {p.draft_pick_number}
+                      Drafted &middot; Rnd {roundByPlayerId[p.id]} . Overall Pick# {p.draft_pick_number}
                     </p>
                     <p className="text-xs font-medium text-ink m-0 mt-1">{team?.name || ''}</p>
                     {team && ownerByTeam[team.id] && (

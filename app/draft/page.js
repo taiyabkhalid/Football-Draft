@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
-import { getRound, getTeamOnTheClock, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
+import { getRound, getTeamOnTheClock, getTeamOnTheClockExtended, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
 import FootballIcon, { lightenColor, StarIcon } from '../../lib/FootballIcon';
 import OnboardingTour from '../../lib/OnboardingTour';
@@ -51,6 +51,7 @@ function DraftPageContent() {
 
   const searchParams = useSearchParams();
   const focusParam = searchParams.get('focus');
+  const focusTimestamp = searchParams.get('t');
 
   function scrollToElement(ref, delay = 200) {
     function doScroll() {
@@ -232,8 +233,24 @@ function DraftPageContent() {
   const draftType = settings?.draft_type || 'snake';
   const currentRound = numTeams ? getRound(currentPickNumber, numTeams) : 1;
   const nextRound = numTeams ? getRound(currentPickNumber + 1, numTeams) : 1;
-  const teamOnClock = numTeams ? getTeamOnTheClock(currentPickNumber, numTeams, teams, draftType) : null;
-  const teamNextOnClock = numTeams ? getTeamOnTheClock(currentPickNumber + 1, numTeams, teams, draftType) : null;
+  // poolSize is duplicated here (matches totalPicks - skipCount further
+  // below) rather than reordering declarations, since it's simple
+  // arithmetic - the number of turns needed if nothing were ever skipped.
+  const poolSize = Math.max(players.length - numTeams, 0);
+  const skipPickNumbers = useMemo(
+    () =>
+      picks
+        .filter((p) => !p.player_id)
+        .map((p) => p.pick_number)
+        .sort((a, b) => a - b),
+    [picks]
+  );
+  const teamOnClock = numTeams
+    ? getTeamOnTheClockExtended(currentPickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers)
+    : null;
+  const teamNextOnClock = numTeams
+    ? getTeamOnTheClockExtended(currentPickNumber + 1, numTeams, teams, draftType, poolSize, skipPickNumbers)
+    : null;
 
   const minRoster = settings?.min_roster_size ?? 9;
   const minFemale = settings?.min_female_players ?? 2;
@@ -351,18 +368,26 @@ function DraftPageContent() {
   const totalPicks = Math.max(players.length - numTeams, 0) + skipCount;
   const maxRounds = numTeams ? Math.ceil(totalPicks / numTeams) : 0;
   const pickByNumber = useMemo(() => Object.fromEntries(picks.map((p) => [p.pick_number, p])), [picks]);
-
-  const fullPickOrder = useMemo(
-    () => (numTeams ? buildFullPickOrder(numTeams, totalPicks, draftType) : []),
-    [numTeams, totalPicks, draftType]
+  const roundByPlayerId = useMemo(
+    () => Object.fromEntries(picks.filter((p) => p.player_id).map((p) => [p.player_id, p.round])),
+    [picks]
   );
+
+
+  // Counts how many picks each team actually gets, extended-phase aware -
+  // a team that was skipped gets more (their makeup picks), a team that
+  // was never skipped gets exactly its normal share. The old version
+  // assumed every team gets an equal count via the raw rotation, which
+  // is wrong the moment any skip has happened.
   const picksPerTeam = useMemo(() => {
     const map = {};
-    for (const t of teams) {
-      map[t.id] = fullPickOrder.filter((s) => s.draftPosition === t.draft_position).length;
+    for (const t of teams) map[t.id] = 0;
+    for (let pickNum = 1; pickNum <= totalPicks; pickNum++) {
+      const team = getTeamOnTheClockExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers);
+      if (team) map[team.id] = (map[team.id] || 0) + 1;
     }
     return map;
-  }, [fullPickOrder, teams]);
+  }, [totalPicks, numTeams, teams, draftType, poolSize, skipPickNumbers]);
 
   useEffect(() => {
     if (!roundInitialized.current && currentRound) {
@@ -385,7 +410,7 @@ function DraftPageContent() {
     return buildFullPickOrder(numTeams, totalPicks, draftType)
       .filter((s) => s.round === selectedRound)
       .map((slot) => {
-        const team = teams.find((t) => t.draft_position === slot.draftPosition);
+        const team = getTeamOnTheClockExtended(slot.pickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers);
         const pick = pickByNumber[slot.pickNumber];
         return {
           pickNumber: slot.pickNumber,
@@ -395,7 +420,7 @@ function DraftPageContent() {
           player: pick?.player_id ? playersById[pick.player_id] : null,
         };
       });
-  }, [numTeams, totalPicks, draftType, selectedRound, teams, pickByNumber, playersById]);
+  }, [numTeams, totalPicks, draftType, selectedRound, teams, pickByNumber, playersById, poolSize, skipPickNumbers]);
 
   // Full pick order across every round - the Draft Board grid needs this
   // (previously this was missing entirely, causing a crash the moment
@@ -403,7 +428,7 @@ function DraftPageContent() {
   const allSlots = useMemo(() => {
     if (!numTeams) return [];
     return buildFullPickOrder(numTeams, totalPicks, draftType).map((slot) => {
-      const team = teams.find((t) => t.draft_position === slot.draftPosition);
+      const team = getTeamOnTheClockExtended(slot.pickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers);
       const pick = pickByNumber[slot.pickNumber];
       return {
         pickNumber: slot.pickNumber,
@@ -413,7 +438,7 @@ function DraftPageContent() {
         player: pick?.player_id ? playersById[pick.player_id] : null,
       };
     });
-  }, [numTeams, totalPicks, draftType, teams, pickByNumber, playersById]);
+  }, [numTeams, totalPicks, draftType, teams, pickByNumber, playersById, poolSize, skipPickNumbers]);
 
   function buildTeamSlots(teamId) {
     const roster = rosterByTeam[teamId]?.players || [];
@@ -513,15 +538,25 @@ function DraftPageContent() {
       return sorted[0] || null;
     }
     // Multiple teams - search forward from the current pick for whichever
-    // of them comes up soonest. A full round cycles through every draft
-    // position exactly once, so searching numTeams picks ahead is always
-    // enough to find a match.
-    for (let i = 0; i < numTeams; i++) {
-      const team = getTeamOnTheClock(currentPickNumber + i, numTeams, teams, draftType);
+    // of them comes up soonest. Searches the full remaining draft (not
+    // just numTeams picks ahead) since the extended phase can give one
+    // team several consecutive picks in a row, so a normal-phase-sized
+    // window isn't guaranteed to find a match anymore.
+    for (let pickNum = currentPickNumber; pickNum <= totalPicks; pickNum++) {
+      const team = getTeamOnTheClockExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers);
       if (team && myManagedTeamIds.has(team.id)) return team;
     }
     return null;
-  }, [myManagedTeamIds, currentPickNumber, numTeams, teams, draftType, teamsById, draftStatus, profile]);
+  }, [myManagedTeamIds, currentPickNumber, numTeams, teams, draftType, teamsById, draftStatus, profile, totalPicks, poolSize, skipPickNumbers]);
+
+  // Always holds the latest draftingForTeam, updated every render - lets
+  // the focus effect below read the current value without depending on
+  // it, since draftingForTeam legitimately changes on every single pick
+  // for someone managing many teams (e.g. a commissioner proxying for
+  // everyone), and that should never by itself be treated as "a new
+  // navigation happened, reopen My Team."
+  const draftingForTeamRef = useRef(draftingForTeam);
+  draftingForTeamRef.current = draftingForTeam;
 
   // Runs all the way to the end of the remaining draft (totalPicks already
   // accounts for skips dynamically, so this list grows on its own if a
@@ -536,7 +571,7 @@ function DraftPageContent() {
     const list = [];
     let foundSoonest = false;
     for (let pickNum = currentPickNumber; pickNum <= totalPicks; pickNum++) {
-      const team = getTeamOnTheClock(pickNum, numTeams, teams, draftType);
+      const team = getTeamOnTheClockExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers);
       const isMine = Boolean(team && myManagedTeamIds.has(team.id));
       const isSoonestMine = isMine && !foundSoonest;
       if (isSoonestMine) foundSoonest = true;
@@ -552,12 +587,13 @@ function DraftPageContent() {
   }, [currentPickNumber, numTeams, teams, draftType, totalPicks, myManagedTeamIds]);
 
   useEffect(() => {
-    console.log('[focus-effect] draft page fired', { focusParam, profileTeamId: profile?.team_id, profileLoaded: !!profile });
+    console.log('[focus-effect] draft page fired', { focusParam, focusTimestamp, profileTeamId: profile?.team_id, profileLoaded: !!profile });
+    const currentDraftingForTeam = draftingForTeamRef.current;
     if (focusParam === 'search') {
       console.log('[focus-effect] -> search branch');
       setViewByTeamOpen(false);
       scrollToElement(playerSelectionRef, 300);
-    } else if (focusParam === 'myteam' && (profile?.team_id || draftingForTeam)) {
+    } else if (focusParam === 'myteam' && (profile?.team_id || currentDraftingForTeam)) {
       // GM/commissioner: unchanged, always their own team. Proxy (no team
       // of their own): falls back to whichever team they're actually
       // drafting for next, same logic as the label and the Your Team
@@ -565,7 +601,7 @@ function DraftPageContent() {
       console.log('[focus-effect] -> myteam branch');
       setViewByTeamOpen(true);
       setRosterViewMode('team');
-      setViewingTeamId(profile?.team_id || draftingForTeam.id);
+      setViewingTeamId(profile?.team_id || currentDraftingForTeam.id);
       scrollToElement(rostersSectionRef, 400);
     } else if (focusParam === 'results') {
       console.log('[focus-effect] -> results branch');
@@ -581,12 +617,12 @@ function DraftPageContent() {
       // persist from an earlier visit rather than genuinely resetting).
       setViewByTeamOpen(false);
       scrollToElement(playerSelectionRef, 300);
-    } else if (focusParam === 'myteam' && !profile?.team_id && !draftingForTeam) {
+    } else if (focusParam === 'myteam' && !profile?.team_id && !currentDraftingForTeam) {
       console.log('[focus-effect] -> myteam requested but no team available yet, waiting for data to load');
     } else {
       console.log('[focus-effect] -> no branch matched focusParam:', focusParam);
     }
-  }, [focusParam, profile, draftingForTeam?.id]);
+  }, [focusParam, focusTimestamp, profile]);
 
   // Which team Your Team panel actually shows. Defaults to auto-following
   // draftingForTeam (whichever of this person's teams is up next) - the
@@ -1079,10 +1115,13 @@ function DraftPageContent() {
 
   const picksRemainingForClockTeam = useMemo(() => {
     if (!teamOnClock) return 0;
-    return fullPickOrder.filter(
-      (s) => s.pickNumber >= currentPickNumber && s.draftPosition === teamOnClock.draft_position
-    ).length;
-  }, [fullPickOrder, currentPickNumber, teamOnClock]);
+    let count = 0;
+    for (let pickNum = currentPickNumber; pickNum <= totalPicks; pickNum++) {
+      const team = getTeamOnTheClockExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers);
+      if (team?.id === teamOnClock.id) count++;
+    }
+    return count;
+  }, [currentPickNumber, teamOnClock, totalPicks, numTeams, teams, draftType, poolSize, skipPickNumbers]);
 
   const mustDraftFemale = useMemo(() => {
     if (!teamOnClock) return false;
@@ -1730,7 +1769,7 @@ function DraftPageContent() {
                                   {player.full_name}
                                 </p>
                                 <span className="text-[9px] text-muted mt-0.5">
-                                  Rnd {getRound(player.draft_pick_number, numTeams)} . Overall Pick # {player.draft_pick_number}
+                                  Rnd {roundByPlayerId[player.id]} . Overall Pick # {player.draft_pick_number}
                                 </span>
                               </>
                             ) : entry?.kind === 'skipped' ? (
@@ -2339,7 +2378,7 @@ function DraftPageContent() {
                               </p>
                               {p.draft_pick_number && (
                                 <p className="text-[10px] italic m-0" style={{ color: '#8b97a3' }}>
-                                  Rnd {getRound(p.draft_pick_number, numTeams)} &middot; Overall Pick# {p.draft_pick_number}
+                                  Rnd {roundByPlayerId[p.id]} &middot; Overall Pick# {p.draft_pick_number}
                                 </p>
                               )}
                             </>
@@ -2715,7 +2754,7 @@ function DraftPageContent() {
                         </p>
                         {p.draft_pick_number && (
                           <p className="text-[11px] m-0" style={{ color: '#5a6b7d' }}>
-                            Rnd {getRound(p.draft_pick_number, numTeams)} &middot; Overall Pick# {p.draft_pick_number}
+                            Rnd {roundByPlayerId[p.id]} &middot; Overall Pick# {p.draft_pick_number}
                           </p>
                         )}
                       </div>
@@ -2868,7 +2907,7 @@ function DraftPageContent() {
                 ) : p.draft_pick_number ? (
                   <>
                     <p className="text-xs text-ink m-0">
-                      Drafted &middot; Rnd {getRound(p.draft_pick_number, numTeams)} . Overall Pick# {p.draft_pick_number}
+                      Drafted &middot; Rnd {roundByPlayerId[p.id]} . Overall Pick# {p.draft_pick_number}
                     </p>
                     <p className="text-xs font-medium text-ink m-0 mt-1">{team?.name || ''}</p>
                     {team && ownerByTeam[team.id] && (
