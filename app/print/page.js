@@ -242,6 +242,10 @@ function PrintContent() {
     );
   }
 
+  // Used to label extended-phase rounds as "Ext" in the Round column,
+  // matching every other place in the app that shows round numbers.
+  const maxNormalRound = numTeams ? Math.ceil(Math.max(players.length - numTeams, 0) / numTeams) : 0;
+
   function DraftOrderTable() {
     const allDrafted = players
       .filter((p) => p.draft_pick_number)
@@ -263,7 +267,7 @@ function PrintContent() {
           {allDrafted.map((p) => (
             <tr key={p.id} style={{ borderTop: '1px solid #eef0f2' }}>
               <td style={td}>{p.draft_pick_number}</td>
-              <td style={td}>{roundByPlayerId[p.id]}</td>
+              <td style={td}>{roundByPlayerId[p.id]}{roundByPlayerId[p.id] > maxNormalRound ? ' Ext' : ''}</td>
               <td style={td}>{p.full_name}</td>
               <td style={td}>
                 {p.offensive_position} / {p.defensive_position}

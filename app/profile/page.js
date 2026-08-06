@@ -15,6 +15,7 @@ export default function ProfilePage() {
   const [team, setTeam] = useState(null);
   const [allTeams, setAllTeams] = useState([]);
   const [proxyTeamId, setProxyTeamId] = useState(null);
+  const [proxyTeams, setProxyTeams] = useState([]);
   const [settings, setSettings] = useState(null);
   const [role, setRole] = useState(null);
   const [teamNameDraft, setTeamNameDraft] = useState('');
@@ -103,6 +104,14 @@ export default function ProfilePage() {
         .includes(myEmailLower)
     );
     setProxyTeamId(proxyTeam?.id || null);
+    setProxyTeams(
+      (allTeamsRow || []).filter((t) =>
+        (t.proxy_email || '')
+          .split(',')
+          .map((e) => e.trim().toLowerCase())
+          .includes(myEmailLower)
+      )
+    );
 
     if (settingsRow?.draft_status === 'completed') {
       setAllTeams(allTeamsRow || []);
@@ -231,7 +240,7 @@ export default function ProfilePage() {
               textDecoration: 'none',
             }}
           >
-            {draftStatus === 'completed' ? 'Draft Results' : 'Go to Draft Room'}
+            {draftStatus === 'completed' ? 'Draft Results' : 'Go to My Draft Room'}
           </Link>
         )}
 
@@ -250,6 +259,15 @@ export default function ProfilePage() {
             }}
           >
             Draft Results
+          </Link>
+        )}
+
+        {team && (
+          <Link
+            href={role === 'gm' || role === 'commissioner' ? '/draft?focus=myteam' : '/live?focus=team'}
+            className="btn-primary block text-center mb-3"
+          >
+            View My Team
           </Link>
         )}
 
@@ -349,6 +367,17 @@ export default function ProfilePage() {
               Not yet drafted
             </p>
           )}
+          {proxyTeams.length > 0 && (
+            <div className="mt-2 pt-2" style={{ borderTop: '1px solid #e2e6ea' }}>
+              <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Proxy for</p>
+              {proxyTeams.map((t) => (
+                <div key={t.id} className="flex items-center gap-2 mb-1">
+                  <FootballIcon color={t.team_color || '#0074ff'} size={14} />
+                  <p className="text-xs font-medium text-ink m-0">{t.name}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         {!team && draftStatus !== 'completed' && (
           <p className="text-[10px] text-faint mb-3 flex items-center gap-1">
@@ -418,15 +447,6 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {team && (
-          <Link
-            href={role === 'gm' || role === 'commissioner' ? '/draft?focus=myteam' : '/live?focus=team'}
-            className="btn-primary block text-center mb-3"
-          >
-            View My Team
-          </Link>
-        )}
-
         {draftStatus !== 'completed' && (
           (role === 'gm' || role === 'commissioner' || proxyTeamId) ? (
             <button
@@ -438,7 +458,7 @@ export default function ProfilePage() {
                   Watch the live draft <i className="ti ti-arrow-right text-sm" aria-hidden="true" />
                 </>
               ) : (
-                'Enter Draft Room'
+                'Enter Spectator Draft Room'
               )}
             </button>
           ) : (
@@ -523,7 +543,7 @@ export default function ProfilePage() {
             className="w-full flex items-center justify-between"
           >
             <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
-              Account &amp; security
+              Update My Password
             </p>
             <i className={`ti ti-chevron-${securityOpen ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
           </button>

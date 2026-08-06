@@ -991,6 +991,41 @@ function LiveDraftPageContent() {
     );
   }
 
+  // Shared between the pre-draft countdown view (where this doubles as
+  // the draft order preview - pick 1 through the end IS the draft order
+  // before anything has been picked) and the live/paused view, so both
+  // get the same full scrollable list and consistent styling instead of
+  // two different, drifting implementations.
+  const upcomingPicksBlock = (
+    <div className="mx-4 sm:mx-5 mt-4 rounded-xl border border-line bg-surface px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-wide m-0 mb-2" style={{ color: '#5a6b7d' }}>
+        Upcoming picks
+      </p>
+      <div className="flex gap-2 overflow-x-auto pb-1 upcoming-picks-scroll">
+        {upcomingPicks.map((n) => {
+          const color = n.team?.team_color || '#0074ff';
+          return (
+            <button
+              key={n.pickNumber}
+              type="button"
+              onClick={() => n.team && jumpToTeam(n.team.id)}
+              className="flex-none rounded-md flex flex-col items-center justify-center text-center px-1.5"
+              style={{ width: 100, height: 44, background: lightenColor(color, 0.85), color: '#0c2340', border: 'none', cursor: n.team ? 'pointer' : 'default' }}
+            >
+              <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
+                <FootballIcon color={color} size={11} />
+                <span className="truncate">{n.team?.name || '—'}</span>
+              </span>
+              <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
+                Rnd {n.round}{n.round > maxNormalRound ? ' Ext' : ''} . Pick {allSlots.filter((s) => s.round === n.round).findIndex((s) => s.pickNumber === n.pickNumber) + 1}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   const preDraftWaitingRoomBlock = draftStatus === 'not_started' && (
     <>
     {!roomIsOpen ? (
@@ -1016,31 +1051,7 @@ function LiveDraftPageContent() {
           </div>
         </div>
 
-        {showDraftOrderPreview && (
-          <div className="mt-4 rounded-xl border border-line bg-surface px-4 py-3.5">
-            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#0c447c' }}>
-              Draft order
-            </p>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {teams
-                .slice()
-                .sort((a, b) => a.draft_position - b.draft_position)
-                .map((t) => (
-                  <div
-                    key={t.id}
-                    className="flex-none rounded-md flex flex-col items-center justify-center text-center px-2 py-1.5"
-                    style={{ minWidth: 90, background: lightenColor(t.team_color || '#0074ff', 0.85) }}
-                  >
-                    <span className="text-[10px] text-muted">#{t.draft_position}</span>
-                    <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
-                      <FootballIcon color={t.team_color || '#0074ff'} size={11} />
-                      <span className="truncate">{t.name}</span>
-                    </span>
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
+        {showDraftOrderPreview && upcomingPicksBlock}
       </div>
     )}
 
@@ -2147,33 +2158,7 @@ function LiveDraftPageContent() {
 
       {(draftStatus === 'in_progress' || draftStatus === 'paused') && (
         <>
-          <div className="mx-4 sm:mx-5 mt-4 rounded-xl border border-line bg-surface px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide m-0 mb-2" style={{ color: '#5a6b7d' }}>
-              Upcoming picks
-            </p>
-            <div className="flex gap-2 overflow-x-auto pb-1 upcoming-picks-scroll">
-              {upcomingPicks.map((n) => {
-                const color = n.team?.team_color || '#0074ff';
-                return (
-                  <button
-                    key={n.pickNumber}
-                    type="button"
-                    onClick={() => n.team && jumpToTeam(n.team.id)}
-                    className="flex-none rounded-md flex flex-col items-center justify-center text-center px-1.5"
-                    style={{ width: 100, height: 44, background: lightenColor(color, 0.85), color: '#0c2340', border: 'none', cursor: n.team ? 'pointer' : 'default' }}
-                  >
-                    <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
-                      <FootballIcon color={color} size={11} />
-                      <span className="truncate">{n.team?.name || '—'}</span>
-                    </span>
-                    <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
-                      Rnd {n.round}{n.round > maxNormalRound ? ' Ext' : ''} . Pick {allSlots.filter((s) => s.round === n.round).findIndex((s) => s.pickNumber === n.pickNumber) + 1}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {upcomingPicksBlock}
 
           <p className="text-2xl font-semibold text-center m-0 pt-2" style={{ color: '#0c2340' }}>
             Round {currentRound}, Pick {allSlots.filter((s) => s.round === currentRound).findIndex((s) => s.pickNumber === currentPickNumber) + 1}

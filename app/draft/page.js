@@ -1385,18 +1385,16 @@ function DraftPageContent() {
             </p>
           </div>
 
-          <div className="px-4 sm:px-5">
           {showDraftOrderPreview && (
             <>
               {upcomingPicksBlock}
               {profile?.role === 'commissioner' && (
-                <p className="text-[10px] text-muted mt-2 mb-0 text-center">
+                <p className="text-[10px] text-muted mt-2 mb-0 text-center px-4 sm:px-5">
                   You can still change this order in Commish Tools right up until the draft starts.
                 </p>
               )}
             </>
           )}
-          </div>
         </>
       )}
 
@@ -2264,11 +2262,18 @@ function DraftPageContent() {
                       Inactive
                     </p>
                   ) : isDrafted ? (
-                    <p className="text-[11px] font-medium m-0" style={{ color: '#185fa5' }}>
-                      {p.draft_pick_number
-                        ? `Drafted \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'} \u00b7 Rnd ${roundByPlayerId[p.id]} . Pick # ${p.draft_pick_number}`
-                        : `Added manually \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'}`}
-                    </p>
+                    <>
+                      <p className="text-[11px] font-medium m-0" style={{ color: '#185fa5' }}>
+                        {p.draft_pick_number
+                          ? `Drafted by ${teamsById[p.team_id]?.name || 'Unknown'}`
+                          : `Added manually \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'}`}
+                      </p>
+                      {p.draft_pick_number && (
+                        <p className="text-[11px] font-medium m-0" style={{ color: '#185fa5' }}>
+                          Round {roundByPlayerId[p.id]}{roundByPlayerId[p.id] > maxNormalRound ? ' Ext' : ''}, Pick {p.draft_pick_number}
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <>
                       <p className="text-[11px] text-muted m-0">
@@ -2440,7 +2445,7 @@ function DraftPageContent() {
         </aside>
 
         <section className="flex-1 min-w-0 order-1 lg:order-2 lg:px-3">
-          <div className="flex items-center gap-3.5 mb-2 flex-wrap" style={{ position: 'relative', zIndex: 31 }}>
+          <div className="flex items-center gap-3.5 mb-2 flex-wrap">
             <p className="text-[11px] font-bold uppercase tracking-wide text-muted m-0">
               {draftStatus === 'completed' ? 'Available players' : `Round ${currentRound}, pick ${currentPickNumber}`}
             </p>
