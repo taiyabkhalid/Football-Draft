@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
-import { getRound, getTeamOnTheClock, getTeamOnTheClockExtended, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
+import { getRound, getTeamOnTheClock, getTeamOnTheClockExtended, getRoundExtended, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
 import FootballIcon, { lightenColor, StarIcon } from '../../lib/FootballIcon';
 import PrintRosterButton from '../../lib/PrintRosterButton';
@@ -797,7 +797,8 @@ function LiveDraftPageContent() {
   // spoiler content about who was picked. See draft/page.js for the same logic.
   const skipCount = useMemo(() => picks.filter((p) => !p.player_id).length, [picks]);
   const totalPicks = Math.max(players.length - numTeams, 0) + skipCount;
-  const maxRounds = numTeams ? Math.ceil(totalPicks / numTeams) : 0;
+  const maxRounds = numTeams && totalPicks ? getRoundExtended(totalPicks, numTeams, teams, draftType, poolSize, skipPickNumbers) : 0;
+  const maxNormalRound = numTeams ? Math.ceil(poolSize / numTeams) : 0;
 
   // Runs all the way to the end of the remaining draft (totalPicks already
   // accounts for skips dynamically) rather than a fixed lookahead - no
@@ -809,7 +810,7 @@ function LiveDraftPageContent() {
     for (let pickNum = currentPickNumber; pickNum <= totalPicks; pickNum++) {
       list.push({
         pickNumber: pickNum,
-        round: getRound(pickNum, numTeams),
+        round: getRoundExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers),
         team: getTeamOnTheClockExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers),
       });
     }
@@ -819,11 +820,12 @@ function LiveDraftPageContent() {
   const allSlots = useMemo(() => {
     if (!numTeams) return [];
     return buildFullPickOrder(numTeams, totalPicks, draftType).map((slot) => {
+      const round = getRoundExtended(slot.pickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers);
       const team = getTeamOnTheClockExtended(slot.pickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers);
       const pick = pickByNumber[slot.pickNumber];
       return {
         pickNumber: slot.pickNumber,
-        round: slot.round,
+        round,
         team,
         pick,
         player: pick?.player_id ? playersById[pick.player_id] : null,
@@ -1891,7 +1893,7 @@ function LiveDraftPageContent() {
                       border: '2px solid transparent',
                     }}
                   >
-                    Round {r}
+                    Round {r}{r > maxNormalRound ? ' Ext' : ''}
                   </button>
                 ))}
               </div>
@@ -2022,7 +2024,7 @@ function LiveDraftPageContent() {
                           borderBottom: '2px solid #d8dde2',
                         }}
                       >
-                        Round {r}
+                        Round {r}{r > maxNormalRound ? ' Ext' : ''}
                       </th>
                     ))}
                   </tr>
@@ -2163,7 +2165,7 @@ function LiveDraftPageContent() {
                       <span className="truncate">{n.team?.name || '—'}</span>
                     </span>
                     <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
-                      Rnd {n.round} . Pick {pickInRound(n.pickNumber, numTeams)}
+                      Rnd {n.round}{n.round > maxNormalRound ? ' Ext' : ''} . Pick {pickInRound(n.pickNumber, numTeams)}
                     </span>
                   </button>
                 );

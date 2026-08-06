@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
-import { getRound, getTeamOnTheClock, getTeamOnTheClockExtended, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
+import { getRound, getTeamOnTheClock, getTeamOnTheClockExtended, getRoundExtended, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
 import FootballIcon, { lightenColor, StarIcon } from '../../lib/FootballIcon';
 import OnboardingTour from '../../lib/OnboardingTour';
@@ -366,7 +366,8 @@ function DraftPageContent() {
   // which is why skipCount is added back in here.
   const skipCount = useMemo(() => picks.filter((p) => !p.player_id).length, [picks]);
   const totalPicks = Math.max(players.length - numTeams, 0) + skipCount;
-  const maxRounds = numTeams ? Math.ceil(totalPicks / numTeams) : 0;
+  const maxRounds = numTeams && totalPicks ? getRoundExtended(totalPicks, numTeams, teams, draftType, poolSize, skipPickNumbers) : 0;
+  const maxNormalRound = numTeams ? Math.ceil(poolSize / numTeams) : 0;
   const pickByNumber = useMemo(() => Object.fromEntries(picks.map((p) => [p.pick_number, p])), [picks]);
   const roundByPlayerId = useMemo(
     () => Object.fromEntries(picks.filter((p) => p.player_id).map((p) => [p.player_id, p.round])),
@@ -405,40 +406,29 @@ function DraftPageContent() {
     prevDraftStatusRef.current = draftStatus;
   }, [draftStatus]);
 
-  const roundSlots = useMemo(() => {
-    if (!numTeams) return [];
-    return buildFullPickOrder(numTeams, totalPicks, draftType)
-      .filter((s) => s.round === selectedRound)
-      .map((slot) => {
-        const team = getTeamOnTheClockExtended(slot.pickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers);
-        const pick = pickByNumber[slot.pickNumber];
-        return {
-          pickNumber: slot.pickNumber,
-          round: slot.round,
-          team,
-          pick,
-          player: pick?.player_id ? playersById[pick.player_id] : null,
-        };
-      });
-  }, [numTeams, totalPicks, draftType, selectedRound, teams, pickByNumber, playersById, poolSize, skipPickNumbers]);
-
   // Full pick order across every round - the Draft Board grid needs this
   // (previously this was missing entirely, causing a crash the moment
-  // anyone switched to the Draft Board tab on this page).
+  // anyone switched to the Draft Board tab on this page). Round is now
+  // computed via getRoundExtended rather than trusted from the naive
+  // buildFullPickOrder output, since an extended-phase pick's real round
+  // depends on skip-packing, not just raw arithmetic on the pick number.
   const allSlots = useMemo(() => {
     if (!numTeams) return [];
     return buildFullPickOrder(numTeams, totalPicks, draftType).map((slot) => {
+      const round = getRoundExtended(slot.pickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers);
       const team = getTeamOnTheClockExtended(slot.pickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers);
       const pick = pickByNumber[slot.pickNumber];
       return {
         pickNumber: slot.pickNumber,
-        round: slot.round,
+        round,
         team,
         pick,
         player: pick?.player_id ? playersById[pick.player_id] : null,
       };
     });
   }, [numTeams, totalPicks, draftType, teams, pickByNumber, playersById, poolSize, skipPickNumbers]);
+
+  const roundSlots = useMemo(() => allSlots.filter((s) => s.round === selectedRound), [allSlots, selectedRound]);
 
   function buildTeamSlots(teamId) {
     const roster = rosterByTeam[teamId]?.players || [];
@@ -577,7 +567,7 @@ function DraftPageContent() {
       if (isSoonestMine) foundSoonest = true;
       list.push({
         pickNumber: pickNum,
-        round: getRound(pickNum, numTeams),
+        round: getRoundExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers),
         team,
         isMine,
         isSoonestMine,
@@ -1352,7 +1342,7 @@ function DraftPageContent() {
                   <span className="truncate">{n.team?.name || '—'}</span>
                 </span>
                 <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
-                  Rnd {n.round} . Pick {pickInRound(n.pickNumber, numTeams)}
+                  Rnd {n.round}{n.round > maxNormalRound ? ' Ext' : ''} . Pick {pickInRound(n.pickNumber, numTeams)}
                 </span>
               </button>
             );
@@ -1830,7 +1820,7 @@ function DraftPageContent() {
                         border: '2px solid transparent',
                       }}
                     >
-                      Round {r}
+                      Round {r}{r > maxNormalRound ? ' Ext' : ''}
                     </button>
                   ))}
                 </div>
@@ -1959,7 +1949,7 @@ function DraftPageContent() {
                             borderBottom: '2px solid #d8dde2',
                           }}
                         >
-                          Round {r}
+                          Round {r}{r > maxNormalRound ? ' Ext' : ''}
                         </th>
                       ))}
                     </tr>
