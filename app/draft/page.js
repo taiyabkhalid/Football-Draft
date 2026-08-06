@@ -231,8 +231,6 @@ function DraftPageContent() {
   const numTeams = settings?.num_teams || teams.length;
   const draftStatus = settings?.draft_status || 'not_started';
   const draftType = settings?.draft_type || 'snake';
-  const currentRound = numTeams ? getRound(currentPickNumber, numTeams) : 1;
-  const nextRound = numTeams ? getRound(currentPickNumber + 1, numTeams) : 1;
   // poolSize is duplicated here (matches totalPicks - skipCount further
   // below) rather than reordering declarations, since it's simple
   // arithmetic - the number of turns needed if nothing were ever skipped.
@@ -245,6 +243,8 @@ function DraftPageContent() {
         .sort((a, b) => a - b),
     [picks]
   );
+  const currentRound = numTeams ? getRoundExtended(currentPickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers) : 1;
+  const nextRound = numTeams ? getRoundExtended(currentPickNumber + 1, numTeams, teams, draftType, poolSize, skipPickNumbers) : 1;
   const teamOnClock = numTeams
     ? getTeamOnTheClockExtended(currentPickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers)
     : null;
@@ -1342,7 +1342,7 @@ function DraftPageContent() {
                   <span className="truncate">{n.team?.name || '—'}</span>
                 </span>
                 <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
-                  Rnd {n.round}{n.round > maxNormalRound ? ' Ext' : ''} . Pick {pickInRound(n.pickNumber, numTeams)}
+                  Rnd {n.round}{n.round > maxNormalRound ? ' Ext' : ''} . Pick {allSlots.filter((s) => s.round === n.round).findIndex((s) => s.pickNumber === n.pickNumber) + 1}
                 </span>
               </button>
             );
@@ -1421,7 +1421,7 @@ function DraftPageContent() {
                     </p>
                   </div>
                   <p className="text-[10px] text-muted m-0 mt-1">
-                    Round {previousPick.round} &middot; Pick {pickInRound(previousPick.pick_number, numTeams)}
+                    Round {previousPick.round} &middot; Pick {allSlots.filter((s) => s.round === previousPick.round).findIndex((s) => s.pickNumber === previousPick.pick_number) + 1}
                   </p>
                 </>
               ) : (
@@ -1443,7 +1443,7 @@ function DraftPageContent() {
                   </p>
                 </div>
                 <p className="text-[10px] m-0 mt-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
-                  Round {currentRound} &middot; Pick {pickInRound(currentPickNumber, numTeams)}
+                  Round {currentRound} &middot; Pick {allSlots.filter((s) => s.round === currentRound).findIndex((s) => s.pickNumber === currentPickNumber) + 1}
                 </p>
                 {canDraft && (
                   <p className="text-xs font-semibold m-0 mt-1" style={{ color: '#ffffff' }}>
@@ -1494,7 +1494,7 @@ function DraftPageContent() {
               </div>
               {teamNextOnClock && (
                 <p className="text-[10px] text-muted m-0 mt-1">
-                  Round {nextRound} &middot; Pick {pickInRound(currentPickNumber + 1, numTeams)}
+                  Round {nextRound} &middot; Pick {allSlots.filter((s) => s.round === nextRound).findIndex((s) => s.pickNumber === currentPickNumber + 1) + 1}
                 </p>
               )}
             </div>
@@ -1830,6 +1830,7 @@ function DraftPageContent() {
                       const isSkippedPick = slot.pick && !slot.pick.player_id;
                       const isClockSlot = slot.pickNumber === currentPickNumber && !slot.player && !isSkippedPick;
                       const teamColor = slot.team?.team_color || '#0074ff';
+                      const positionInRound = roundSlots.findIndex((s) => s.pickNumber === slot.pickNumber) + 1;
                       return (
                         <div
                           key={slot.pickNumber}
@@ -1858,7 +1859,7 @@ function DraftPageContent() {
                               <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
                                 {slot.player.full_name}
                               </p>
-                              <span className="text-[9px] text-muted mt-0.5">Pick # {pickInRound(slot.pickNumber, numTeams)}</span>
+                              <span className="text-[9px] text-muted mt-0.5">Pick # {positionInRound}</span>
                             </>
                           ) : isSkippedPick ? (
                             <>
@@ -1882,7 +1883,7 @@ function DraftPageContent() {
                                 {slot.team?.name}
                               </p>
                               <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
-                                Pick # {pickInRound(slot.pickNumber, numTeams)}
+                                Pick # {positionInRound}
                               </span>
                             </>
                           ) : (
@@ -2265,10 +2266,7 @@ function DraftPageContent() {
                   ) : isDrafted ? (
                     <p className="text-[11px] font-medium m-0" style={{ color: '#185fa5' }}>
                       {p.draft_pick_number
-                        ? `Drafted \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'} \u00b7 Rnd ${getRound(
-                            p.draft_pick_number,
-                            numTeams
-                          )} . Pick # ${p.draft_pick_number}`
+                        ? `Drafted \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'} \u00b7 Rnd ${roundByPlayerId[p.id]} . Pick # ${p.draft_pick_number}`
                         : `Added manually \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'}`}
                     </p>
                   ) : (

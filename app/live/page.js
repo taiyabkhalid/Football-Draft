@@ -572,8 +572,6 @@ function LiveDraftPageContent() {
   const currentPickNumber = revealedPicks.length + 1;
   const numTeams = settings?.num_teams || teams.length;
   const draftType = settings?.draft_type || 'snake';
-  const currentRound = numTeams ? getRound(currentPickNumber, numTeams) : 1;
-  const nextRound = numTeams ? getRound(currentPickNumber + 1, numTeams) : 1;
   // poolSize is duplicated here (matches totalPicks - skipCount further
   // below) rather than reordering declarations, since it's simple
   // arithmetic - the number of turns needed if nothing were ever skipped.
@@ -586,6 +584,8 @@ function LiveDraftPageContent() {
         .sort((a, b) => a - b),
     [picks]
   );
+  const currentRound = numTeams ? getRoundExtended(currentPickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers) : 1;
+  const nextRound = numTeams ? getRoundExtended(currentPickNumber + 1, numTeams, teams, draftType, poolSize, skipPickNumbers) : 1;
   const teamOnClock = numTeams
     ? getTeamOnTheClockExtended(currentPickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers)
     : null;
@@ -1227,6 +1227,7 @@ function LiveDraftPageContent() {
             (draftStatus === 'in_progress' || draftStatus === 'paused' || (draftStatus === 'not_started' && showDraftOrderPreview));
           const teamColor = slot.team?.team_color || '#0074ff';
           const owner = ownerByTeam[slot.team?.id];
+          const positionInRound = allSlots.filter((s) => s.round === slot.round).findIndex((s) => s.pickNumber === slot.pickNumber) + 1;
 
           const isPoppedOut =
             showPopout && activeReveal && slot.pickNumber === activeReveal.pick_number && activeReveal.player_id;
@@ -1324,7 +1325,7 @@ function LiveDraftPageContent() {
                   <i className="ti ti-x text-3xl" style={{ color: '#c0392b' }} aria-hidden="true" />
                 </div>
                 <p className="text-[19px] font-medium m-0" style={{ color: '#0c2340' }}>
-                  Round {slot.round} &middot; Pick {pickInRound(slot.pickNumber, numTeams)}
+                  Round {slot.round}{slot.round > maxNormalRound ? ' Ext' : ''} &middot; Pick {positionInRound}
                 </p>
                 {skipMessage && (
                   <p className="text-[13px] italic m-0 mt-1.5" style={{ color: '#5a6b7d' }}>{skipMessage}</p>
@@ -1355,7 +1356,7 @@ function LiveDraftPageContent() {
               }}
             >
               <p className="text-[10px] text-muted m-0 mb-1.5">
-                Round {slot.round} &middot; Pick {pickInRound(slot.pickNumber, numTeams)}
+                Round {slot.round}{slot.round > maxNormalRound ? ' Ext' : ''} &middot; Pick {positionInRound}
               </p>
               {slot.player ? (
                 <>
@@ -1903,6 +1904,7 @@ function LiveDraftPageContent() {
                     const isSkippedPick = slot.pick && !slot.pick.player_id;
                     const isClockSlot = slot.pickNumber === currentPickNumber && !slot.player && !isSkippedPick;
                     const teamColor = slot.team?.team_color || '#0074ff';
+                    const positionInRound = roundSlots.findIndex((s) => s.pickNumber === slot.pickNumber) + 1;
                     return (
                       <div
                         key={slot.pickNumber}
@@ -1931,7 +1933,7 @@ function LiveDraftPageContent() {
                             <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
                               {slot.player.full_name}
                             </p>
-                            <span className="text-[9px] text-muted mt-0.5">Pick # {pickInRound(slot.pickNumber, numTeams)}</span>
+                            <span className="text-[9px] text-muted mt-0.5">Pick # {positionInRound}</span>
                           </>
                         ) : isSkippedPick ? (
                           <>
@@ -1960,7 +1962,7 @@ function LiveDraftPageContent() {
                               {slot.team?.name}
                             </p>
                             <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
-                              Pick # {pickInRound(slot.pickNumber, numTeams)}
+                              Pick # {positionInRound}
                             </span>
                           </>
                         ) : (
@@ -2165,7 +2167,7 @@ function LiveDraftPageContent() {
                       <span className="truncate">{n.team?.name || '—'}</span>
                     </span>
                     <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
-                      Rnd {n.round}{n.round > maxNormalRound ? ' Ext' : ''} . Pick {pickInRound(n.pickNumber, numTeams)}
+                      Rnd {n.round}{n.round > maxNormalRound ? ' Ext' : ''} . Pick {allSlots.filter((s) => s.round === n.round).findIndex((s) => s.pickNumber === n.pickNumber) + 1}
                     </span>
                   </button>
                 );
@@ -2174,7 +2176,7 @@ function LiveDraftPageContent() {
           </div>
 
           <p className="text-2xl font-semibold text-center m-0 pt-2" style={{ color: '#0c2340' }}>
-            Round {currentRound}, Pick {pickInRound(currentPickNumber, numTeams)}
+            Round {currentRound}, Pick {allSlots.filter((s) => s.round === currentRound).findIndex((s) => s.pickNumber === currentPickNumber) + 1}
           </p>
         </>
       )}
