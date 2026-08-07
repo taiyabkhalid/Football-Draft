@@ -575,6 +575,139 @@ function DraftPageContent() {
     return null;
   }, [myManagedTeamIds, currentPickNumber, numTeams, teams, draftType, teamsById, draftStatus, profile, totalPicks, poolSize, skipPickNumbers]);
 
+  // Proactive, informational-only heads-up (separate from the existing
+  // hard "must draft a female now" gate, which only ever applies to
+  // whoever's currently on the clock). This instead continuously checks
+  // every team the viewer manages, even when it isn't their turn, and
+  // warns if the pool's remaining females could plausibly run out before
+  // their next turn comes around. Deliberately isolated: it reads
+  // existing values (availablePlayers, rosterByTeam, minFemale) but never
+  // writes to or recomputes any of them, so it cannot affect any
+  // existing female count or display elsewhere.
+  const FEMALE_SCARCITY_WARNING_MARGIN = 2;
+  const femaleScarcityWarnings = useMemo(() => {
+    if (!numTeams || draftStatus === 'completed') return [];
+    const femalesRemainingInPool = availablePlayers.filter((p) => p.gender === 'F').length;
+    const warnings = [];
+
+    for (const teamId of myManagedTeamIds) {
+      const team = teamsById[teamId];
+      if (!team) continue;
+      const roster = rosterByTeam[teamId];
+      const femaleCount = roster?.femaleCount ?? 0;
+      if (femaleCount >= minFemale) continue; // already satisfied, not a candidate for this warning
+
+      // Find this specific team's next upcoming pick (not "any managed
+      // team" like draftingForTeam - this needs to be per-team).
+      let nextPickForTeam = null;
+      for (let pickNum = currentPickNumber; pickNum <= totalPicks; pickNum++) {
+        const onClock = getTeamOnTheClockExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers);
+        if (onClock?.id === teamId) {
+          nextPickForTeam = pickNum;
+          break;
+        }
+      }
+      if (nextPickForTeam === null) continue;
+
+      // Among the picks happening before this team's next turn, count
+      // only the ones belonging to OTHER teams that still need a female
+      // themselves - a team that's already met its own requirement is
+      // unlikely to spend a pick on another one, so it isn't real
+      // competition for the remaining pool.
+      let atRiskPicks = 0;
+      for (let pickNum = currentPickNumber; pickNum < nextPickForTeam; pickNum++) {
+        const onClock = getTeamOnTheClockExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers);
+        if (!onClock || onClock.id === teamId) continue;
+        const otherRoster = rosterByTeam[onClock.id];
+        const otherFemaleCount = otherRoster?.femaleCount ?? 0;
+        if (otherFemaleCount < minFemale) atRiskPicks++;
+      }
+
+      if (atRiskPicks >= femalesRemainingInPool - FEMALE_SCARCITY_WARNING_MARGIN) {
+        warnings.push({
+          teamId,
+          teamName: team.name,
+          femalesRemainingInPool,
+          atRiskPicks,
+          picksUntilNextTurn: nextPickForTeam - currentPickNumber,
+        });
+      }
+    }
+
+    return warnings;
+  }, [
+    numTeams,
+    draftStatus,
+    availablePlayers,
+    myManagedTeamIds,
+    teamsById,
+    rosterByTeam,
+    minFemale,
+    currentPickNumber,
+    totalPicks,
+    teams,
+    draftType,
+    poolSize,
+    skipPickNumbers,
+  ]);
+
+  // Popup version of the scarcity warning - queues one at a time (never
+  // stacks), only for a genuinely new or worsened situation per team, not
+  // on every re-render while a warning happens to still be true. "Don't
+  // show me this again" is scoped to sessionStorage specifically so it
+  // resets cleanly for a future draft rather than persisting forever.
+  const [scarcityPopupQueue, setScarcityPopupQueue] = useState([]);
+  const [scarcityOptOut, setScarcityOptOut] = useState(false);
+  const shownSeverityRef = useRef({});
+
+  useEffect(() => {
+    if (!myEmail) return;
+    try {
+      if (sessionStorage.getItem(`femaleScarcityOptOut_${myEmail}`) === 'true') {
+        setScarcityOptOut(true);
+      }
+    } catch (e) {
+      // sessionStorage unavailable - popup still works, just can't
+      // remember an opt-out across a reload this session.
+    }
+  }, [myEmail]);
+
+  useEffect(() => {
+    if (scarcityOptOut) return;
+    for (const w of femaleScarcityWarnings) {
+      const lastShown = shownSeverityRef.current[w.teamId];
+      const isNew = !lastShown;
+      const isWorse =
+        lastShown && (w.femalesRemainingInPool < lastShown.femalesRemainingInPool || w.atRiskPicks > lastShown.atRiskPicks);
+      const alreadyQueued = scarcityPopupQueue.some((q) => q.teamId === w.teamId);
+      if ((isNew || isWorse) && !alreadyQueued) {
+        setScarcityPopupQueue((prev) => [...prev, w]);
+      }
+    }
+  }, [femaleScarcityWarnings, scarcityOptOut]);
+
+  function dismissScarcityPopup() {
+    const current = scarcityPopupQueue[0];
+    if (current) {
+      shownSeverityRef.current[current.teamId] = {
+        femalesRemainingInPool: current.femalesRemainingInPool,
+        atRiskPicks: current.atRiskPicks,
+      };
+    }
+    setScarcityPopupQueue((prev) => prev.slice(1));
+  }
+
+  function dismissScarcityPopupForever() {
+    setScarcityOptOut(true);
+    setScarcityPopupQueue([]);
+    try {
+      sessionStorage.setItem(`femaleScarcityOptOut_${myEmail}`, 'true');
+    } catch (e) {
+      // sessionStorage unavailable - opt-out applies for the rest of this
+      // page session regardless, just won't survive a reload.
+    }
+  }
+
   // Always holds the latest draftingForTeam, updated every render - lets
   // the focus effect below read the current value without depending on
   // it, since draftingForTeam legitimately changes on every single pick
@@ -1413,6 +1546,70 @@ function DraftPageContent() {
           </div>
         </div>
       )}
+
+      {scarcityPopupQueue.length > 0 && (() => {
+        const current = scarcityPopupQueue[0];
+        const team = teamsById[current.teamId];
+        const teamColor = team?.team_color || '#0074ff';
+        return (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
+            className="flex items-center justify-center px-4"
+          >
+            <div className="bg-white rounded-xl p-5" style={{ maxWidth: 300, width: '100%' }}>
+              <div className="flex items-center justify-center gap-2 mb-2.5">
+                <i className="ti ti-alert-triangle text-xl flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
+                <p className="text-[15px] font-semibold m-0" style={{ color: '#0c2340' }}>
+                  Female players running low
+                </p>
+              </div>
+              <div style={{ position: 'relative', marginBottom: 12, minHeight: 20 }}>
+                <span style={{ position: 'absolute', left: 24, top: '50%', marginTop: -8 }}>
+                  <FootballIcon color={teamColor} size={16} />
+                </span>
+                <p className="text-[15px] font-semibold m-0 text-center" style={{ color: teamColor }}>
+                  {team?.name || 'Your team'}
+                </p>
+              </div>
+              <p className="text-[13px] m-0 mb-4" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
+                Only {current.femalesRemainingInPool} female player{current.femalesRemainingInPool === 1 ? '' : 's'} left in the pool,
+                with {current.picksUntilNextTurn} pick{current.picksUntilNextTurn === 1 ? '' : 's'} before your next turn -
+                you haven't drafted one yet.
+              </p>
+              <button
+                onClick={dismissScarcityPopup}
+                className="w-full text-center mb-2.5"
+                style={{
+                  background: '#185fa5',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  borderRadius: 8,
+                  padding: '9px 14px',
+                  fontSize: 13,
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                OK
+              </button>
+              <button
+                onClick={dismissScarcityPopupForever}
+                className="w-full text-center"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#5a6b7d',
+                  fontSize: 12,
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                }}
+              >
+                Don&apos;t show me this again
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {draftStatus === 'not_started' && (
         <>

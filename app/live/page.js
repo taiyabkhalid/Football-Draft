@@ -286,6 +286,7 @@ function LiveDraftPageContent() {
   const chimeBufferRef = useRef(null);
   const chimeArrayBufferRef = useRef(null);
   const chimeUnlockedRef = useRef(false);
+  const unlockInProgressRef = useRef(false);
   const [chimeUnlocked, setChimeUnlocked] = useState(false);
   const [soundMuted, setSoundMuted] = useState(false);
   const soundMutedRef = useRef(false);
@@ -351,9 +352,22 @@ function LiveDraftPageContent() {
       logDebug('unlockAudio called but already unlocked, skipping');
       return;
     }
+    // Mobile fires touchstart, touchend, and click for a single real tap,
+    // all within milliseconds of each other - since this function is
+    // async, chimeUnlockedRef doesn't flip to true until after the first
+    // call's await work finishes, so without this separate synchronous
+    // flag, all three passive listener events (plus the explicit tap
+    // handler) can race past the guard above simultaneously, each
+    // touching the AudioContext independently and corrupting state.
+    if (unlockInProgressRef.current) {
+      logDebug('unlockAudio called while another unlock is already in progress, skipping');
+      return;
+    }
+    unlockInProgressRef.current = true;
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) {
       logDebug('no AudioContext class available on this browser at all');
+      unlockInProgressRef.current = false;
       return;
     }
     try {
@@ -398,6 +412,8 @@ function LiveDraftPageContent() {
     } catch (e) {
       logDebug('unlock/decode FAILED', { name: e.name, message: e.message });
       console.error('[chime] unlock/decode failed:', e.name, e.message);
+    } finally {
+      unlockInProgressRef.current = false;
     }
   }
 
@@ -408,11 +424,13 @@ function LiveDraftPageContent() {
   // usable for the rest of the page's lifetime once it's been established.
   function handleToggleSound() {
     if (!chimeUnlockedRef.current) {
+      logDebug('speaker icon tapped - not yet unlocked, unlocking now');
       unlockAudio();
       return;
     }
     setSoundMuted((prev) => {
       const next = !prev;
+      logDebug('speaker icon tapped - toggling mute', { wasMuted: prev, nowMuted: next });
       try {
         sessionStorage.setItem('chimeSoundMuted', String(next));
       } catch (e) {
