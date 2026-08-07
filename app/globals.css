@@ -94,3 +94,11 @@ button {
 .animate-pulse-glow {
   animation: pulse-glow 2.2s ease-in-out infinite;
 }
+
+@keyframes spin-wheel {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin-wheel {
+  animation: spin-wheel 1s linear infinite;
+}

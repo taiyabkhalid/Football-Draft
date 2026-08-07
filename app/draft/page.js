@@ -18,6 +18,32 @@ function previousTeamLabel(previousTeam) {
   return previousTeam;
 }
 
+function ordinalSuffix(day) {
+  if (day >= 11 && day <= 13) return 'th';
+  switch (day % 10) {
+    case 1:
+      return 'st';
+    case 2:
+      return 'nd';
+    case 3:
+      return 'rd';
+    default:
+      return 'th';
+  }
+}
+
+// Formats as "7:00 PM on Fri, Aug 8th, 2026" - used for the pre-draft
+// "drafting opens at..." message.
+function formatDraftingOpensMessage(dateMs) {
+  const d = new Date(dateMs);
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+  const monthName = d.toLocaleDateString('en-US', { month: 'short' });
+  const dayNum = d.getDate();
+  const year = d.getFullYear();
+  return `${time} on ${dayName}, ${monthName} ${dayNum}${ordinalSuffix(dayNum)}, ${year}`;
+}
+
 function DraftPageContent() {
   const router = useRouter();
 
@@ -313,6 +339,16 @@ function DraftPageContent() {
     return mmss;
   }, [msUntilDraft]);
   const showDraftOrderPreview = msUntilDraft !== null && msUntilDraft <= 30 * 60 * 1000;
+  // Shown from the moment the page opens within the 30-minute window
+  // until randomize_draft_order_if_due actually completes (checked every
+  // 5 seconds by the effect above) - purely reflects real settings state,
+  // so it naturally disappears the instant draft_order_auto_randomized
+  // flips to true, no separate timer of its own needed.
+  const showRandomizingPopup =
+    draftStatus === 'not_started' &&
+    showDraftOrderPreview &&
+    settings?.auto_randomize_draft_order === true &&
+    settings?.draft_order_auto_randomized !== true;
   const secondsUntilDraftGm = msUntilDraft !== null ? Math.floor(msUntilDraft / 1000) : null;
 
   const scrolledToTopForStartRef = useRef(false);
@@ -1360,6 +1396,24 @@ function DraftPageContent() {
         pickTimer={draftStatus === 'in_progress' || draftStatus === 'paused' ? timerDisplay : undefined}
       />
 
+      {showRandomizingPopup && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
+          className="flex items-center justify-center px-4"
+        >
+          <div className="bg-white rounded-xl p-6 text-center" style={{ maxWidth: 300 }}>
+            <i
+              className="ti ti-loader-2 animate-spin-wheel"
+              style={{ fontSize: 40, color: '#185fa5', display: 'inline-block' }}
+              aria-hidden="true"
+            />
+            <p className="text-sm font-semibold m-0 mt-3" style={{ color: '#0c2340' }}>
+              The draft order is being randomized
+            </p>
+          </div>
+        </div>
+      )}
+
       {draftStatus === 'not_started' && (
         <>
           <div
@@ -1381,20 +1435,11 @@ function DraftPageContent() {
               </div>
             </div>
             <p className="text-xs text-center text-muted mt-2 mb-0">
-              You can search and research players now - drafting opens once the commissioner starts the draft.
+              You can search and research players now - drafting opens{draftDatetimeMs ? ` at ${formatDraftingOpensMessage(draftDatetimeMs)}` : ''}.
             </p>
           </div>
 
-          {showDraftOrderPreview && (
-            <>
-              {upcomingPicksBlock}
-              {profile?.role === 'commissioner' && (
-                <p className="text-[10px] text-muted mt-2 mb-0 text-center px-4 sm:px-5">
-                  You can still change this order in Commish Tools right up until the draft starts.
-                </p>
-              )}
-            </>
-          )}
+          {showDraftOrderPreview && upcomingPicksBlock}
         </>
       )}
 

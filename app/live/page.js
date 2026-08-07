@@ -619,6 +619,16 @@ function LiveDraftPageContent() {
   const msUntilRoomOpens = msUntilDraft !== null ? msUntilDraft - 30 * 60 * 1000 : null;
   const roomIsOpen = msUntilRoomOpens !== null && msUntilRoomOpens <= 0;
   const showDraftOrderPreview = msUntilDraft !== null && msUntilDraft <= 30 * 60 * 1000;
+  // Shown from the moment the page opens within the 30-minute window
+  // until randomize_draft_order_if_due actually completes (checked every
+  // 5 seconds by the effect above) - purely reflects real settings state,
+  // so it naturally disappears the instant draft_order_auto_randomized
+  // flips to true, no separate timer of its own needed.
+  const showRandomizingPopup =
+    draftStatus === 'not_started' &&
+    showDraftOrderPreview &&
+    settings?.auto_randomize_draft_order === true &&
+    settings?.draft_order_auto_randomized !== true;
 
   function formatCountdown(ms) {
     if (ms === null) return '--:--';
@@ -1004,14 +1014,31 @@ function LiveDraftPageContent() {
       <div className="flex gap-2 overflow-x-auto pb-1 upcoming-picks-scroll">
         {upcomingPicks.map((n) => {
           const color = n.team?.team_color || '#0074ff';
+          const isOnClock = (draftStatus === 'in_progress' || draftStatus === 'paused') && n.pickNumber === currentPickNumber;
           return (
             <button
               key={n.pickNumber}
               type="button"
               onClick={() => n.team && jumpToTeam(n.team.id)}
-              className="flex-none rounded-md flex flex-col items-center justify-center text-center px-1.5"
-              style={{ width: 100, height: 44, background: lightenColor(color, 0.85), color: '#0c2340', border: 'none', cursor: n.team ? 'pointer' : 'default' }}
+              className={`flex-none rounded-md flex flex-col items-center justify-center text-center px-1.5 ${
+                isOnClock ? 'animate-pulse-glow' : ''
+              }`}
+              style={{
+                width: 100,
+                height: 52,
+                background: isOnClock ? lightenColor(color, 0.7) : lightenColor(color, 0.85),
+                color: '#0c2340',
+                border: isOnClock ? `2px solid ${color}` : 'none',
+                cursor: n.team ? 'pointer' : 'default',
+                transition: 'background 0.4s, border 0.4s',
+                '--pulse-color': color,
+              }}
             >
+              {isOnClock && (
+                <span className="text-[9px] font-semibold" style={{ color }}>
+                  On the clock
+                </span>
+              )}
               <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
                 <FootballIcon color={color} size={11} />
                 <span className="truncate">{n.team?.name || '—'}</span>
@@ -1039,20 +1066,22 @@ function LiveDraftPageContent() {
         </p>
       </div>
     ) : (
-      <div className="px-4 sm:px-5 pt-4">
-        <div className="flex justify-center">
-          <div className="rounded-lg p-3 flex flex-col items-center justify-center" style={{ background: '#185fa5', width: '100%', maxWidth: 320 }}>
-            <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
-              Draft starts in
-            </p>
-            <p className="text-2xl font-semibold m-0" style={{ color: '#ffffff', letterSpacing: '0.03em' }}>
-              {formatCountdown(msUntilDraft)}
-            </p>
+      <>
+        <div className="px-4 sm:px-5 pt-4">
+          <div className="flex justify-center">
+            <div className="rounded-lg p-3 flex flex-col items-center justify-center" style={{ background: '#185fa5', width: '100%', maxWidth: 320 }}>
+              <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                Draft starts in
+              </p>
+              <p className="text-2xl font-semibold m-0" style={{ color: '#ffffff', letterSpacing: '0.03em' }}>
+                {formatCountdown(msUntilDraft)}
+              </p>
+            </div>
           </div>
         </div>
 
         {showDraftOrderPreview && upcomingPicksBlock}
-      </div>
+      </>
     )}
 
       <div className="mx-4 sm:mx-5 mt-4 rounded-xl border border-line bg-surface px-4 py-3" ref={searchPanelRef}>
@@ -2131,6 +2160,24 @@ function LiveDraftPageContent() {
         soundOn={chimeUnlocked && !soundMuted}
         onToggleSound={handleToggleSound}
       />
+
+      {showRandomizingPopup && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
+          className="flex items-center justify-center px-4"
+        >
+          <div className="bg-white rounded-xl p-6 text-center" style={{ maxWidth: 300 }}>
+            <i
+              className="ti ti-loader-2 animate-spin-wheel"
+              style={{ fontSize: 40, color: '#185fa5', display: 'inline-block' }}
+              aria-hidden="true"
+            />
+            <p className="text-sm font-semibold m-0 mt-3" style={{ color: '#0c2340' }}>
+              The draft order is being randomized
+            </p>
+          </div>
+        </div>
+      )}
 
       {!chimeUnlocked && draftStatus !== 'completed' && (
         <button
