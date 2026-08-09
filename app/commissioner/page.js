@@ -47,6 +47,7 @@ export default function CommissionerToolsPage() {
 
   const [savingUnlock, setSavingUnlock] = useState(false);
   const [savingRegistrationUnlock, setSavingRegistrationUnlock] = useState(false);
+  const [savingEnforceMinFemale, setSavingEnforceMinFemale] = useState(false);
 
   const [resetEmail, setResetEmail] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
@@ -287,6 +288,16 @@ export default function CommissionerToolsPage() {
       .eq('id', 1);
     await fetchData();
     setSavingRegistrationUnlock(false);
+  }
+
+  async function handleToggleEnforceMinFemale() {
+    setSavingEnforceMinFemale(true);
+    await supabase
+      .from('draft_settings')
+      .update({ enforce_min_female_draft: !settings?.enforce_min_female_draft })
+      .eq('id', 1);
+    await fetchData();
+    setSavingEnforceMinFemale(false);
   }
 
   async function handleResetPassword() {
@@ -855,6 +866,46 @@ export default function CommissionerToolsPage() {
                 new player register.
               </p>
             )}
+          </div>
+
+          <div className="border-t border-line mt-3 pt-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium text-ink m-0">Enforce minimum female draft requirement</p>
+                <p className="text-[11px] text-muted m-0 mt-0.5">
+                  Once the pool of remaining female players is tight enough that any team could otherwise miss its
+                  minimum, protects females for teams that still need them - a team that's already met its minimum
+                  can't draft another, and a team that hasn't can only draft females until it does. Can be turned on
+                  or off at any point; doesn't undo any picks already made.
+                </p>
+              </div>
+              <button
+                onClick={handleToggleEnforceMinFemale}
+                disabled={savingEnforceMinFemale}
+                className="flex-shrink-0 rounded-full"
+                style={{
+                  width: 44,
+                  height: 24,
+                  background: settings?.enforce_min_female_draft ? '#185fa5' : '#d8dde2',
+                  border: 'none',
+                  position: 'relative',
+                }}
+                aria-label="Toggle enforce minimum female draft requirement"
+              >
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 2,
+                    left: settings?.enforce_min_female_draft ? 22 : 2,
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    background: '#ffffff',
+                    transition: 'left 0.15s',
+                  }}
+                />
+              </button>
+            </div>
           </div>
 
           <div className="border-t border-line mt-3 pt-3">

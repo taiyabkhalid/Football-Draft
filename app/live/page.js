@@ -118,6 +118,10 @@ function LiveDraftPageContent() {
   const [viewingTeamId, setViewingTeamId] = useState(null);
   const [myTeamId, setMyTeamId] = useState(null);
   const [myEmail, setMyEmail] = useState(null);
+  // Declared early since the reveal-queue pause effect further down needs
+  // it - the rest of this notification's logic (which depends on
+  // rosterByTeam) is defined later, closer to where that data exists.
+  const [showFemaleReqSpectatorNotification, setShowFemaleReqSpectatorNotification] = useState(false);
   const [myRole, setMyRole] = useState(null);
   const [teamRankings, setTeamRankings] = useState([]);
   const [rankingToast, setRankingToast] = useState(false);
@@ -556,7 +560,7 @@ function LiveDraftPageContent() {
   }, [picks, revealedCount]);
 
   useEffect(() => {
-    if (processingRef.current || queue.length === 0) return;
+    if (processingRef.current || queue.length === 0 || showFemaleReqSpectatorNotification) return;
     processingRef.current = true;
     const next = queue[0];
 
@@ -583,7 +587,7 @@ function LiveDraftPageContent() {
       }
     }
     run();
-  }, [queue]);
+  }, [queue, showFemaleReqSpectatorNotification]);
 
   const revealedPicks = useMemo(() => picks.slice(0, revealedCount ?? picks.length), [picks, revealedCount]);
 
@@ -813,6 +817,60 @@ function LiveDraftPageContent() {
     }
     return map;
   }, [teams, players, revealedPicks, ownerByTeam]);
+
+  // Mirrors draft.js's isEnforceMinFemaleModeActive, but deliberately
+  // built on the same reveal-aware data as rosterByTeam above (not raw
+  // team_id) - a spectator shouldn't be able to infer anything about a
+  // pick that hasn't actually been revealed yet just from this
+  // notification's numbers.
+  const isEnforceMinFemaleModeActive = useMemo(() => {
+    if (!settings?.enforce_min_female_draft) return false;
+    const revealedPlayerIds = new Set(revealedPicks.filter((p) => p.player_id).map((p) => p.player_id));
+    const femalesRemaining = players.filter((p) => p.gender === 'F' && !revealedPlayerIds.has(p.id)).length;
+    const totalStillRequired = teams.reduce((sum, t) => {
+      const femaleCount = rosterByTeam[t.id]?.femaleCount ?? 0;
+      return sum + Math.max(minFemale - femaleCount, 0);
+    }, 0);
+    return femalesRemaining <= totalStillRequired;
+  }, [settings?.enforce_min_female_draft, revealedPicks, players, teams, rosterByTeam, minFemale]);
+
+  const femaleRestrictedTeamsForSpectator = useMemo(() => {
+    if (!isEnforceMinFemaleModeActive) return [];
+    return teams
+      .filter((t) => (rosterByTeam[t.id]?.femaleCount ?? 0) < minFemale)
+      .map((t) => ({ teamId: t.id, teamName: t.name, gmName: ownerByTeam[t.id]?.name || 'GM' }));
+  }, [isEnforceMinFemaleModeActive, teams, rosterByTeam, minFemale, ownerByTeam]);
+
+  // Shown once per person per draft (scoped by draft_session_id, same as
+  // the GM page), auto-closes after 5 seconds, and pauses the reveal
+  // queue above while visible rather than letting picks reveal
+  // underneath it.
+  const femaleReqSpectatorShownRef = useRef(false);
+
+  useEffect(() => {
+    if (!myEmail || !settings?.draft_session_id) return;
+    try {
+      if (sessionStorage.getItem(`femaleReqGeneralSeen_${settings.draft_session_id}_${myEmail}`) === 'true') {
+        femaleReqSpectatorShownRef.current = true;
+      }
+    } catch (e) {
+      // sessionStorage unavailable - notification just won't remember
+      // being shown across a reload this session.
+    }
+  }, [myEmail, settings?.draft_session_id]);
+
+  useEffect(() => {
+    if (!isEnforceMinFemaleModeActive || femaleReqSpectatorShownRef.current || !myEmail || !settings?.draft_session_id) return;
+    femaleReqSpectatorShownRef.current = true;
+    try {
+      sessionStorage.setItem(`femaleReqGeneralSeen_${settings.draft_session_id}_${myEmail}`, 'true');
+    } catch (e) {
+      // sessionStorage unavailable - notification still shows this visit.
+    }
+    setShowFemaleReqSpectatorNotification(true);
+    const timer = setTimeout(() => setShowFemaleReqSpectatorNotification(false), 5000);
+    return () => clearTimeout(timer);
+  }, [isEnforceMinFemaleModeActive, myEmail, settings?.draft_session_id]);
 
   const pickByNumber = useMemo(() => Object.fromEntries(revealedPicks.map((p) => [p.pick_number, p])), [revealedPicks]);
 
@@ -2193,6 +2251,38 @@ function LiveDraftPageContent() {
             <p className="text-sm font-semibold m-0 mt-3" style={{ color: '#0c2340' }}>
               The draft order is being randomized
             </p>
+          </div>
+        </div>
+      )}
+
+      {showFemaleReqSpectatorNotification && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
+          className="flex items-center justify-center px-4"
+        >
+          <div className="bg-white rounded-xl p-5" style={{ maxWidth: 340, width: '100%' }}>
+            <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: '#0c2340' }}>
+              Female Draft Requirement
+            </p>
+            <p className="text-[13px] m-0" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
+              {femaleRestrictedTeamsForSpectator.length} team{femaleRestrictedTeamsForSpectator.length === 1 ? '' : 's'} have not drafted
+              enough females, and only{' '}
+              {players.filter((p) => p.gender === 'F' && !revealedPicks.some((rp) => rp.player_id === p.id)).length} female player
+              {players.filter((p) => p.gender === 'F' && !revealedPicks.some((rp) => rp.player_id === p.id)).length === 1 ? '' : 's'} are left.
+            </p>
+            <p className="text-[13px] m-0 mb-3" style={{ color: '#5a6b7d', lineHeight: 1.6, marginTop: 6 }}>
+              The following GM(s) must select a female with their next draft pick:
+            </p>
+            <div className="rounded-md" style={{ background: '#f7f9fb', padding: 10 }}>
+              {femaleRestrictedTeamsForSpectator.map((t) => (
+                <div key={t.teamId} className="flex items-center gap-1.5" style={{ marginBottom: 6 }}>
+                  <FootballIcon color={teamsById[t.teamId]?.team_color || '#0074ff'} size={14} />
+                  <span className="text-[12px]" style={{ color: '#0c2340' }}>
+                    {t.gmName} - <span style={{ color: teamsById[t.teamId]?.team_color || '#0074ff', fontWeight: 600 }}>{t.teamName}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
