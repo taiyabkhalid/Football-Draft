@@ -831,7 +831,7 @@ function LiveDraftPageContent() {
       const femaleCount = rosterByTeam[t.id]?.femaleCount ?? 0;
       return sum + Math.max(minFemale - femaleCount, 0);
     }, 0);
-    return femalesRemaining <= totalStillRequired;
+    return totalStillRequired > 0 && femalesRemaining <= totalStillRequired;
   }, [settings?.enforce_min_female_draft, revealedPicks, players, teams, rosterByTeam, minFemale]);
 
   const femaleRestrictedTeamsForSpectator = useMemo(() => {
@@ -879,6 +879,19 @@ function LiveDraftPageContent() {
     const timer = setTimeout(() => setShowFemaleReqSpectatorNotification(false), duration);
     return () => clearTimeout(timer);
   }, [isEnforceMinFemaleModeActive, myEmail, femaleReqSpectatorStorageKey]);
+
+  // Independent safeguard: if the "shown once" guard above ever blocks a
+  // fresh timer from being set (e.g. the mode flickers true/false/true in
+  // quick succession, cancelling the pending timer via the effect's own
+  // cleanup without a new one taking its place), this ensures the
+  // notification can never get stuck on screen - it hides the instant the
+  // mode is confirmed inactive, independent of whatever the timer above
+  // is doing.
+  useEffect(() => {
+    if (!isEnforceMinFemaleModeActive) {
+      setShowFemaleReqSpectatorNotification(false);
+    }
+  }, [isEnforceMinFemaleModeActive]);
 
   const pickByNumber = useMemo(() => Object.fromEntries(revealedPicks.map((p) => [p.pick_number, p])), [revealedPicks]);
 

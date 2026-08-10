@@ -587,7 +587,7 @@ function DraftPageContent() {
       const femaleCount = roster?.femaleCount ?? 0;
       return sum + Math.max(minFemale - femaleCount, 0);
     }, 0);
-    return femalesRemaining <= totalStillRequired;
+    return totalStillRequired > 0 && femalesRemaining <= totalStillRequired;
   }, [settings?.enforce_min_female_draft, availablePlayers, teams, rosterByTeam, minFemale]);
 
   function teamIsFemaleRestricted(teamId) {
@@ -718,6 +718,13 @@ function DraftPageContent() {
       }
     }
   }, [femaleScarcityWarnings, scarcityOptOut]);
+
+  useEffect(() => {
+    const stillAtRiskTeamIds = new Set(femaleScarcityWarnings.map((w) => w.teamId));
+    setScarcityPopupQueue((prev) =>
+      prev.filter((q, i) => i === 0 || stillAtRiskTeamIds.has(q.teamId))
+    );
+  }, [femaleScarcityWarnings]);
 
   function dismissScarcityPopup() {
     const current = scarcityPopupQueue[0];
@@ -855,6 +862,18 @@ function DraftPageContent() {
       // page session regardless, just won't survive a reload.
     }
   }
+
+  // The queue only ever gets new items added while the mode is active -
+  // but nothing was clearing items already sitting in it once the mode
+  // deactivated (e.g. the last short team finally drafted enough
+  // females). Without this, a backlog of notifications queued from
+  // earlier turns would keep popping up one by one even after every team
+  // had already become satisfied and the mode had genuinely turned off.
+  useEffect(() => {
+    if (!isEnforceMinFemaleModeActive) {
+      setFemaleReqQueue([]);
+    }
+  }, [isEnforceMinFemaleModeActive]);
 
   // Always holds the latest draftingForTeam, updated every render - lets
   // the focus effect below read the current value without depending on
