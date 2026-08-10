@@ -773,7 +773,7 @@ function DraftPageContent() {
     if (!myEmail || !settings?.draft_session_id || !isEnforceMinFemaleModeActive) return;
     const newItems = [];
 
-    if (!femaleReqGeneralShownRef.current) {
+    if (!femaleReqGeneralShownRef.current && !femaleReqQueue.some((q) => q.type === 'general')) {
       newItems.push({
         type: 'general',
         teams: femaleRestrictedTeams,
@@ -784,12 +784,19 @@ function DraftPageContent() {
     const iManageClockTeam = teamOnClock && (profile?.team_id === teamOnClock.id || isProxyForClockTeam);
     if (iManageClockTeam) {
       const restricted = teamIsFemaleRestricted(teamOnClock.id);
-      if (restricted && femaleReqShownForPickRef.current.forced !== currentPickNumber) {
+      const alreadyQueuedForcedThisPick = femaleReqQueue.some(
+        (q) => q.type === 'forced' && q.pickNumber === currentPickNumber
+      );
+      const alreadyQueuedSatisfiedThisPick = femaleReqQueue.some(
+        (q) => q.type === 'satisfied' && q.pickNumber === currentPickNumber
+      );
+      if (restricted && femaleReqShownForPickRef.current.forced !== currentPickNumber && !alreadyQueuedForcedThisPick) {
         newItems.push({ type: 'forced', team: teamOnClock, pickNumber: currentPickNumber });
       } else if (
         !restricted &&
         !femaleReqSatisfiedOptOut &&
-        femaleReqShownForPickRef.current.satisfied !== currentPickNumber
+        femaleReqShownForPickRef.current.satisfied !== currentPickNumber &&
+        !alreadyQueuedSatisfiedThisPick
       ) {
         newItems.push({
           type: 'satisfied',
@@ -815,6 +822,7 @@ function DraftPageContent() {
     isProxyForClockTeam,
     availablePlayers,
     femaleReqSatisfiedOptOut,
+    femaleReqQueue,
   ]);
 
   function dismissFemaleReqNotification() {

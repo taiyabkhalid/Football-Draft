@@ -841,36 +841,44 @@ function LiveDraftPageContent() {
       .map((t) => ({ teamId: t.id, teamName: t.name, gmName: ownerByTeam[t.id]?.name || 'GM' }));
   }, [isEnforceMinFemaleModeActive, teams, rosterByTeam, minFemale, ownerByTeam]);
 
-  // Shown once per person per draft (scoped by draft_session_id, same as
-  // the GM page), auto-closes after 5 seconds, and pauses the reveal
-  // queue above while visible rather than letting picks reveal
-  // underneath it.
+  // Shown once per viewer per draft (scoped by draft_session_id) - works
+  // for logged-in GMs/proxies/Commissioner AND anonymous spectators alike,
+  // since sessionStorage is already scoped to this browser tab regardless
+  // of identity; anonymous viewers just get a generic key instead of one
+  // keyed to their email. Auto-closes after 5 seconds for a logged-in
+  // viewer, 7 for an anonymous one (no account to log back into and
+  // re-check, so a bit more reading time), and pauses the reveal queue
+  // above while visible rather than letting picks reveal underneath it.
   const femaleReqSpectatorShownRef = useRef(false);
+  const femaleReqSpectatorStorageKey = settings?.draft_session_id
+    ? `femaleReqGeneralSeen_${settings.draft_session_id}_${myEmail || 'anonymous'}`
+    : null;
 
   useEffect(() => {
-    if (!myEmail || !settings?.draft_session_id) return;
+    if (!femaleReqSpectatorStorageKey) return;
     try {
-      if (sessionStorage.getItem(`femaleReqGeneralSeen_${settings.draft_session_id}_${myEmail}`) === 'true') {
+      if (sessionStorage.getItem(femaleReqSpectatorStorageKey) === 'true') {
         femaleReqSpectatorShownRef.current = true;
       }
     } catch (e) {
       // sessionStorage unavailable - notification just won't remember
       // being shown across a reload this session.
     }
-  }, [myEmail, settings?.draft_session_id]);
+  }, [femaleReqSpectatorStorageKey]);
 
   useEffect(() => {
-    if (!isEnforceMinFemaleModeActive || femaleReqSpectatorShownRef.current || !myEmail || !settings?.draft_session_id) return;
+    if (!isEnforceMinFemaleModeActive || femaleReqSpectatorShownRef.current || !femaleReqSpectatorStorageKey) return;
     femaleReqSpectatorShownRef.current = true;
     try {
-      sessionStorage.setItem(`femaleReqGeneralSeen_${settings.draft_session_id}_${myEmail}`, 'true');
+      sessionStorage.setItem(femaleReqSpectatorStorageKey, 'true');
     } catch (e) {
       // sessionStorage unavailable - notification still shows this visit.
     }
     setShowFemaleReqSpectatorNotification(true);
-    const timer = setTimeout(() => setShowFemaleReqSpectatorNotification(false), 5000);
+    const duration = myEmail ? 5000 : 7000;
+    const timer = setTimeout(() => setShowFemaleReqSpectatorNotification(false), duration);
     return () => clearTimeout(timer);
-  }, [isEnforceMinFemaleModeActive, myEmail, settings?.draft_session_id]);
+  }, [isEnforceMinFemaleModeActive, myEmail, femaleReqSpectatorStorageKey]);
 
   const pickByNumber = useMemo(() => Object.fromEntries(revealedPicks.map((p) => [p.pick_number, p])), [revealedPicks]);
 
