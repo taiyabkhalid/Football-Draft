@@ -307,6 +307,20 @@ function DraftPageContent() {
     return () => clearInterval(timer);
   }, [draftStatus]);
 
+  // Resolves the specific deadlock where a team that has already met both
+  // its roster and female minimums is stuck on the clock with zero
+  // eligible players remaining (the Enforce Minimum Female Draft Mode
+  // only protects the female supply, not the male one). Checked every 5
+  // seconds while the draft is actually live - safe to call repeatedly,
+  // it only ever does anything the one time this exact situation exists.
+  useEffect(() => {
+    if (draftStatus !== 'in_progress') return;
+    const timer = setInterval(() => {
+      supabase.rpc('auto_forfeit_stuck_pick_if_needed');
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [draftStatus]);
+
   const pickStartedAt = settings?.current_pick_started_at ? new Date(settings.current_pick_started_at).getTime() : null;
   const liveSecondsLeft = pickStartedAt
     ? Math.max(pickClockSeconds - Math.floor((now - pickStartedAt) / 1000), 0)
@@ -759,6 +773,7 @@ function DraftPageContent() {
   const [femaleReqSatisfiedOptOut, setFemaleReqSatisfiedOptOut] = useState(false);
   const femaleReqGeneralShownRef = useRef(false);
   const femaleReqShownForPickRef = useRef({ forced: null, satisfied: null });
+  const femaleReqForfeitShownPicksRef = useRef(new Set());
 
   useEffect(() => {
     if (!myEmail || !settings?.draft_session_id) return;
@@ -832,6 +847,35 @@ function DraftPageContent() {
     femaleReqQueue,
   ]);
 
+  // Separate from the trigger effect above - a forfeit is a discrete,
+  // already-happened event (a real draft_picks row), not an ongoing
+  // condition to react to, so this watches the actual pick history rather
+  // than recomputing anything. Tracks which pick numbers have already
+  // been shown so it never re-queues the same forfeit twice, even as
+  // picks refreshes repeatedly via realtime.
+  useEffect(() => {
+    if (!myManagedTeamIds || myManagedTeamIds.size === 0) return;
+    const newForfeits = picks.filter(
+      (p) =>
+        p.player_id === null &&
+        typeof p.skip_reason === 'string' &&
+        p.skip_reason.startsWith('Auto-forfeited') &&
+        myManagedTeamIds.has(p.team_id) &&
+        !femaleReqForfeitShownPicksRef.current.has(p.pick_number) &&
+        !femaleReqQueue.some((q) => q.type === 'forfeited' && q.pickNumber === p.pick_number)
+    );
+    if (newForfeits.length > 0) {
+      setFemaleReqQueue((prev) => [
+        ...prev,
+        ...newForfeits.map((p) => ({
+          type: 'forfeited',
+          team: teamsById[p.team_id],
+          pickNumber: p.pick_number,
+        })),
+      ]);
+    }
+  }, [picks, myManagedTeamIds, teamsById, femaleReqQueue]);
+
   function dismissFemaleReqNotification() {
     const current = femaleReqQueue[0];
     if (current) {
@@ -847,6 +891,8 @@ function DraftPageContent() {
         femaleReqShownForPickRef.current.forced = current.pickNumber;
       } else if (current.type === 'satisfied') {
         femaleReqShownForPickRef.current.satisfied = current.pickNumber;
+      } else if (current.type === 'forfeited') {
+        femaleReqForfeitShownPicksRef.current.add(current.pickNumber);
       }
     }
     setFemaleReqQueue((prev) => prev.slice(1));
@@ -869,9 +915,12 @@ function DraftPageContent() {
   // females). Without this, a backlog of notifications queued from
   // earlier turns would keep popping up one by one even after every team
   // had already become satisfied and the mode had genuinely turned off.
+  // Forfeit notifications are deliberately exempt - a forfeit already
+  // happened to that team and is a historical fact worth knowing about,
+  // not a live condition that stops being true once the mode turns off.
   useEffect(() => {
     if (!isEnforceMinFemaleModeActive) {
-      setFemaleReqQueue([]);
+      setFemaleReqQueue((prev) => prev.filter((q) => q.type === 'forfeited'));
     }
   }, [isEnforceMinFemaleModeActive]);
 
@@ -1891,6 +1940,26 @@ function DraftPageContent() {
                   <p className="text-[13px] m-0 mb-3.5" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
                     has met its female requirement. {current.femalesRemaining} female player{current.femalesRemaining === 1 ? '' : 's'} {current.femalesRemaining === 1 ? 'is' : 'are'} reserved
                     for other teams right now - draft freely from the rest of the pool.
+                  </p>
+                </>
+              )}
+              {current.type === 'forfeited' && (
+                <>
+                  <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: '#0c2340' }}>
+                    Pick Automatically Forfeited
+                  </p>
+                  <p className="text-[13px] m-0" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
+                    Your team
+                  </p>
+                  <div className="flex items-center gap-1.5" style={{ margin: '4px 0 12px' }}>
+                    <FootballIcon color={current.team?.team_color || '#0074ff'} size={14} />
+                    <span className="text-[13px] font-semibold" style={{ color: current.team?.team_color || '#0074ff' }}>
+                      {current.team?.name}
+                    </span>
+                  </div>
+                  <p className="text-[13px] m-0 mb-3.5" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
+                    has already met its roster and female minimums, and no eligible players remained for this pick -
+                    it was automatically forfeited so the draft could continue.
                   </p>
                 </>
               )}

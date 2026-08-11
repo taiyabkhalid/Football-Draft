@@ -636,6 +636,19 @@ function LiveDraftPageContent() {
     return () => clearInterval(timer);
   }, [draftStatus]);
 
+  // Resolves the specific deadlock where a team that has already met both
+  // its roster and female minimums is stuck on the clock with zero
+  // eligible players remaining - see the matching comment on the GM page.
+  // Polled from here too, so this can resolve regardless of which page
+  // happens to be open.
+  useEffect(() => {
+    if (draftStatus !== 'in_progress') return;
+    const timer = setInterval(() => {
+      supabase.rpc('auto_forfeit_stuck_pick_if_needed');
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [draftStatus]);
+
   const draftDatetimeMs = settings?.draft_datetime ? new Date(settings.draft_datetime).getTime() : null;
   const msUntilDraft = draftDatetimeMs !== null ? draftDatetimeMs - now : null;
   const msUntilRoomOpens = msUntilDraft !== null ? msUntilDraft - 30 * 60 * 1000 : null;
