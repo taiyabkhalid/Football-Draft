@@ -608,7 +608,7 @@ function LiveDraftPageContent() {
   );
   const currentRound = numTeams ? getRoundExtended(currentPickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers) : 1;
   const nextRound = numTeams ? getRoundExtended(currentPickNumber + 1, numTeams, teams, draftType, poolSize, skipPickNumbers) : 1;
-  const teamOnClock = numTeams
+  const baseTeamOnClock = numTeams
     ? getTeamOnTheClockExtended(currentPickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers)
     : null;
   const teamNextOnClock = numTeams
@@ -847,6 +847,41 @@ function LiveDraftPageContent() {
     return totalStillRequired > 0 && femalesRemaining <= totalStillRequired;
   }, [settings?.enforce_min_female_draft, revealedPicks, players, teams, rosterByTeam, minFemale]);
 
+  // Mirrors the backend's get_team_on_clock_with_redirect - see the
+  // matching comment on the GM page for the full reasoning. Built on the
+  // same reveal-aware data as isEnforceMinFemaleModeActive above, for
+  // consistency with this page's spoiler-safety design elsewhere.
+  function teamIsFemaleRestrictedForSpectator(teamId) {
+    if (!isEnforceMinFemaleModeActive) return false;
+    return (rosterByTeam[teamId]?.femaleCount ?? 0) < minFemale;
+  }
+
+  function getTeamOnClockWithRedirectForSpectator(baseTeam) {
+    if (!baseTeam) return null;
+    if (!isEnforceMinFemaleModeActive) return baseTeam;
+    if (teamIsFemaleRestrictedForSpectator(baseTeam.id)) return baseTeam;
+
+    const roster = rosterByTeam[baseTeam.id];
+    const rosterSize = roster?.count ?? 0;
+    const femaleCount = roster?.femaleCount ?? 0;
+    if (rosterSize < minRoster || femaleCount < minFemale) return baseTeam;
+
+    const revealedPlayerIds = new Set(revealedPicks.filter((p) => p.player_id).map((p) => p.player_id));
+    const malesRemaining = players.filter((p) => p.gender !== 'F' && !p.team_id && !revealedPlayerIds.has(p.id)).length;
+    if (malesRemaining > 0) return baseTeam;
+
+    const femalesRemaining = players.filter((p) => p.gender === 'F' && !p.team_id && !revealedPlayerIds.has(p.id)).length;
+    if (femalesRemaining === 0) return baseTeam;
+
+    const shortTeams = teams
+      .filter((t) => teamIsFemaleRestrictedForSpectator(t.id))
+      .sort((a, b) => a.draft_position - b.draft_position);
+
+    return shortTeams[0] || baseTeam;
+  }
+
+  const teamOnClock = getTeamOnClockWithRedirectForSpectator(baseTeamOnClock);
+
   const femaleRestrictedTeamsForSpectator = useMemo(() => {
     if (!isEnforceMinFemaleModeActive) return [];
     return teams
@@ -944,10 +979,12 @@ function LiveDraftPageContent() {
     if (!numTeams) return [];
     const list = [];
     for (let pickNum = currentPickNumber; pickNum <= totalPicks; pickNum++) {
+      const baseTeam = getTeamOnTheClockExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers);
+      const team = pickNum === currentPickNumber ? getTeamOnClockWithRedirectForSpectator(baseTeam) : baseTeam;
       list.push({
         pickNumber: pickNum,
         round: getRoundExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers),
-        team: getTeamOnTheClockExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers),
+        team,
       });
     }
     return list;

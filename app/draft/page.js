@@ -271,7 +271,7 @@ function DraftPageContent() {
   );
   const currentRound = numTeams ? getRoundExtended(currentPickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers) : 1;
   const nextRound = numTeams ? getRoundExtended(currentPickNumber + 1, numTeams, teams, draftType, poolSize, skipPickNumbers) : 1;
-  const teamOnClock = numTeams
+  const baseTeamOnClock = numTeams
     ? getTeamOnTheClockExtended(currentPickNumber, numTeams, teams, draftType, poolSize, skipPickNumbers)
     : null;
   const teamNextOnClock = numTeams
@@ -545,7 +545,6 @@ function DraftPageContent() {
       ),
     [teams, myEmail]
   );
-  const isProxyForClockTeam = Boolean(teamOnClock && myProxyTeamIds.has(teamOnClock.id));
   const myActingTeamId = profile?.team_id || [...myProxyTeamIds][0] || null;
 
   // Every team this person is authorized to draft for - their own team (if
@@ -610,6 +609,39 @@ function DraftPageContent() {
     const femaleCount = roster?.femaleCount ?? 0;
     return femaleCount < minFemale;
   }
+
+  // Mirrors the backend's get_team_on_clock_with_redirect exactly. When
+  // the base clock resolution lands on a team that's satisfied on both
+  // minimums but has zero eligible males left, and at least one other
+  // team is still short on females with females still available, hands
+  // the turn to that short team instead (by draft position order if
+  // multiple qualify) - so their own GM can actually choose which
+  // player to draft, rather than the turn being stranded indefinitely.
+  function getTeamOnClockWithRedirect(baseTeam) {
+    if (!baseTeam) return null;
+    if (!isEnforceMinFemaleModeActive) return baseTeam;
+    if (teamIsFemaleRestricted(baseTeam.id)) return baseTeam;
+
+    const roster = rosterByTeam[baseTeam.id];
+    const rosterSize = roster?.count ?? 0;
+    const femaleCount = roster?.femaleCount ?? 0;
+    if (rosterSize < minRoster || femaleCount < minFemale) return baseTeam;
+
+    const malesRemaining = availablePlayers.filter((p) => p.gender !== 'F').length;
+    if (malesRemaining > 0) return baseTeam;
+
+    const femalesRemaining = availablePlayers.filter((p) => p.gender === 'F').length;
+    if (femalesRemaining === 0) return baseTeam;
+
+    const shortTeams = teams
+      .filter((t) => teamIsFemaleRestricted(t.id))
+      .sort((a, b) => a.draft_position - b.draft_position);
+
+    return shortTeams[0] || baseTeam;
+  }
+
+  const teamOnClock = getTeamOnClockWithRedirect(baseTeamOnClock);
+  const isProxyForClockTeam = Boolean(teamOnClock && myProxyTeamIds.has(teamOnClock.id));
 
   const femaleRestrictedTeams = useMemo(() => {
     if (!isEnforceMinFemaleModeActive) return [];
@@ -947,7 +979,8 @@ function DraftPageContent() {
     const list = [];
     let foundSoonest = false;
     for (let pickNum = currentPickNumber; pickNum <= totalPicks; pickNum++) {
-      const team = getTeamOnTheClockExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers);
+      const baseTeam = getTeamOnTheClockExtended(pickNum, numTeams, teams, draftType, poolSize, skipPickNumbers);
+      const team = pickNum === currentPickNumber ? getTeamOnClockWithRedirect(baseTeam) : baseTeam;
       const isMine = Boolean(team && myManagedTeamIds.has(team.id));
       const isSoonestMine = isMine && !foundSoonest;
       if (isSoonestMine) foundSoonest = true;
@@ -960,7 +993,7 @@ function DraftPageContent() {
       });
     }
     return list;
-  }, [currentPickNumber, numTeams, teams, draftType, totalPicks, myManagedTeamIds]);
+  }, [currentPickNumber, numTeams, teams, draftType, totalPicks, myManagedTeamIds, poolSize, skipPickNumbers]);
 
   useEffect(() => {
     console.log('[focus-effect] draft page fired', { focusParam, focusTimestamp, profileTeamId: profile?.team_id, profileLoaded: !!profile });
