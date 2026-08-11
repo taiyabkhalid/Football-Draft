@@ -818,7 +818,8 @@ function DraftPageContent() {
         !restricted &&
         !femaleReqSatisfiedOptOut &&
         femaleReqShownForPickRef.current.satisfied !== currentPickNumber &&
-        !alreadyQueuedSatisfiedThisPick
+        !alreadyQueuedSatisfiedThisPick &&
+        availablePlayers.some((p) => p.gender !== 'F')
       ) {
         newItems.push({
           type: 'satisfied',
