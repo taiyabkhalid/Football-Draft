@@ -694,16 +694,16 @@ function DraftPageContent() {
   const shownSeverityRef = useRef({});
 
   useEffect(() => {
-    if (!myEmail) return;
+    if (!myEmail || !settings?.draft_session_id) return;
     try {
-      if (sessionStorage.getItem(`femaleScarcityOptOut_${myEmail}`) === 'true') {
+      if (sessionStorage.getItem(`femaleScarcityOptOut_${settings.draft_session_id}_${myEmail}`) === 'true') {
         setScarcityOptOut(true);
       }
     } catch (e) {
       // sessionStorage unavailable - popup still works, just can't
       // remember an opt-out across a reload this session.
     }
-  }, [myEmail]);
+  }, [myEmail, settings?.draft_session_id]);
 
   useEffect(() => {
     if (scarcityOptOut) return;
@@ -741,7 +741,7 @@ function DraftPageContent() {
     setScarcityOptOut(true);
     setScarcityPopupQueue([]);
     try {
-      sessionStorage.setItem(`femaleScarcityOptOut_${myEmail}`, 'true');
+      sessionStorage.setItem(`femaleScarcityOptOut_${settings.draft_session_id}_${myEmail}`, 'true');
     } catch (e) {
       // sessionStorage unavailable - opt-out applies for the rest of this
       // page session regardless, just won't survive a reload.
@@ -1879,8 +1879,17 @@ function DraftPageContent() {
                   <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: '#0c2340' }}>
                     Female Players Temporarily Unavailable
                   </p>
+                  <p className="text-[13px] m-0" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
+                    Your team
+                  </p>
+                  <div className="flex items-center gap-1.5" style={{ margin: '4px 0 12px' }}>
+                    <FootballIcon color={current.team.team_color || '#0074ff'} size={14} />
+                    <span className="text-[13px] font-semibold" style={{ color: current.team.team_color || '#0074ff' }}>
+                      {current.team.name}
+                    </span>
+                  </div>
                   <p className="text-[13px] m-0 mb-3.5" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
-                    Your team has met its female requirement. {current.femalesRemaining} female player{current.femalesRemaining === 1 ? '' : 's'} {current.femalesRemaining === 1 ? 'is' : 'are'} reserved
+                    has met its female requirement. {current.femalesRemaining} female player{current.femalesRemaining === 1 ? '' : 's'} {current.femalesRemaining === 1 ? 'is' : 'are'} reserved
                     for other teams right now - draft freely from the rest of the pool.
                   </p>
                 </>
