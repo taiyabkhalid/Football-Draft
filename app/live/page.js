@@ -850,6 +850,7 @@ function LiveDraftPageContent() {
   // re-check, so a bit more reading time), and pauses the reveal queue
   // above while visible rather than letting picks reveal underneath it.
   const femaleReqSpectatorShownRef = useRef(false);
+  const femaleReqSpectatorDurationRef = useRef(5000);
   const femaleReqSpectatorStorageKey = settings?.draft_session_id
     ? `femaleReqGeneralSeen_${settings.draft_session_id}_${myEmail || 'anonymous'}`
     : null;
@@ -866,27 +867,42 @@ function LiveDraftPageContent() {
     }
   }, [femaleReqSpectatorStorageKey]);
 
+  // Only ever decides WHETHER to show, once - myEmail resolves
+  // asynchronously (starts null, then updates once the auth check
+  // completes), which used to also live in this same effect's dependency
+  // array; if the mode was already active on page load, this could fire
+  // once with myEmail still null, then fire AGAIN moments later once
+  // auth resolved - and since the "already shown" guard blocked that
+  // second run from doing anything, the timer that the first run had set
+  // up got silently cancelled with nothing left to replace it. Snapshotting
+  // the duration into a ref here, at the exact moment the decision is
+  // made, and handing the actual timer off to a fully separate effect
+  // below removes that dependency entirely.
   useEffect(() => {
     if (!isEnforceMinFemaleModeActive || femaleReqSpectatorShownRef.current || !femaleReqSpectatorStorageKey) return;
     femaleReqSpectatorShownRef.current = true;
+    femaleReqSpectatorDurationRef.current = myEmail ? 5000 : 7000;
     try {
       sessionStorage.setItem(femaleReqSpectatorStorageKey, 'true');
     } catch (e) {
       // sessionStorage unavailable - notification still shows this visit.
     }
     setShowFemaleReqSpectatorNotification(true);
-    const duration = myEmail ? 5000 : 7000;
-    const timer = setTimeout(() => setShowFemaleReqSpectatorNotification(false), duration);
-    return () => clearTimeout(timer);
   }, [isEnforceMinFemaleModeActive, myEmail, femaleReqSpectatorStorageKey]);
 
-  // Independent safeguard: if the "shown once" guard above ever blocks a
-  // fresh timer from being set (e.g. the mode flickers true/false/true in
-  // quick succession, cancelling the pending timer via the effect's own
-  // cleanup without a new one taking its place), this ensures the
-  // notification can never get stuck on screen - it hides the instant the
-  // mode is confirmed inactive, independent of whatever the timer above
-  // is doing.
+  // Manages the actual auto-close timer, completely independently of
+  // myEmail/the storage key/isEnforceMinFemaleModeActive - depends only
+  // on the visibility flag itself, so nothing upstream changing after the
+  // notification is already showing can spuriously cancel this timer
+  // without a replacement ever being set.
+  useEffect(() => {
+    if (!showFemaleReqSpectatorNotification) return;
+    const timer = setTimeout(() => setShowFemaleReqSpectatorNotification(false), femaleReqSpectatorDurationRef.current);
+    return () => clearTimeout(timer);
+  }, [showFemaleReqSpectatorNotification]);
+
+  // Independent safeguard: if the mode deactivates entirely while this is
+  // showing, hide it immediately rather than waiting out the timer.
   useEffect(() => {
     if (!isEnforceMinFemaleModeActive) {
       setShowFemaleReqSpectatorNotification(false);
