@@ -817,6 +817,10 @@ function DraftPageContent() {
       if (sessionStorage.getItem(`femaleReqSatisfiedOptOut_${sessionId}_${myEmail}`) === 'true') {
         setFemaleReqSatisfiedOptOut(true);
       }
+      const storedForfeits = sessionStorage.getItem(`femaleReqForfeitsSeen_${sessionId}_${myEmail}`);
+      if (storedForfeits) {
+        femaleReqForfeitShownPicksRef.current = new Set(JSON.parse(storedForfeits));
+      }
     } catch (e) {
       // sessionStorage unavailable - notifications just won't remember
       // being dismissed across a reload this session.
@@ -926,6 +930,15 @@ function DraftPageContent() {
         femaleReqShownForPickRef.current.satisfied = current.pickNumber;
       } else if (current.type === 'forfeited') {
         femaleReqForfeitShownPicksRef.current.add(current.pickNumber);
+        try {
+          sessionStorage.setItem(
+            `femaleReqForfeitsSeen_${settings.draft_session_id}_${myEmail}`,
+            JSON.stringify([...femaleReqForfeitShownPicksRef.current])
+          );
+        } catch (e) {
+          // sessionStorage unavailable - won't survive a reload, but
+          // won't re-show again this same page session either way.
+        }
       }
     }
     setFemaleReqQueue((prev) => prev.slice(1));
