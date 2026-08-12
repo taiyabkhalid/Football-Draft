@@ -828,7 +828,7 @@ function DraftPageContent() {
   }, [myEmail, settings?.draft_session_id]);
 
   useEffect(() => {
-    if (!myEmail || !settings?.draft_session_id || !isEnforceMinFemaleModeActive) return;
+    if (draftStatus !== 'in_progress' || !myEmail || !settings?.draft_session_id || !isEnforceMinFemaleModeActive) return;
     const newItems = [];
 
     if (!femaleReqGeneralShownRef.current && !femaleReqQueue.some((q) => q.type === 'general')) {
@@ -871,6 +871,7 @@ function DraftPageContent() {
       setFemaleReqQueue((prev) => [...prev, ...newItems]);
     }
   }, [
+    draftStatus,
     isEnforceMinFemaleModeActive,
     teamOnClock,
     currentPickNumber,
@@ -889,8 +890,12 @@ function DraftPageContent() {
   // condition to react to, so this watches the actual pick history rather
   // than recomputing anything. Tracks which pick numbers have already
   // been shown so it never re-queues the same forfeit twice, even as
-  // picks refreshes repeatedly via realtime.
+  // picks refreshes repeatedly via realtime. Only relevant while the
+  // draft is still live - once it's completed, a forfeit that happened
+  // is purely historical and no longer actionable, so it shouldn't
+  // interrupt someone who's just looking at the finished results.
   useEffect(() => {
+    if (draftStatus !== 'in_progress') return;
     if (!myManagedTeamIds || myManagedTeamIds.size === 0) return;
     const newForfeits = picks.filter(
       (p) =>
@@ -911,7 +916,7 @@ function DraftPageContent() {
         })),
       ]);
     }
-  }, [picks, myManagedTeamIds, teamsById, femaleReqQueue]);
+  }, [draftStatus, picks, myManagedTeamIds, teamsById, femaleReqQueue]);
 
   function dismissFemaleReqNotification() {
     const current = femaleReqQueue[0];
@@ -969,6 +974,16 @@ function DraftPageContent() {
       setFemaleReqQueue((prev) => prev.filter((q) => q.type === 'forfeited'));
     }
   }, [isEnforceMinFemaleModeActive]);
+
+  // Separate, additional safeguard specifically for the draft itself
+  // ending - unlike the mode simply deactivating mid-draft above, once
+  // the whole draft is completed, even a forfeit fact is no longer
+  // actionable, so this clears everything, including forfeited items.
+  useEffect(() => {
+    if (draftStatus === 'completed') {
+      setFemaleReqQueue([]);
+    }
+  }, [draftStatus]);
 
   // Always holds the latest draftingForTeam, updated every render - lets
   // the focus effect below read the current value without depending on
