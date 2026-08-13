@@ -593,6 +593,7 @@ function DraftPageContent() {
   // the backend's is_enforce_min_female_mode_active/team_is_female_restricted
   // exactly, so the UI and the server-side enforcement always agree.
   const isEnforceMinFemaleModeActive = useMemo(() => {
+    if (draftStatus !== 'in_progress') return false;
     if (!settings?.enforce_min_female_draft) return false;
     const femalesRemaining = availablePlayers.filter((p) => p.gender === 'F').length;
     const totalStillRequired = teams.reduce((sum, t) => {
@@ -601,7 +602,7 @@ function DraftPageContent() {
       return sum + Math.max(minFemale - femaleCount, 0);
     }, 0);
     return totalStillRequired > 0 && femalesRemaining <= totalStillRequired;
-  }, [settings?.enforce_min_female_draft, availablePlayers, teams, rosterByTeam, minFemale]);
+  }, [draftStatus, settings?.enforce_min_female_draft, availablePlayers, teams, rosterByTeam, minFemale]);
 
   function teamIsFemaleRestricted(teamId) {
     if (!isEnforceMinFemaleModeActive) return false;

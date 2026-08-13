@@ -837,6 +837,7 @@ function LiveDraftPageContent() {
   // pick that hasn't actually been revealed yet just from this
   // notification's numbers.
   const isEnforceMinFemaleModeActive = useMemo(() => {
+    if (draftStatus !== 'in_progress') return false;
     if (!settings?.enforce_min_female_draft) return false;
     const revealedPlayerIds = new Set(revealedPicks.filter((p) => p.player_id).map((p) => p.player_id));
     const femalesRemaining = players.filter((p) => p.gender === 'F' && !revealedPlayerIds.has(p.id)).length;
@@ -845,7 +846,7 @@ function LiveDraftPageContent() {
       return sum + Math.max(minFemale - femaleCount, 0);
     }, 0);
     return totalStillRequired > 0 && femalesRemaining <= totalStillRequired;
-  }, [settings?.enforce_min_female_draft, revealedPicks, players, teams, rosterByTeam, minFemale]);
+  }, [draftStatus, settings?.enforce_min_female_draft, revealedPicks, players, teams, rosterByTeam, minFemale]);
 
   // Mirrors the backend's get_team_on_clock_with_redirect - see the
   // matching comment on the GM page for the full reasoning. Built on the

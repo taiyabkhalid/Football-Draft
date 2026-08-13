@@ -362,6 +362,14 @@ export default function ProfilePage() {
                 </div>
               )}
             </>
+          ) : player?.is_active === false ? (
+            <p className="text-xs text-faint m-0" style={{ fontStyle: 'italic' }}>
+              You are not eligible to be drafted -{' '}
+              <a href="https://wa.me/14045185304" target="_blank" rel="noopener noreferrer" style={{ color: '#185fa5', fontStyle: 'normal' }}>
+                Whatsapp the commissioner if this is wrong (+1 404 518 5304)
+              </a>
+              .
+            </p>
           ) : (
             <p className="text-xs text-faint m-0" style={{ fontStyle: 'italic' }}>
               Not yet drafted
