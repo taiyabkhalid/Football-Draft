@@ -118,10 +118,6 @@ function LiveDraftPageContent() {
   const [viewingTeamId, setViewingTeamId] = useState(null);
   const [myTeamId, setMyTeamId] = useState(null);
   const [myEmail, setMyEmail] = useState(null);
-  // Declared early since the reveal-queue pause effect further down needs
-  // it - the rest of this notification's logic (which depends on
-  // rosterByTeam) is defined later, closer to where that data exists.
-  const [showFemaleReqSpectatorNotification, setShowFemaleReqSpectatorNotification] = useState(false);
   const [myRole, setMyRole] = useState(null);
   const [teamRankings, setTeamRankings] = useState([]);
   const [rankingToast, setRankingToast] = useState(false);
@@ -560,7 +556,7 @@ function LiveDraftPageContent() {
   }, [picks, revealedCount]);
 
   useEffect(() => {
-    if (processingRef.current || queue.length === 0 || showFemaleReqSpectatorNotification) return;
+    if (processingRef.current || queue.length === 0) return;
     processingRef.current = true;
     const next = queue[0];
 
@@ -587,7 +583,7 @@ function LiveDraftPageContent() {
       }
     }
     run();
-  }, [queue, showFemaleReqSpectatorNotification]);
+  }, [queue]);
 
   const revealedPicks = useMemo(() => picks.slice(0, revealedCount ?? picks.length), [picks, revealedCount]);
 
@@ -852,20 +848,19 @@ function LiveDraftPageContent() {
   // matching comment on the GM page for the full reasoning. Built on the
   // same reveal-aware data as isEnforceMinFemaleModeActive above, for
   // consistency with this page's spoiler-safety design elsewhere.
-  function teamIsFemaleRestrictedForSpectator(teamId) {
+  function teamIsFemaleCappedForSpectator(teamId) {
     if (!isEnforceMinFemaleModeActive) return false;
-    return (rosterByTeam[teamId]?.femaleCount ?? 0) < minFemale;
+    return (rosterByTeam[teamId]?.femaleCount ?? 0) >= minFemale;
   }
 
   function getTeamOnClockWithRedirectForSpectator(baseTeam) {
     if (!baseTeam) return null;
     if (!isEnforceMinFemaleModeActive) return baseTeam;
-    if (teamIsFemaleRestrictedForSpectator(baseTeam.id)) return baseTeam;
+    if (!teamIsFemaleCappedForSpectator(baseTeam.id)) return baseTeam;
 
     const roster = rosterByTeam[baseTeam.id];
     const rosterSize = roster?.count ?? 0;
-    const femaleCount = roster?.femaleCount ?? 0;
-    if (rosterSize < minRoster || femaleCount < minFemale) return baseTeam;
+    if (rosterSize < minRoster) return baseTeam;
 
     const revealedPlayerIds = new Set(revealedPicks.filter((p) => p.player_id).map((p) => p.player_id));
     const malesRemaining = players.filter((p) => p.gender !== 'F' && !p.team_id && !revealedPlayerIds.has(p.id)).length;
@@ -875,88 +870,13 @@ function LiveDraftPageContent() {
     if (femalesRemaining === 0) return baseTeam;
 
     const shortTeams = teams
-      .filter((t) => teamIsFemaleRestrictedForSpectator(t.id))
+      .filter((t) => !teamIsFemaleCappedForSpectator(t.id))
       .sort((a, b) => a.draft_position - b.draft_position);
 
     return shortTeams[0] || baseTeam;
   }
 
   const teamOnClock = getTeamOnClockWithRedirectForSpectator(baseTeamOnClock);
-
-  const femaleRestrictedTeamsForSpectator = useMemo(() => {
-    if (!isEnforceMinFemaleModeActive) return [];
-    return teams
-      .filter((t) => (rosterByTeam[t.id]?.femaleCount ?? 0) < minFemale)
-      .map((t) => ({ teamId: t.id, teamName: t.name, gmName: ownerByTeam[t.id]?.name || 'GM' }));
-  }, [isEnforceMinFemaleModeActive, teams, rosterByTeam, minFemale, ownerByTeam]);
-
-  // Shown once per viewer per draft (scoped by draft_session_id) - works
-  // for logged-in GMs/proxies/Commissioner AND anonymous spectators alike,
-  // since sessionStorage is already scoped to this browser tab regardless
-  // of identity; anonymous viewers just get a generic key instead of one
-  // keyed to their email. Auto-closes after 5 seconds for a logged-in
-  // viewer, 7 for an anonymous one (no account to log back into and
-  // re-check, so a bit more reading time), and pauses the reveal queue
-  // above while visible rather than letting picks reveal underneath it.
-  const femaleReqSpectatorShownRef = useRef(false);
-  const femaleReqSpectatorDurationRef = useRef(5000);
-  const femaleReqSpectatorStorageKey = settings?.draft_session_id
-    ? `femaleReqGeneralSeen_${settings.draft_session_id}_${myEmail || 'anonymous'}`
-    : null;
-
-  useEffect(() => {
-    if (!femaleReqSpectatorStorageKey) return;
-    try {
-      if (sessionStorage.getItem(femaleReqSpectatorStorageKey) === 'true') {
-        femaleReqSpectatorShownRef.current = true;
-      }
-    } catch (e) {
-      // sessionStorage unavailable - notification just won't remember
-      // being shown across a reload this session.
-    }
-  }, [femaleReqSpectatorStorageKey]);
-
-  // Only ever decides WHETHER to show, once - myEmail resolves
-  // asynchronously (starts null, then updates once the auth check
-  // completes), which used to also live in this same effect's dependency
-  // array; if the mode was already active on page load, this could fire
-  // once with myEmail still null, then fire AGAIN moments later once
-  // auth resolved - and since the "already shown" guard blocked that
-  // second run from doing anything, the timer that the first run had set
-  // up got silently cancelled with nothing left to replace it. Snapshotting
-  // the duration into a ref here, at the exact moment the decision is
-  // made, and handing the actual timer off to a fully separate effect
-  // below removes that dependency entirely.
-  useEffect(() => {
-    if (!isEnforceMinFemaleModeActive || femaleReqSpectatorShownRef.current || !femaleReqSpectatorStorageKey) return;
-    femaleReqSpectatorShownRef.current = true;
-    femaleReqSpectatorDurationRef.current = myEmail ? 5000 : 7000;
-    try {
-      sessionStorage.setItem(femaleReqSpectatorStorageKey, 'true');
-    } catch (e) {
-      // sessionStorage unavailable - notification still shows this visit.
-    }
-    setShowFemaleReqSpectatorNotification(true);
-  }, [isEnforceMinFemaleModeActive, myEmail, femaleReqSpectatorStorageKey]);
-
-  // Manages the actual auto-close timer, completely independently of
-  // myEmail/the storage key/isEnforceMinFemaleModeActive - depends only
-  // on the visibility flag itself, so nothing upstream changing after the
-  // notification is already showing can spuriously cancel this timer
-  // without a replacement ever being set.
-  useEffect(() => {
-    if (!showFemaleReqSpectatorNotification) return;
-    const timer = setTimeout(() => setShowFemaleReqSpectatorNotification(false), femaleReqSpectatorDurationRef.current);
-    return () => clearTimeout(timer);
-  }, [showFemaleReqSpectatorNotification]);
-
-  // Independent safeguard: if the mode deactivates entirely while this is
-  // showing, hide it immediately rather than waiting out the timer.
-  useEffect(() => {
-    if (!isEnforceMinFemaleModeActive) {
-      setShowFemaleReqSpectatorNotification(false);
-    }
-  }, [isEnforceMinFemaleModeActive]);
 
   const pickByNumber = useMemo(() => Object.fromEntries(revealedPicks.map((p) => [p.pick_number, p])), [revealedPicks]);
 
@@ -2339,38 +2259,6 @@ function LiveDraftPageContent() {
             <p className="text-sm font-semibold m-0 mt-3" style={{ color: '#0c2340' }}>
               The draft order is being randomized
             </p>
-          </div>
-        </div>
-      )}
-
-      {showFemaleReqSpectatorNotification && (
-        <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
-          className="flex items-center justify-center px-4"
-        >
-          <div className="bg-white rounded-xl p-5" style={{ maxWidth: 340, width: '100%' }}>
-            <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: '#0c2340' }}>
-              Female Draft Requirement
-            </p>
-            <p className="text-[13px] m-0" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
-              {femaleRestrictedTeamsForSpectator.length} team{femaleRestrictedTeamsForSpectator.length === 1 ? '' : 's'} have not drafted
-              enough females, and only{' '}
-              {players.filter((p) => p.gender === 'F' && !revealedPicks.some((rp) => rp.player_id === p.id)).length} female player
-              {players.filter((p) => p.gender === 'F' && !revealedPicks.some((rp) => rp.player_id === p.id)).length === 1 ? '' : 's'} are left.
-            </p>
-            <p className="text-[13px] m-0 mb-3" style={{ color: '#5a6b7d', lineHeight: 1.6, marginTop: 6 }}>
-              The following GM(s) must select a female with their next draft pick:
-            </p>
-            <div className="rounded-md" style={{ background: '#f7f9fb', padding: 10 }}>
-              {femaleRestrictedTeamsForSpectator.map((t) => (
-                <div key={t.teamId} className="flex items-center gap-1.5" style={{ marginBottom: 6 }}>
-                  <FootballIcon color={teamsById[t.teamId]?.team_color || '#0074ff'} size={14} />
-                  <span className="text-[12px]" style={{ color: '#0c2340' }}>
-                    {t.gmName} - <span style={{ color: teamsById[t.teamId]?.team_color || '#0074ff', fontWeight: 600 }}>{t.teamName}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       )}
