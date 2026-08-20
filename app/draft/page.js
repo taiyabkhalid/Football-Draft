@@ -632,13 +632,21 @@ function DraftPageContent() {
   // cost it the minimum - not the entire time it's short. Every turn
   // before that, a short team can freely draft males or females; this
   // is the actual fix for restricting a team the whole time it's short.
+  // Independent of isEnforceMinFemaleModeActive (pool-wide scarcity) on
+  // purpose - this is a per-team guarantee that must hold regardless of
+  // the overall pool's surplus/deficit state. Gating this behind the
+  // pool-wide check meant a single procrastinating team could slip
+  // through undetected during a genuine surplus, since other teams
+  // drafting females normally keeps the pool-wide math looking healthy
+  // even while this one team runs out of turns unprotected.
   function teamMustDraftFemaleNow(teamId, fromPickNumber) {
-    if (!isEnforceMinFemaleModeActive) return false;
-    if (teamIsFemaleCapped(teamId)) return false;
+    if (!settings?.enforce_min_female_draft) return false;
     const roster = rosterByTeam[teamId];
     const femaleCount = roster?.femaleCount ?? 0;
     const femaleNeeded = minFemale - femaleCount;
     if (femaleNeeded <= 0) return false;
+    const femalesRemaining = availablePlayers.filter((p) => p.gender === 'F').length;
+    if (femalesRemaining === 0) return false;
     const picksLeft = picksRemainingForTeam(teamId, fromPickNumber);
     return femaleNeeded >= picksLeft;
   }
@@ -829,20 +837,23 @@ function DraftPageContent() {
   // activation) shows once per person per draft - scoped by
   // draft_session_id specifically so it correctly resets if the
   // Commissioner resets the draft, even within the same long-lived
-  // browser tab. Messages 2/3 are turn-based: tracked by pick number
-  // rather than a one-time flag, so they correctly re-fire on a later
-  // turn rather than only ever showing once.
+  // browser tab. The "forced" message is turn-based - tracked by pick
+  // number, since it correctly needs to re-fire on a later turn if that
+  // team is still short then. The "satisfied" message is different: it
+  // only ever needs to tell someone once, ever, per team - there's
+  // nothing new to learn by seeing it again on a later turn.
   const [femaleReqQueue, setFemaleReqQueue] = useState([]);
-  const [femaleReqSatisfiedOptOut, setFemaleReqSatisfiedOptOut] = useState(false);
-  const femaleReqShownForPickRef = useRef({ forced: null, satisfied: null });
+  const femaleReqShownForPickRef = useRef({ forced: null });
+  const femaleReqSatisfiedShownTeamsRef = useRef(new Set());
   const femaleReqForfeitShownPicksRef = useRef(new Set());
 
   useEffect(() => {
     if (!myEmail || !settings?.draft_session_id) return;
     const sessionId = settings.draft_session_id;
     try {
-      if (sessionStorage.getItem(`femaleReqSatisfiedOptOut_${sessionId}_${myEmail}`) === 'true') {
-        setFemaleReqSatisfiedOptOut(true);
+      const storedSatisfiedTeams = sessionStorage.getItem(`femaleReqSatisfiedShownTeams_${sessionId}_${myEmail}`);
+      if (storedSatisfiedTeams) {
+        femaleReqSatisfiedShownTeamsRef.current = new Set(JSON.parse(storedSatisfiedTeams));
       }
       const storedForfeits = sessionStorage.getItem(`femaleReqForfeitsSeen_${sessionId}_${myEmail}`);
       if (storedForfeits) {
@@ -861,7 +872,7 @@ function DraftPageContent() {
   // their last chance yet). Only the two notifications below, which
   // correspond to something genuinely happening to a specific team, fire.
   useEffect(() => {
-    if (draftStatus !== 'in_progress' || !myEmail || !settings?.draft_session_id || !isEnforceMinFemaleModeActive) return;
+    if (draftStatus !== 'in_progress' || !myEmail || !settings?.draft_session_id || !settings?.enforce_min_female_draft) return;
     const newItems = [];
 
     const iManageClockTeam = teamOnClock && (profile?.team_id === teamOnClock.id || isProxyForClockTeam);
@@ -871,16 +882,15 @@ function DraftPageContent() {
       const alreadyQueuedForcedThisPick = femaleReqQueue.some(
         (q) => q.type === 'forced' && q.pickNumber === currentPickNumber
       );
-      const alreadyQueuedSatisfiedThisPick = femaleReqQueue.some(
-        (q) => q.type === 'satisfied' && q.pickNumber === currentPickNumber
+      const alreadyQueuedSatisfiedThisTeam = femaleReqQueue.some(
+        (q) => q.type === 'satisfied' && q.team?.id === teamOnClock.id
       );
       if (mustDraftNow && femaleReqShownForPickRef.current.forced !== currentPickNumber && !alreadyQueuedForcedThisPick) {
         newItems.push({ type: 'forced', team: teamOnClock, pickNumber: currentPickNumber });
       } else if (
         capped &&
-        !femaleReqSatisfiedOptOut &&
-        femaleReqShownForPickRef.current.satisfied !== currentPickNumber &&
-        !alreadyQueuedSatisfiedThisPick &&
+        !femaleReqSatisfiedShownTeamsRef.current.has(teamOnClock.id) &&
+        !alreadyQueuedSatisfiedThisTeam &&
         availablePlayers.some((p) => p.gender !== 'F')
       ) {
         newItems.push({
@@ -904,7 +914,6 @@ function DraftPageContent() {
     profile,
     isProxyForClockTeam,
     availablePlayers,
-    femaleReqSatisfiedOptOut,
     femaleReqQueue,
   ]);
 
@@ -947,7 +956,16 @@ function DraftPageContent() {
       if (current.type === 'forced') {
         femaleReqShownForPickRef.current.forced = current.pickNumber;
       } else if (current.type === 'satisfied') {
-        femaleReqShownForPickRef.current.satisfied = current.pickNumber;
+        femaleReqSatisfiedShownTeamsRef.current.add(current.team.id);
+        try {
+          sessionStorage.setItem(
+            `femaleReqSatisfiedShownTeams_${settings.draft_session_id}_${myEmail}`,
+            JSON.stringify([...femaleReqSatisfiedShownTeamsRef.current])
+          );
+        } catch (e) {
+          // sessionStorage unavailable - won't survive a reload, but
+          // won't re-show again this same page session either way.
+        }
       } else if (current.type === 'forfeited') {
         femaleReqForfeitShownPicksRef.current.add(current.pickNumber);
         try {
@@ -962,17 +980,6 @@ function DraftPageContent() {
       }
     }
     setFemaleReqQueue((prev) => prev.slice(1));
-  }
-
-  function dismissFemaleReqSatisfiedForever() {
-    setFemaleReqSatisfiedOptOut(true);
-    setFemaleReqQueue((prev) => prev.filter((item) => item.type !== 'satisfied'));
-    try {
-      sessionStorage.setItem(`femaleReqSatisfiedOptOut_${settings.draft_session_id}_${myEmail}`, 'true');
-    } catch (e) {
-      // sessionStorage unavailable - opt-out applies for the rest of this
-      // page session regardless, just won't survive a reload.
-    }
   }
 
   // The queue only ever gets new items added while the mode is active -
@@ -1574,11 +1581,9 @@ function DraftPageContent() {
   // own validation, so the UI and the actual submit path can never
   // disagree with each other.
   function isPlayerBlockedByFemaleRules(p) {
-    if (teamOnClock && isEnforceMinFemaleModeActive) {
-      if (teamIsFemaleCapped(teamOnClock.id)) return p.gender === 'F';
-      if (teamMustDraftFemaleNow(teamOnClock.id, currentPickNumber)) return p.gender !== 'F';
-      return false;
-    }
+    if (!teamOnClock) return false;
+    if (isEnforceMinFemaleModeActive && teamIsFemaleCapped(teamOnClock.id)) return p.gender === 'F';
+    if (teamMustDraftFemaleNow(teamOnClock.id, currentPickNumber)) return p.gender !== 'F';
     return false;
   }
 
@@ -1642,24 +1647,24 @@ function DraftPageContent() {
     // condition - a team that's short but not yet at its last chance
     // falls through to no special sorting at all, since it has no
     // restriction of any kind right now.
-    if (teamOnClock && isEnforceMinFemaleModeActive) {
-      if (teamIsFemaleCapped(teamOnClock.id)) {
-        // Section 12: this team already met its requirement - eligible
-        // males first (starred, then alpha), then ineligible females
-        // (alpha only, currently reserved for teams still short).
-        const males = starredThenAlpha(base.filter((p) => p.gender !== 'F'));
-        const females = sortList(base.filter((p) => p.gender === 'F'), 'name');
-        return [...males, ...females];
-      }
-      if (teamMustDraftFemaleNow(teamOnClock.id, currentPickNumber)) {
-        // Section 11: eligible females first (starred, then alpha), then
-        // ineligible males (alpha only) - males are shown but can't
-        // actually be drafted right now, since this is this team's
-        // genuine last chance to still reach its minimum.
-        const females = starredThenAlpha(base.filter((p) => p.gender === 'F'));
-        const males = sortList(base.filter((p) => p.gender !== 'F'), 'name');
-        return [...females, ...males];
-      }
+    if (teamOnClock && isEnforceMinFemaleModeActive && teamIsFemaleCapped(teamOnClock.id)) {
+      // Section 12: this team already met its requirement - eligible
+      // males first (starred, then alpha), then ineligible females
+      // (alpha only, currently reserved for teams still short).
+      const males = starredThenAlpha(base.filter((p) => p.gender !== 'F'));
+      const females = sortList(base.filter((p) => p.gender === 'F'), 'name');
+      return [...males, ...females];
+    }
+    if (teamOnClock && teamMustDraftFemaleNow(teamOnClock.id, currentPickNumber)) {
+      // Section 11: eligible females first (starred, then alpha), then
+      // ineligible males (alpha only) - males are shown but can't
+      // actually be drafted right now, since this is this team's
+      // genuine last chance to still reach its minimum. Independent of
+      // isEnforceMinFemaleModeActive - this must correctly sort during
+      // a genuine pool-wide surplus too, since it's a per-team guarantee.
+      const females = starredThenAlpha(base.filter((p) => p.gender === 'F'));
+      const males = sortList(base.filter((p) => p.gender !== 'F'), 'name');
+      return [...females, ...males];
     }
 
     // The older, separate "last chance" reordering has been removed
@@ -2036,20 +2041,10 @@ function DraftPageContent() {
                   fontSize: 13,
                   border: 'none',
                   cursor: 'pointer',
-                  marginBottom: current.type === 'satisfied' ? 10 : 0,
                 }}
               >
                 OK
               </button>
-              {current.type === 'satisfied' && (
-                <button
-                  onClick={dismissFemaleReqSatisfiedForever}
-                  className="w-full text-center"
-                  style={{ background: 'none', border: 'none', color: '#5a6b7d', fontSize: 12, textDecoration: 'underline', cursor: 'pointer' }}
-                >
-                  Don&apos;t show me this again
-                </button>
-              )}
             </div>
           </div>
         );
@@ -2823,24 +2818,29 @@ function DraftPageContent() {
           </p>
         )}
 
-        {teamOnClock && isEnforceMinFemaleModeActive && teamMustDraftFemaleNow(teamOnClock.id, currentPickNumber) && (
-          <div className="rounded-md px-3 py-2 mt-2" style={{ background: '#faeeda' }}>
-            <p className="text-xs m-0" style={{ color: '#633806' }}>
-              <i className="ti ti-info-circle text-sm" aria-hidden="true" style={{ verticalAlign: -2, marginRight: 4 }} />
-              {teamOnClock.name} must draft a female player this pick to reach the {minFemale}-female minimum — female
-              players are sorted to the front below.
-            </p>
-          </div>
-        )}
-        {teamOnClock && isEnforceMinFemaleModeActive && teamIsFemaleCapped(teamOnClock.id) && (
-          <div className="rounded-md px-3 py-2 mt-2" style={{ background: '#faeeda' }}>
-            <p className="text-xs m-0" style={{ color: '#633806' }}>
-              <i className="ti ti-info-circle text-sm" aria-hidden="true" style={{ verticalAlign: -2, marginRight: 4 }} />
-              {teamOnClock.name} has met its female minimum. Female players are reserved for teams that still need
-              one. Currently only male players are available for you to draft.
-            </p>
-          </div>
-        )}
+        {teamOnClock &&
+          (profile?.team_id === teamOnClock.id || isProxyForClockTeam) &&
+          teamMustDraftFemaleNow(teamOnClock.id, currentPickNumber) && (
+            <div className="rounded-md px-3 py-2 mt-2" style={{ background: '#faeeda' }}>
+              <p className="text-xs m-0" style={{ color: '#633806' }}>
+                <i className="ti ti-info-circle text-sm" aria-hidden="true" style={{ verticalAlign: -2, marginRight: 4 }} />
+                {teamOnClock.name} must draft a female player this pick to reach the {minFemale}-female minimum — female
+                players are sorted to the front below.
+              </p>
+            </div>
+          )}
+        {teamOnClock &&
+          isEnforceMinFemaleModeActive &&
+          (profile?.team_id === teamOnClock.id || isProxyForClockTeam) &&
+          teamIsFemaleCapped(teamOnClock.id) && (
+            <div className="rounded-md px-3 py-2 mt-2" style={{ background: '#faeeda' }}>
+              <p className="text-xs m-0" style={{ color: '#633806' }}>
+                <i className="ti ti-info-circle text-sm" aria-hidden="true" style={{ verticalAlign: -2, marginRight: 4 }} />
+                {teamOnClock.name} has met its female minimum. Female players are reserved for teams that still need
+                one. Currently only male players are available for you to draft.
+              </p>
+            </div>
+          )}
 
         {/* Main layout: sidebar / card row / my team */}
         <div className="flex flex-col lg:flex-row pt-3">
