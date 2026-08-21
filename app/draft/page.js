@@ -685,6 +685,30 @@ function DraftPageContent() {
   const teamOnClock = getTeamOnClockWithRedirect(baseTeamOnClock);
   const isProxyForClockTeam = Boolean(teamOnClock && myProxyTeamIds.has(teamOnClock.id));
 
+  // The sort-order override (starredThenAlpha / sortList within
+  // sortedAvailable below) only reorders players that are ALREADY in the
+  // base list - it can't rescue anyone the GM's own searchGender FILTER
+  // has already excluded entirely. If a GM had filtered to "M" before
+  // their turn came up, and their turn then requires a female (or vice
+  // versa), the eligible players would be filtered out of the list
+  // before the sort logic even runs, leaving them unable to see - let
+  // alone select - the player they're required to draft. This clears
+  // that filter the moment it would conflict with what's actually
+  // eligible right now, the same way the sort order already gets
+  // automatically overridden.
+  useEffect(() => {
+    if (!teamOnClock || !searchGender) return;
+    let eligibleGender = null;
+    if (isEnforceMinFemaleModeActive && teamIsFemaleCapped(teamOnClock.id)) {
+      eligibleGender = 'M';
+    } else if (teamMustDraftFemaleNow(teamOnClock.id, currentPickNumber)) {
+      eligibleGender = 'F';
+    }
+    if (eligibleGender && searchGender !== eligibleGender) {
+      setSearchGender('');
+    }
+  }, [teamOnClock, isEnforceMinFemaleModeActive, currentPickNumber, searchGender, rosterByTeam, minFemale, availablePlayers, settings?.enforce_min_female_draft]);
+
   // Proactive, informational-only heads-up (separate from the last-chance
   // "must draft a female now" gate, which only ever applies to whoever's
   // currently on the clock). This instead continuously checks every team
@@ -693,16 +717,19 @@ function DraftPageContent() {
   // turn comes around. Deliberately isolated: it reads existing values
   // (availablePlayers, rosterByTeam, minFemale) but never writes to or
   // recomputes any of them, so it cannot affect any existing female
-  // count or display elsewhere. No longer suppressed while the Enforce
-  // Minimum Female Draft Mode is active - the general, pool-wide
-  // notification that once justified this suppression has been removed
-  // entirely, since it fired on a mathematical threshold with no
-  // practical effect on most teams seeing it. This warning is a better,
-  // per-team-calibrated signal and should resume working regardless of
-  // whether that mode is active.
+  // count or display elsewhere. Suppressed whenever the Enforce Minimum
+  // Female Draft Mode toggle is on at all - not just when pool-wide
+  // scarcity is active - since the last-chance guarantee that makes
+  // this warning redundant now applies independent of pool-wide state
+  // (a team's own last chance is protected even during a genuine
+  // surplus), so the toggle itself is the correct scope to match. It
+  // correctly re-fires on genuine worsening (confirmed directly against
+  // real draft data), which is why it was firing multiple times - not a
+  // bug, just no longer a necessary signal once the guarantee mechanism
+  // covers the same risk.
   const FEMALE_SCARCITY_WARNING_MARGIN = 2;
   const femaleScarcityWarnings = useMemo(() => {
-    if (!numTeams || draftStatus === 'completed') return [];
+    if (!numTeams || draftStatus === 'completed' || settings?.enforce_min_female_draft) return [];
     const femalesRemainingInPool = availablePlayers.filter((p) => p.gender === 'F').length;
 
     const warnings = [];
@@ -766,7 +793,7 @@ function DraftPageContent() {
     draftType,
     poolSize,
     skipPickNumbers,
-    isEnforceMinFemaleModeActive,
+    settings?.enforce_min_female_draft,
   ]);
 
   // Popup version of the scarcity warning - queues one at a time (never
