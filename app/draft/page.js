@@ -254,6 +254,19 @@ function DraftPageContent() {
 
   // ---- Derived draft state ----
   const currentPickNumber = picks.length + 1;
+
+  // The number a slot displays is however many successful picks happened
+  // before it, plus one - a skip never consumes a number, it just delays
+  // which team fills that slot. For any given clock position, this is
+  // the number every card sharing that slot (any preceding skips, plus
+  // whichever pick eventually fills it) should show. For a pick that's
+  // already happened, this exactly matches player.draft_pick_number
+  // (already correct, stored at the time of that pick) - this helper is
+  // only actually needed for skips and the current/upcoming pick, since
+  // those never had a draft_pick_number of their own to fall back on.
+  function getSharedPickNumber(clockPickNumber) {
+    return picks.filter((p) => p.player_id && p.pick_number < clockPickNumber).length + 1;
+  }
   const numTeams = settings?.num_teams || teams.length;
   const draftStatus = settings?.draft_status || 'not_started';
   const draftType = settings?.draft_type || 'snake';
@@ -2426,7 +2439,7 @@ function DraftPageContent() {
                                     {viewedTeam?.name}
                                   </p>
                                   <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
-                                    Rnd {currentRound} . Overall Pick # {currentPickNumber}
+                                    Rnd {currentRound} . Overall Pick # {getSharedPickNumber(currentPickNumber)}
                                   </span>
                                 </>
                               ) : entry?.kind === 'gm' ? (
@@ -2468,7 +2481,7 @@ function DraftPageContent() {
                                 </div>
                                 <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
                                 <span className="text-[9px] text-faint mt-0.5">
-                                  Rnd {entry.pick.round} . Overall Pick # {entry.pick.pick_number}
+                                  Rnd {entry.pick.round} . Overall Pick # {getSharedPickNumber(entry.pick.pick_number)}
                                 </span>
                               </>
                             ) : entry?.kind === 'manual' ? (
@@ -2706,9 +2719,14 @@ function DraftPageContent() {
                                       </p>
                                     </button>
                                   ) : isSkipped ? (
-                                    <p className="text-[10px] italic m-0" style={{ color: '#8b97a3' }}>
-                                      Skipped
-                                    </p>
+                                    <>
+                                      <p className="text-[10px] italic m-0" style={{ color: '#8b97a3' }}>
+                                        Skipped
+                                      </p>
+                                      <p className="text-[9px] m-0" style={{ color: '#8b97a3' }}>
+                                        Overall Pick #{getSharedPickNumber(slot.pickNumber)}
+                                      </p>
+                                    </>
                                   ) : (
                                     <p className="m-0" style={{ color: '#8b97a3' }}>
                                       &mdash;

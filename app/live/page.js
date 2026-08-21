@@ -588,6 +588,14 @@ function LiveDraftPageContent() {
   const revealedPicks = useMemo(() => picks.slice(0, revealedCount ?? picks.length), [picks, revealedCount]);
 
   const currentPickNumber = revealedPicks.length + 1;
+
+  // Reveal-aware version of the same calculation on the GM page - built
+  // on revealedPicks specifically, so a skip or pick that hasn't been
+  // revealed yet can never influence a number shown to this viewer,
+  // matching how currentPickNumber above already handles spoiler safety.
+  function getSharedPickNumber(clockPickNumber) {
+    return revealedPicks.filter((p) => p.player_id && p.pick_number < clockPickNumber).length + 1;
+  }
   const numTeams = settings?.num_teams || teams.length;
   const draftType = settings?.draft_type || 'snake';
   // poolSize is duplicated here (matches totalPicks - skipCount further
@@ -1925,7 +1933,7 @@ function LiveDraftPageContent() {
                                   {viewedTeam?.name}
                                 </p>
                                 <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
-                                  Rnd {currentRound} . Overall Pick # {currentPickNumber}
+                                  Rnd {currentRound} . Overall Pick # {getSharedPickNumber(currentPickNumber)}
                                 </span>
                               </>
                             ) : entry?.kind === 'gm' ? (
@@ -1967,7 +1975,7 @@ function LiveDraftPageContent() {
                                 </div>
                                 <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
                                 <span className="text-[9px] text-faint mt-0.5">
-                                  Rnd {entry.pick.round} . Overall Pick # {entry.pick.pick_number}
+                                  Rnd {entry.pick.round} . Overall Pick # {getSharedPickNumber(entry.pick.pick_number)}
                                 </span>
                               </>
                             ) : entry?.kind === 'manual' ? (
@@ -2210,9 +2218,14 @@ function LiveDraftPageContent() {
                                     </p>
                                   </button>
                                 ) : isSkipped ? (
-                                  <p className="text-[10px] italic m-0" style={{ color: '#8b97a3' }}>
-                                    Skipped
-                                  </p>
+                                  <>
+                                    <p className="text-[10px] italic m-0" style={{ color: '#8b97a3' }}>
+                                      Skipped
+                                    </p>
+                                    <p className="text-[9px] m-0" style={{ color: '#8b97a3' }}>
+                                      Overall Pick #{getSharedPickNumber(slot.pickNumber)}
+                                    </p>
+                                  </>
                                 ) : (
                                   <p className="m-0" style={{ color: '#8b97a3' }}>
                                     &mdash;

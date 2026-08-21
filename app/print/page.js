@@ -24,6 +24,7 @@ function PrintContent() {
   const [emailToName, setEmailToName] = useState({});
   const [viewerRole, setViewerRole] = useState(null);
   const [viewerTeamId, setViewerTeamId] = useState(null);
+  const [allDraftPicks, setAllDraftPicks] = useState([]);
 
   useEffect(() => {
     async function fetchAll() {
@@ -31,7 +32,7 @@ function PrintContent() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      const [teamsRes, playersRes, profilesRes, settingsRes, emailMatchRes, picksRes] = await Promise.all([
+      const [teamsRes, playersRes, profilesRes, settingsRes, emailMatchRes, picksRes, fullPicksRes] = await Promise.all([
         supabase.from('teams').select('*').order('name', { ascending: true }),
         supabase
           .from('players')
@@ -51,6 +52,10 @@ function PrintContent() {
         // pick number disagrees with the actual round for any pick made
         // during the extended phase (after a skip has occurred).
         supabase.from('draft_picks').select('player_id, round').not('player_id', 'is', null),
+        // Every draft_picks row, skips included - needed only for Full
+        // Draft Order, which shows a running list of every turn taken
+        // (including skips) in true sequence, not just successful picks.
+        supabase.from('draft_picks').select('pick_number, round, player_id, team_id').order('pick_number', { ascending: true }),
       ]);
       setTeams(teamsRes.data || []);
       setPlayers(playersRes.data || []);
@@ -58,6 +63,7 @@ function PrintContent() {
       setNumTeams(settingsRes.data?.num_teams || (teamsRes.data || []).length);
       setRoundByPlayerId(Object.fromEntries((picksRes.data || []).map((p) => [p.player_id, p.round])));
       setEmailToName(Object.fromEntries((emailMatchRes.data || []).map((p) => [p.email, p.full_name])));
+      setAllDraftPicks(fullPicksRes.data || []);
 
       if (user) {
         const myEmailLower = user.email?.toLowerCase() || '';
@@ -246,10 +252,23 @@ function PrintContent() {
   // matching every other place in the app that shows round numbers.
   const maxNormalRound = numTeams ? Math.ceil(Math.max(players.length - numTeams, 0) / numTeams) : 0;
 
+  const playersById = Object.fromEntries(players.map((p) => [p.id, p]));
+
   function DraftOrderTable() {
-    const allDrafted = players
-      .filter((p) => p.draft_pick_number)
-      .sort((a, b) => a.draft_pick_number - b.draft_pick_number);
+    const sorted = allDraftPicks.slice().sort((a, b) => a.pick_number - b.pick_number);
+
+    // A skip never consumes a number - it just delays which team fills
+    // that slot. The number shown is however many successful picks
+    // happened before this row, plus one, so every skip preceding a real
+    // pick shares that same real pick's number, exactly matching how
+    // draft_pick_number already works for a successful pick's own card.
+    let successfulSoFar = 0;
+    const rows = sorted.map((dp) => {
+      const displayNumber = successfulSoFar + 1;
+      if (dp.player_id) successfulSoFar += 1;
+      return { ...dp, displayNumber };
+    });
+
     return (
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
@@ -264,19 +283,24 @@ function PrintContent() {
           </tr>
         </thead>
         <tbody>
-          {allDrafted.map((p) => (
-            <tr key={p.id} style={{ borderTop: '1px solid #eef0f2' }}>
-              <td style={td}>{p.draft_pick_number}</td>
-              <td style={td}>{roundByPlayerId[p.id]}{roundByPlayerId[p.id] > maxNormalRound ? ' Ext' : ''}</td>
-              <td style={td}>{p.full_name}</td>
-              <td style={td}>
-                {p.offensive_position} / {p.defensive_position}
-              </td>
-              <td style={td}>{p.gender}</td>
-              <td style={td}>{teamsById[p.team_id]?.name || ''}</td>
-              <td style={td}>{ownerByTeamId[p.team_id] || ''}</td>
-            </tr>
-          ))}
+          {rows.map((dp) => {
+            const player = dp.player_id ? playersById[dp.player_id] : null;
+            const isSkipped = !dp.player_id;
+            return (
+              <tr key={dp.pick_number} style={{ borderTop: '1px solid #eef0f2' }}>
+                <td style={td}>{dp.displayNumber}</td>
+                <td style={td}>
+                  {dp.round}
+                  {dp.round > maxNormalRound ? ' Ext' : ''}
+                </td>
+                <td style={td}>{isSkipped ? 'Skipped' : player?.full_name || ''}</td>
+                <td style={td}>{isSkipped ? '' : `${player?.offensive_position || ''} / ${player?.defensive_position || ''}`}</td>
+                <td style={td}>{isSkipped ? '' : player?.gender || ''}</td>
+                <td style={td}>{teamsById[dp.team_id]?.name || ''}</td>
+                <td style={td}>{ownerByTeamId[dp.team_id] || ''}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     );
