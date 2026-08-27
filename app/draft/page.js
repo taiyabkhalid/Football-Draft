@@ -729,18 +729,30 @@ function DraftPageContent() {
   // versa), the eligible players would be filtered out of the list
   // before the sort logic even runs, leaving them unable to see - let
   // alone select - the player they're required to draft. This clears
-  // that filter the moment it would conflict with what's actually
-  // eligible right now, the same way the sort order already gets
-  // automatically overridden.
+  // that filter once, the moment a new turn begins with a conflicting
+  // restriction - tracked by team+pick so it only fires on that
+  // transition, not on every render. Without that tracking, this would
+  // silently re-clear the filter the instant anyone tried to set it
+  // during the same turn, making it look like the filter simply
+  // "does nothing" even when someone just wants to browse the
+  // ineligible gender, not draft it.
+  const femaleFilterAutoClearedForRef = useRef(null);
   useEffect(() => {
-    if (!teamOnClock || !searchGender) return;
+    if (!teamOnClock) return;
     let eligibleGender = null;
     if (isEnforceMinFemaleModeActive && teamIsFemaleCapped(teamOnClock.id)) {
       eligibleGender = 'M';
     } else if (teamMustDraftFemaleNow(teamOnClock.id, currentPickNumber)) {
       eligibleGender = 'F';
     }
-    if (eligibleGender && searchGender !== eligibleGender) {
+    const turnKey = `${teamOnClock.id}-${currentPickNumber}`;
+    if (
+      eligibleGender &&
+      searchGender &&
+      searchGender !== eligibleGender &&
+      femaleFilterAutoClearedForRef.current !== turnKey
+    ) {
+      femaleFilterAutoClearedForRef.current = turnKey;
       setSearchGender('');
     }
   }, [teamOnClock, isEnforceMinFemaleModeActive, currentPickNumber, searchGender, rosterByTeam, minFemale, availablePlayers, settings?.enforce_min_female_draft]);
