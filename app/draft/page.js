@@ -640,6 +640,26 @@ function DraftPageContent() {
     return count;
   }
 
+  // The instant a team becomes the ONLY team still short (every other
+  // team already capped), no scarcity risk to anyone else remains - so
+  // there's no reason left to let this team delay drafting its female.
+  // Applies regardless of how many females remain in the pool, since
+  // the point isn't protecting against real competition (there is
+  // none), it's closing a strategic-delay loophole: without this, a
+  // team in this exact position could draft nothing but males for as
+  // long as it wants, knowing with certainty a female will still be
+  // sitting there whenever it finally gets around to it.
+  function teamIsOnlyRemainingShortTeam(teamId) {
+    if (!settings?.enforce_min_female_draft) return false;
+    const thisTeamFemaleCount = rosterByTeam[teamId]?.femaleCount ?? 0;
+    if (thisTeamFemaleCount >= minFemale) return false;
+    return teams.every((t) => {
+      if (t.id === teamId) return true;
+      const femaleCount = rosterByTeam[t.id]?.femaleCount ?? 0;
+      return femaleCount >= minFemale;
+    });
+  }
+
   // A short team is only forced into females-only on its genuine last
   // possible turn - the one where skipping a female would mathematically
   // cost it the minimum - not the entire time it's short. Every turn
@@ -651,7 +671,9 @@ function DraftPageContent() {
   // pool-wide check meant a single procrastinating team could slip
   // through undetected during a genuine surplus, since other teams
   // drafting females normally keeps the pool-wide math looking healthy
-  // even while this one team runs out of turns unprotected.
+  // even while this one team runs out of turns unprotected. Layered on
+  // top of the existing last-chance check - either condition alone is
+  // enough to force a female this turn.
   function teamMustDraftFemaleNow(teamId, fromPickNumber) {
     if (!settings?.enforce_min_female_draft) return false;
     const roster = rosterByTeam[teamId];
@@ -660,6 +682,7 @@ function DraftPageContent() {
     if (femaleNeeded <= 0) return false;
     const femalesRemaining = availablePlayers.filter((p) => p.gender === 'F').length;
     if (femalesRemaining === 0) return false;
+    if (teamIsOnlyRemainingShortTeam(teamId)) return true;
     const picksLeft = picksRemainingForTeam(teamId, fromPickNumber);
     return femaleNeeded >= picksLeft;
   }
@@ -918,6 +941,7 @@ function DraftPageContent() {
     const iManageClockTeam = teamOnClock && (profile?.team_id === teamOnClock.id || isProxyForClockTeam);
     if (iManageClockTeam) {
       const mustDraftNow = teamMustDraftFemaleNow(teamOnClock.id, currentPickNumber);
+      const onlyRemainingShortTeam = teamIsOnlyRemainingShortTeam(teamOnClock.id);
       const capped = teamIsFemaleCapped(teamOnClock.id);
       const alreadyQueuedForcedThisPick = femaleReqQueue.some(
         (q) => q.type === 'forced' && q.pickNumber === currentPickNumber
@@ -926,7 +950,12 @@ function DraftPageContent() {
         (q) => q.type === 'satisfied' && q.team?.id === teamOnClock.id
       );
       if (mustDraftNow && femaleReqShownForPickRef.current.forced !== currentPickNumber && !alreadyQueuedForcedThisPick) {
-        newItems.push({ type: 'forced', team: teamOnClock, pickNumber: currentPickNumber });
+        newItems.push({
+          type: 'forced',
+          team: teamOnClock,
+          pickNumber: currentPickNumber,
+          reason: onlyRemainingShortTeam ? 'only_remaining' : 'last_chance',
+        });
       } else if (
         capped &&
         !femaleReqSatisfiedShownTeamsRef.current.has(teamOnClock.id) &&
@@ -2018,7 +2047,7 @@ function DraftPageContent() {
               {current.type === 'forced' && (
                 <>
                   <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: '#0c2340' }}>
-                    Your Next Pick must be a Female
+                    {current.reason === 'only_remaining' ? 'You Are the Only Team Without a Female' : 'Your Next Pick must be a Female'}
                   </p>
                   <p className="text-[13px] m-0" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
                     {ownerByTeam[current.team.id]?.name || 'You'}, your team must select a female player with this draft pick:
@@ -2030,7 +2059,9 @@ function DraftPageContent() {
                     </span>
                   </div>
                   <p className="text-[13px] m-0 mb-3.5" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
-                    Female players are the only players available for selection until you draft one.
+                    {current.reason === 'only_remaining'
+                      ? 'Every other team has already met its female requirement, so you are the only team left that still needs one. Female players are the only players available for selection until you draft one.'
+                      : 'Female players are the only players available for selection until you draft one.'}
                   </p>
                 </>
               )}
@@ -2115,7 +2146,7 @@ function DraftPageContent() {
             </p>
           </div>
 
-          {showDraftOrderPreview && upcomingPicksBlock}
+          {showDraftOrderPreview && !showRandomizingPopup && upcomingPicksBlock}
         </>
       )}
 
@@ -2481,7 +2512,7 @@ function DraftPageContent() {
                                 </div>
                                 <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
                                 <span className="text-[9px] text-faint mt-0.5">
-                                  Rnd {entry.pick.round} . Overall Pick # {getSharedPickNumber(entry.pick.pick_number)}
+                                  Rnd {entry.pick.round} . Pick # {getSharedPickNumber(entry.pick.pick_number)}
                                 </span>
                               </>
                             ) : entry?.kind === 'manual' ? (
@@ -2724,7 +2755,7 @@ function DraftPageContent() {
                                         Skipped
                                       </p>
                                       <p className="text-[9px] m-0" style={{ color: '#8b97a3' }}>
-                                        Overall Pick #{getSharedPickNumber(slot.pickNumber)}
+                                        Pick #{getSharedPickNumber(slot.pickNumber)}
                                       </p>
                                     </>
                                   ) : (
@@ -2869,8 +2900,9 @@ function DraftPageContent() {
             <div className="rounded-md px-3 py-2 mt-2" style={{ background: '#faeeda' }}>
               <p className="text-xs m-0" style={{ color: '#633806' }}>
                 <i className="ti ti-info-circle text-sm" aria-hidden="true" style={{ verticalAlign: -2, marginRight: 4 }} />
-                {teamOnClock.name} must draft a female player this pick to reach the {minFemale}-female minimum — female
-                players are sorted to the front below.
+                {teamIsOnlyRemainingShortTeam(teamOnClock.id)
+                  ? `${teamOnClock.name} is the only team that has not yet met the ${minFemale}-female minimum, so a female player must be drafted this pick — female players are sorted to the front below.`
+                  : `${teamOnClock.name} must draft a female player this pick to reach the ${minFemale}-female minimum — female players are sorted to the front below.`}
               </p>
             </div>
           )}

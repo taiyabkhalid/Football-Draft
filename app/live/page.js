@@ -1172,7 +1172,7 @@ function LiveDraftPageContent() {
           </div>
         </div>
 
-        {showDraftOrderPreview && upcomingPicksBlock}
+        {showDraftOrderPreview && !showRandomizingPopup && upcomingPicksBlock}
       </>
     )}
 
@@ -1975,7 +1975,7 @@ function LiveDraftPageContent() {
                                 </div>
                                 <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
                                 <span className="text-[9px] text-faint mt-0.5">
-                                  Rnd {entry.pick.round} . Overall Pick # {getSharedPickNumber(entry.pick.pick_number)}
+                                  Rnd {entry.pick.round} . Pick # {getSharedPickNumber(entry.pick.pick_number)}
                                 </span>
                               </>
                             ) : entry?.kind === 'manual' ? (
@@ -2223,7 +2223,7 @@ function LiveDraftPageContent() {
                                       Skipped
                                     </p>
                                     <p className="text-[9px] m-0" style={{ color: '#8b97a3' }}>
-                                      Overall Pick #{getSharedPickNumber(slot.pickNumber)}
+                                      Pick #{getSharedPickNumber(slot.pickNumber)}
                                     </p>
                                   </>
                                 ) : (
