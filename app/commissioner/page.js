@@ -67,6 +67,9 @@ export default function CommissionerToolsPage() {
   const [resetDraftConfirming, setResetDraftConfirming] = useState(false);
   const [resettingDraft, setResettingDraft] = useState(false);
   const [resetDraftMessage, setResetDraftMessage] = useState(null);
+  const [showArchivePrompt, setShowArchivePrompt] = useState(false);
+  const [archiveNameInput, setArchiveNameInput] = useState('');
+  const [savingArchive, setSavingArchive] = useState(false);
 
   // Assign / revoke commissioner
   const [commissionerEmail, setCommissionerEmail] = useState('');
@@ -394,6 +397,21 @@ export default function CommissionerToolsPage() {
       setResetDraftConfirming(true);
       return;
     }
+    // Only offer to save when the draft has genuinely completed - a
+    // draft that's still in progress, paused, or never started has no
+    // real results worth preserving, so reset proceeds immediately with
+    // no prompt at all, exactly as it always has.
+    if (draftStatus === 'completed') {
+      const defaultName = `${new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })} - Draft`;
+      setArchiveNameInput(defaultName);
+      setShowArchivePrompt(true);
+      setResetDraftConfirming(false);
+      return;
+    }
+    await performReset();
+  }
+
+  async function performReset() {
     setResettingDraft(true);
     setResetDraftMessage(null);
     const { error } = await supabase.rpc('reset_draft');
@@ -405,6 +423,24 @@ export default function CommissionerToolsPage() {
     }
     setResettingDraft(false);
     setResetDraftConfirming(false);
+  }
+
+  async function handleSaveArchiveAndReset() {
+    setSavingArchive(true);
+    const { error } = await supabase.rpc('save_draft_archive', { p_name: archiveNameInput });
+    setSavingArchive(false);
+    if (error) {
+      setResetDraftMessage({ type: 'error', text: `Could not save the draft archive: ${error.message}` });
+      setShowArchivePrompt(false);
+      return;
+    }
+    setShowArchivePrompt(false);
+    await performReset();
+  }
+
+  async function handleResetWithoutSaving() {
+    setShowArchivePrompt(false);
+    await performReset();
   }
 
   async function handleAssignCommissioner() {
@@ -938,6 +974,58 @@ export default function CommissionerToolsPage() {
               <button onClick={() => setResetDraftConfirming(false)} className="text-[11px] text-muted mt-1.5 underline">
                 Cancel
               </button>
+            )}
+
+            {showArchivePrompt && (
+              <div
+                style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
+                className="flex items-center justify-center px-4"
+              >
+                <div className="bg-white rounded-xl p-5" style={{ maxWidth: 360, width: '100%' }}>
+                  <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: '#0c2340' }}>
+                    Save this draft's results?
+                  </p>
+                  <p className="text-[13px] m-0 mb-3" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
+                    This draft has completed. Would you like to save its results before resetting? Once reset, this
+                    information cannot be recovered unless it's saved now.
+                  </p>
+                  <label className="text-[12px] font-medium block mb-1" style={{ color: '#0c2340' }}>
+                    Draft name
+                  </label>
+                  <input
+                    type="text"
+                    value={archiveNameInput}
+                    onChange={(e) => setArchiveNameInput(e.target.value)}
+                    className="w-full rounded-md px-2.5 py-2 text-[13px] mb-3.5"
+                    style={{ border: '1px solid #d8dde2' }}
+                  />
+                  <button
+                    onClick={handleSaveArchiveAndReset}
+                    disabled={savingArchive}
+                    className="w-full text-center mb-2"
+                    style={{
+                      background: '#185fa5',
+                      color: '#ffffff',
+                      fontWeight: 600,
+                      borderRadius: 8,
+                      padding: '9px 14px',
+                      fontSize: 13,
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {savingArchive ? 'Saving…' : 'Yes, save and reset'}
+                  </button>
+                  <button
+                    onClick={handleResetWithoutSaving}
+                    disabled={savingArchive}
+                    className="w-full text-center"
+                    style={{ background: 'none', border: 'none', color: '#5a6b7d', fontSize: 12, textDecoration: 'underline', cursor: 'pointer' }}
+                  >
+                    No, reset without saving
+                  </button>
+                </div>
+              </div>
             )}
           </div>
           </>

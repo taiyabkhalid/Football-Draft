@@ -23,6 +23,17 @@ export default function ProfilePage() {
 
   const [gmContact, setGmContact] = useState(null);
   const [showWatchDraftModal, setShowWatchDraftModal] = useState(false);
+  const [myArchivedDrafts, setMyArchivedDrafts] = useState([]);
+  const [selectedArchivedDraftId, setSelectedArchivedDraftId] = useState('');
+
+  useEffect(() => {
+    async function loadArchivedDrafts() {
+      const { data, error } = await supabase.rpc('get_my_archived_drafts');
+      if (!error) setMyArchivedDrafts(data || []);
+    }
+    loadArchivedDrafts();
+  }, []);
+
   useEffect(() => {
     if (!team || settings?.draft_status !== 'completed') {
       setGmContact(null);
@@ -542,6 +553,31 @@ export default function ProfilePage() {
                 Continue to Spectator Room
               </a>
             </div>
+          </div>
+        )}
+
+        {myArchivedDrafts.length > 0 && (
+          <div className="rounded-lg border border-line px-3.5 py-3 mb-4">
+            <p className="text-xs font-semibold uppercase tracking-wide m-0 mb-2" style={{ color: '#5a6b7d' }}>
+              Past Draft Results
+            </p>
+            <select
+              value={selectedArchivedDraftId}
+              onChange={(e) => {
+                const id = e.target.value;
+                setSelectedArchivedDraftId(id);
+                if (id) router.push(`/archive/${id}`);
+              }}
+              className="w-full rounded-md px-2.5 py-2 text-[13px]"
+              style={{ border: '1px solid #d8dde2' }}
+            >
+              <option value="">Select a draft to view</option>
+              {myArchivedDrafts.map((d) => (
+                <option key={d.archived_draft_id} value={d.archived_draft_id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 
