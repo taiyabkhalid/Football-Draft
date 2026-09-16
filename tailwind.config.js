@@ -7,8 +7,9 @@
 // valid CSS color value, including one that only resolves at runtime.
 function withOpacitySupport(varName, fallback) {
   return ({ opacityValue }) => {
-    if (opacityValue === undefined) return `var(${varName}, ${fallback})`;
-    return `color-mix(in srgb, var(${varName}, ${fallback}) ${parseFloat(opacityValue) * 100}%, transparent)`;
+    const parsed = opacityValue !== undefined ? parseFloat(opacityValue) : NaN;
+    if (Number.isNaN(parsed)) return `var(${varName}, ${fallback})`;
+    return `color-mix(in srgb, var(${varName}, ${fallback}) ${parsed * 100}%, transparent)`;
   };
 }
 
