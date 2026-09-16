@@ -30,6 +30,8 @@
   --df-error: #c0392b;
   --df-error-bg: #fceded;
   --df-success: #3b6d11;
+  --df-scrollbar-track: #eef0f2;
+  --df-scrollbar-thumb: #b5c2cc;
 }
 
 [data-theme='dark'] {
@@ -55,7 +57,32 @@
   --df-error: #ff5c52;
   --df-error-bg: #3a1414;
   --df-success: #2ee68a;
+  --df-scrollbar-track: #131c27;
+  --df-scrollbar-thumb: #3d4f61;
   background: #060b12;
+  color-scheme: dark;
+}
+
+/* Reusable vertical scrollbar styling for the available-players lists -
+   same tokens as the horizontal Upcoming Picks scrollbar, so both match
+   whichever theme is active. */
+.df-vertical-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--df-scrollbar-thumb) var(--df-scrollbar-track);
+}
+.df-vertical-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.df-vertical-scroll::-webkit-scrollbar-track {
+  background: var(--df-scrollbar-track);
+  border-radius: 4px;
+}
+.df-vertical-scroll::-webkit-scrollbar-thumb {
+  background: var(--df-scrollbar-thumb);
+  border-radius: 4px;
+}
+.df-vertical-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--df-text-faint);
 }
 
 body {
@@ -65,7 +92,7 @@ body {
 input,
 select,
 textarea {
-  @apply bg-white border border-line text-ink rounded-md px-3 py-2 text-sm w-full;
+  @apply bg-df-surface border border-line text-ink rounded-md px-3 py-2 text-sm w-full;
   @apply focus:outline-none focus:ring-2 focus:ring-royal focus:border-transparent;
 }
 
@@ -126,21 +153,21 @@ button {
    there's more to scroll to. */
 .upcoming-picks-scroll {
   scrollbar-width: auto;
-  scrollbar-color: #b5c2cc #eef0f2;
+  scrollbar-color: var(--df-scrollbar-thumb) var(--df-scrollbar-track);
 }
 .upcoming-picks-scroll::-webkit-scrollbar {
   height: 10px;
 }
 .upcoming-picks-scroll::-webkit-scrollbar-track {
-  background: #eef0f2;
+  background: var(--df-scrollbar-track);
   border-radius: 5px;
 }
 .upcoming-picks-scroll::-webkit-scrollbar-thumb {
-  background: #b5c2cc;
+  background: var(--df-scrollbar-thumb);
   border-radius: 5px;
 }
 .upcoming-picks-scroll::-webkit-scrollbar-thumb:hover {
-  background: #8b97a3;
+  background: var(--df-text-faint);
 }
 
 @keyframes pulse-glow {

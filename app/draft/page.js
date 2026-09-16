@@ -1971,7 +1971,7 @@ function DraftPageContent() {
           style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
           className="flex items-center justify-center px-4"
         >
-          <div className="bg-white rounded-xl p-6 text-center" style={{ maxWidth: 300 }}>
+          <div className="bg-df-surface rounded-xl p-6 text-center" style={{ maxWidth: 300 }}>
             <i
               className="ti ti-loader-2 animate-spin-wheel"
               style={{ fontSize: 40, color: 'var(--df-accent)', display: 'inline-block' }}
@@ -1993,7 +1993,7 @@ function DraftPageContent() {
             style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
             className="flex items-center justify-center px-4"
           >
-            <div className="bg-white rounded-xl p-5" style={{ maxWidth: 300, width: '100%' }}>
+            <div className="bg-df-surface rounded-xl p-5" style={{ maxWidth: 300, width: '100%' }}>
               <div className="flex items-center justify-center gap-2 mb-2.5">
                 <i className="ti ti-alert-triangle text-xl flex-shrink-0" style={{ color: 'var(--df-warning-text)' }} aria-hidden="true" />
                 <p className="text-[15px] font-semibold m-0" style={{ color: 'var(--df-text-primary)' }}>
@@ -2055,7 +2055,7 @@ function DraftPageContent() {
             style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
             className="flex items-center justify-center px-4"
           >
-            <div className="bg-white rounded-xl p-5" style={{ maxWidth: 320, width: '100%' }}>
+            <div className="bg-df-surface rounded-xl p-5" style={{ maxWidth: 320, width: '100%' }}>
               {current.type === 'forced' && (
                 <>
                   <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: 'var(--df-text-primary)' }}>
@@ -2431,7 +2431,7 @@ function DraftPageContent() {
                   const isTeamOnClock =
                     teamOnClock?.id === viewingTeamId && (draftStatus === 'in_progress' || draftStatus === 'paused');
                   return (
-                    <div className="bg-white rounded-lg p-3 mb-1">
+                    <div className="bg-df-surface rounded-lg p-3 mb-1">
                       <div className="flex justify-between items-center mb-1">
                         <p className="text-sm font-medium text-ink m-0">{viewedTeam?.name}</p>
                         {viewedTeam?.proxy_email && (
@@ -2470,7 +2470,7 @@ function DraftPageContent() {
                               {isClockSlot ? (
                                 <>
                                   <div
-                                    className="w-8 h-8 rounded-full bg-white flex items-center justify-center"
+                                    className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center"
                                     style={{ border: `2px solid ${teamColor}` }}
                                   >
                                     <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
@@ -2490,7 +2490,7 @@ function DraftPageContent() {
                                 {player.headshot_url ? (
                                   <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
                                 ) : (
-                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                  <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center">
                                     <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                                   </div>
                                 )}
@@ -2506,7 +2506,7 @@ function DraftPageContent() {
                                 {player.headshot_url ? (
                                   <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
                                 ) : (
-                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                  <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center">
                                     <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                                   </div>
                                 )}
@@ -2519,7 +2519,7 @@ function DraftPageContent() {
                               </>
                             ) : entry?.kind === 'skipped' ? (
                               <>
-                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center">
                                   <i className="ti ti-x text-faint text-base" aria-hidden="true" />
                                 </div>
                                 <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
@@ -2532,7 +2532,7 @@ function DraftPageContent() {
                                 {player.headshot_url ? (
                                   <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
                                 ) : (
-                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                  <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center">
                                     <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                                   </div>
                                 )}
@@ -2543,7 +2543,7 @@ function DraftPageContent() {
                               </>
                             ) : (
                               <>
-                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-50">
+                                <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center opacity-50">
                                   <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                                 </div>
                                 <p className="text-[9px] text-faint m-0 mt-1" style={{ fontStyle: 'italic' }}>
@@ -2579,7 +2579,7 @@ function DraftPageContent() {
                     </button>
                   ))}
                 </div>
-                <div className="bg-white rounded-lg p-3">
+                <div className="bg-df-surface rounded-lg p-3">
                   <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
                     {roundSlots.map((slot) => {
                       const isSkippedPick = slot.pick && !slot.pick.player_id;
@@ -2607,7 +2607,7 @@ function DraftPageContent() {
                                   className="w-8 h-8 rounded-full object-cover"
                                 />
                               ) : (
-                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center">
                                   <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                                 </div>
                               )}
@@ -2618,7 +2618,7 @@ function DraftPageContent() {
                             </>
                           ) : isSkippedPick ? (
                             <>
-                              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                              <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center">
                                 <i className="ti ti-x text-faint text-base" aria-hidden="true" />
                               </div>
                               <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
@@ -2626,7 +2626,7 @@ function DraftPageContent() {
                           ) : isClockSlot ? (
                             <>
                               <div
-                                className="w-8 h-8 rounded-full bg-white flex items-center justify-center"
+                                className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center"
                                 style={{ border: `2px solid ${teamColor}` }}
                               >
                                 <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
@@ -2643,7 +2643,7 @@ function DraftPageContent() {
                             </>
                           ) : (
                             <>
-                              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-50">
+                              <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center opacity-50">
                                 <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                               </div>
                               <p className="text-[9px] text-faint m-0 mt-1" style={{ fontStyle: 'italic' }}>
@@ -2667,7 +2667,7 @@ function DraftPageContent() {
 
             {rosterViewMode === 'board' && (
               <div
-                className="bg-white rounded-lg p-3"
+                className="bg-df-surface rounded-lg p-3"
                 style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '65vh' }}
               >
                 <table className="border-collapse text-xs" style={{ width: '100%' }}>
@@ -2718,7 +2718,7 @@ function DraftPageContent() {
                         const owner = ownerByTeam[t.id];
                         return (
                           <tr key={t.id} className="border-t" style={{ borderColor: 'var(--df-border)' }}>
-                            <td className="p-2 sticky left-0 bg-white align-top">
+                            <td className="p-2 sticky left-0 bg-df-surface align-top">
                               <div className="flex items-center gap-1.5">
                                 <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={12} />
                                 <span className="font-medium text-ink">{t.name}</span>
@@ -2750,7 +2750,7 @@ function DraftPageContent() {
                                           className="w-7 h-7 rounded-full object-cover mx-auto"
                                         />
                                       ) : (
-                                        <div className="w-7 h-7 rounded-full bg-white mx-auto flex items-center justify-center">
+                                        <div className="w-7 h-7 rounded-full bg-df-surface mx-auto flex items-center justify-center">
                                           <i className="ti ti-user text-faint text-sm" aria-hidden="true" />
                                         </div>
                                       )}
@@ -3009,7 +3009,7 @@ function DraftPageContent() {
           </div>
 
           {leftColumnTab === 'available' && (
-          <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
+          <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1 df-vertical-scroll">
             {boardList.map((p) => {
               const isDrafted = !!p.team_id;
               const isInactive = p.is_active === false;
@@ -3073,7 +3073,7 @@ function DraftPageContent() {
                 Tap the star on any player card to add them to your rankings.
               </p>
             ) : (
-              <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
+              <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1 df-vertical-scroll">
                 {(() => {
                   const draftedEntries = rankedPlayersOrdered.filter((r) => r.player.team_id);
                   const availableEntries = dragPreviewOrder
@@ -3278,7 +3278,7 @@ function DraftPageContent() {
                         className="w-11 h-11 rounded-full object-cover flex-shrink-0"
                       />
                     ) : (
-                      <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center flex-shrink-0">
+                      <div className="w-11 h-11 rounded-full bg-df-surface flex items-center justify-center flex-shrink-0">
                         <i className="ti ti-user text-faint text-2xl" aria-hidden="true" />
                       </div>
                     )}
@@ -3444,7 +3444,7 @@ function DraftPageContent() {
                         </p>
                       </div>
                     )}
-                  <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
+                  <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1 df-vertical-scroll">
                     {rosterByTeam[yourTeamPanelTeamId].players
                       .slice()
                       .sort((a, b) => {
@@ -3541,7 +3541,7 @@ function DraftPageContent() {
 
       {rankingToast && (
         <div
-          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl px-6 py-4 flex items-center gap-3"
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-df-surface rounded-xl px-6 py-4 flex items-center gap-3"
           style={{ boxShadow: '0 12px 32px rgba(12,35,64,0.3)', zIndex: 100 }}
         >
           <StarIcon filled size={22} />
@@ -3579,7 +3579,7 @@ function DraftPageContent() {
           onClick={() => setPendingRankingDraft(null)}
         >
           <div
-            className="bg-white rounded-xl p-5"
+            className="bg-df-surface rounded-xl p-5"
             style={{ maxWidth: 320, width: '100%' }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -3618,7 +3618,7 @@ function DraftPageContent() {
         return (
           <div
             key={id}
-            className="fixed rounded-xl bg-white border border-line"
+            className="fixed rounded-xl bg-df-surface border border-line"
             style={{
               width: 290,
               right: 16 + idx * 20,
@@ -3744,7 +3744,7 @@ function DraftPageContent() {
           style={{ background: 'rgba(12,35,64,0.55)', zIndex: 100 }}
           onClick={() => setShowSkipConfirm(false)}
         >
-          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-xl p-5 max-w-sm w-full">
+          <div onClick={(e) => e.stopPropagation()} className="bg-df-surface rounded-xl p-5 max-w-sm w-full">
             <p className="text-sm font-semibold m-0 mb-1" style={{ color: 'var(--df-text-primary)' }}>
               Skip this pick?
             </p>
@@ -3783,7 +3783,7 @@ function DraftPageContent() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-xl p-6 text-center max-w-sm w-full"
+            className="bg-df-surface rounded-xl p-6 text-center max-w-sm w-full"
           >
             <div
               className="w-14 h-14 rounded-full mx-auto flex items-center justify-center mb-3"

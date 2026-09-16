@@ -29,6 +29,36 @@ precisely.
 | `--df-error` | `#c0392b` | Error text/state |
 | `--df-success` | `#3b6d11` | Success text/state |
 
+## Original `tailwind.config.js` colors (before dark mode)
+
+These custom Tailwind color names were plain hardcoded hex values before
+dark mode was introduced. To fully revert, replace the current
+`withOpacitySupport(...)` function calls in `tailwind.config.js` with
+these exact original values:
+
+```js
+colors: {
+  navy: '#0c2340',
+  royal: {
+    DEFAULT: '#185fa5',
+    soft: '#4a86c4',
+    pale: '#e6f1fb',
+  },
+  surface: '#f1f3f6',
+  line: '#d8dde2',
+  ink: '#0c2340',
+  muted: '#5a6b7d',
+  faint: '#8b97a3',
+  danger: '#c0392b',
+},
+```
+
+Note: the `'df-surface'` color and the `withOpacitySupport` helper
+function itself were both added specifically for dark mode and have no
+"original" equivalent — removing them entirely is part of a full revert,
+along with changing `bg-df-surface` back to `bg-white` wherever it was
+substituted in (see the source files for exact locations).
+
 ## How to fully revert to light mode only
 
 If dark mode is ever removed entirely: replace every `var(--df-*)`
