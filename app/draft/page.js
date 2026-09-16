@@ -134,6 +134,12 @@ function DraftPageContent() {
     scrollRostersIntoView();
   }
   const [openProfileIds, setOpenProfileIds] = useState([]);
+  // Each open player card can be dragged independently - this maps
+  // playerId -> {x, y} pixel offset from its default stacked position.
+  // A ref (not state) tracks the currently-active drag, since mousemove
+  // fires far too often to put through React state on every event.
+  const [cardDragOffsets, setCardDragOffsets] = useState({});
+  const activeDragRef = useRef(null);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const prevDraftStatusRef = useRef(null);
 
@@ -274,6 +280,43 @@ function DraftPageContent() {
   // whenever dark mode is active, so the result stays a genuinely dark,
   // team-tinted card rather than a bright pastel one regardless of theme.
   const isDarkMode = Boolean(profile?.dark_mode_enabled);
+  function startCardDrag(playerId, clientX, clientY) {
+    const current = cardDragOffsets[playerId] || { x: 0, y: 0 };
+    activeDragRef.current = { playerId, startX: clientX, startY: clientY, baseX: current.x, baseY: current.y };
+  }
+
+  useEffect(() => {
+    function applyMove(clientX, clientY) {
+      const drag = activeDragRef.current;
+      if (!drag) return;
+      const dx = clientX - drag.startX;
+      const dy = clientY - drag.startY;
+      setCardDragOffsets((prev) => ({ ...prev, [drag.playerId]: { x: drag.baseX + dx, y: drag.baseY + dy } }));
+    }
+    function handleMouseMove(e) {
+      applyMove(e.clientX, e.clientY);
+    }
+    function handleTouchMove(e) {
+      if (activeDragRef.current && e.touches[0]) {
+        e.preventDefault();
+        applyMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }
+    function handleEnd() {
+      activeDragRef.current = null;
+    }
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleEnd);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+  }, []);
+
   function teamTint(hex, amount) {
     return lightenColor(hex, amount, isDarkMode ? [23, 33, 46] : [255, 255, 255]);
   }
@@ -404,6 +447,11 @@ function DraftPageContent() {
   }
   function closeProfile(playerId) {
     setOpenProfileIds((ids) => ids.filter((id) => id !== playerId));
+    setCardDragOffsets((prev) => {
+      const next = { ...prev };
+      delete next[playerId];
+      return next;
+    });
   }
 
   const playersById = useMemo(() => Object.fromEntries(players.map((p) => [p.id, p])), [players]);
@@ -1982,7 +2030,7 @@ function DraftPageContent() {
           style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
           className="flex items-center justify-center px-4"
         >
-          <div className="bg-df-surface rounded-xl p-6 text-center" style={{ maxWidth: 300 }}>
+          <div className="bg-df-surface rounded-xl p-6 text-center df-modal-card" style={{ maxWidth: 300 }}>
             <i
               className="ti ti-loader-2 animate-spin-wheel"
               style={{ fontSize: 40, color: 'var(--df-accent)', display: 'inline-block' }}
@@ -2004,7 +2052,7 @@ function DraftPageContent() {
             style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
             className="flex items-center justify-center px-4"
           >
-            <div className="bg-df-surface rounded-xl p-5" style={{ maxWidth: 300, width: '100%' }}>
+            <div className="bg-df-surface rounded-xl p-5 df-modal-card" style={{ maxWidth: 300, width: '100%' }}>
               <div className="flex items-center justify-center gap-2 mb-2.5">
                 <i className="ti ti-alert-triangle text-xl flex-shrink-0" style={{ color: 'var(--df-warning-text)' }} aria-hidden="true" />
                 <p className="text-[15px] font-semibold m-0" style={{ color: 'var(--df-text-primary)' }}>
@@ -2066,7 +2114,7 @@ function DraftPageContent() {
             style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
             className="flex items-center justify-center px-4"
           >
-            <div className="bg-df-surface rounded-xl p-5" style={{ maxWidth: 320, width: '100%' }}>
+            <div className="bg-df-surface rounded-xl p-5 df-modal-card" style={{ maxWidth: 320, width: '100%' }}>
               {current.type === 'forced' && (
                 <>
                   <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: 'var(--df-text-primary)' }}>
@@ -2307,10 +2355,6 @@ function DraftPageContent() {
           )}
 
           {upcomingPicksBlock}
-
-          <div className="border-t border-line mx-4 sm:mx-5 mt-1" />
-
-          <div className="border-t border-line mx-4 sm:mx-5" />
 
           {actionError && (
             <div className="bg-danger/10 mx-4 sm:mx-5 mt-3 rounded-md px-3 py-2">
@@ -3590,7 +3634,7 @@ function DraftPageContent() {
           onClick={() => setPendingRankingDraft(null)}
         >
           <div
-            className="bg-df-surface rounded-xl p-5"
+            className="bg-df-surface rounded-xl p-5 df-modal-card"
             style={{ maxWidth: 320, width: '100%' }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -3629,18 +3673,23 @@ function DraftPageContent() {
         return (
           <div
             key={id}
-            className="fixed rounded-xl bg-df-surface border border-line"
+            className="fixed rounded-xl bg-df-surface border border-line df-modal-card"
             style={{
               width: 290,
-              right: 16 + idx * 20,
-              bottom: 16 + idx * 20,
+              right: 16 + idx * 20 - (cardDragOffsets[id]?.x || 0),
+              bottom: 16 + idx * 20 - (cardDragOffsets[id]?.y || 0),
               zIndex: 60 + idx,
               maxHeight: '75vh',
               overflowY: 'auto',
               boxShadow: '0 8px 24px rgba(12,35,64,0.25)',
             }}
           >
-            <div className="flex items-start justify-between gap-2 px-4 pt-3.5 pb-2 border-b border-line">
+            <div
+              onMouseDown={(e) => startCardDrag(id, e.clientX, e.clientY)}
+              onTouchStart={(e) => e.touches[0] && startCardDrag(id, e.touches[0].clientX, e.touches[0].clientY)}
+              className="flex items-start justify-between gap-2 px-4 pt-3.5 pb-2 border-b border-line"
+              style={{ cursor: 'move' }}
+            >
               <div className="flex gap-2.5 items-center min-w-0">
                 {p.headshot_url ? (
                   <img src={p.headshot_url} alt={p.full_name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
@@ -3755,7 +3804,7 @@ function DraftPageContent() {
           style={{ background: 'rgba(12,35,64,0.55)', zIndex: 100 }}
           onClick={() => setShowSkipConfirm(false)}
         >
-          <div onClick={(e) => e.stopPropagation()} className="bg-df-surface rounded-xl p-5 max-w-sm w-full">
+          <div onClick={(e) => e.stopPropagation()} className="bg-df-surface rounded-xl p-5 max-w-sm w-full df-modal-card">
             <p className="text-sm font-semibold m-0 mb-1" style={{ color: 'var(--df-text-primary)' }}>
               Skip this pick?
             </p>
@@ -3794,7 +3843,7 @@ function DraftPageContent() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-df-surface rounded-xl p-6 text-center max-w-sm w-full"
+            className="bg-df-surface rounded-xl p-6 text-center max-w-sm w-full df-modal-card"
           >
             <div
               className="w-14 h-14 rounded-full mx-auto flex items-center justify-center mb-3"

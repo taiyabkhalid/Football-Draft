@@ -85,6 +85,17 @@
   background: var(--df-text-faint);
 }
 
+/* Every modal/popup card on the draft page uses this - invisible in light
+   mode (already has strong contrast against its overlay), but a bright,
+   clearly visible border in dark mode, so a modal never blends into the
+   darkened backdrop sitting behind it. */
+.df-modal-card {
+  border: 2px solid transparent;
+}
+[data-theme='dark'] .df-modal-card {
+  border: 2px solid #e2e8f0;
+}
+
 body {
   background: #ffffff;
 }
