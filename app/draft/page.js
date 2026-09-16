@@ -149,7 +149,7 @@ function DraftPageContent() {
       }
       const { data: profileRow } = await supabase
         .from('profiles')
-        .select('role, team_id, is_primary, has_seen_gm_tour')
+        .select('role, team_id, is_primary, has_seen_gm_tour, dark_mode_enabled')
         .eq('id', user.id)
         .maybeSingle();
       if (!profileRow) {
@@ -183,7 +183,7 @@ function DraftPageContent() {
         }
         const { data: newProfileRow } = await supabase
           .from('profiles')
-          .select('role, team_id, is_primary, has_seen_gm_tour')
+          .select('role, team_id, is_primary, has_seen_gm_tour, dark_mode_enabled')
           .eq('id', user.id)
           .maybeSingle();
         setProfile(newProfileRow);
@@ -1274,30 +1274,30 @@ function DraftPageContent() {
       title: 'This box is your clock',
       body: "It shows who's on the clock, their pick, and how much time is left to draft.",
       visual: (
-        <div style={{ width: 260, background: '#185fa5', borderRadius: 10, padding: 12, textAlign: 'left', position: 'relative' }}>
+        <div style={{ width: 260, background: 'var(--df-accent)', borderRadius: 10, padding: 12, textAlign: 'left', position: 'relative' }}>
           <p style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'rgba(255,255,255,0.75)', margin: '0 0 4px' }}>
             On the clock
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <FootballIcon color="#ffffff" size={16} />
+            <FootballIcon color="var(--df-surface)" size={16} />
             {/* Deliberately a fixed example, not the viewer's real team - this
                 slide is a generic illustration of what the box looks like,
                 not a live readout, so it stays simple and never needs to be
                 accurate to any specific person or moment. */}
-            <p style={{ fontSize: 13, fontWeight: 600, color: '#ffffff', margin: 0 }}>Storm 2.0</p>
+            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--df-surface)', margin: 0 }}>Storm 2.0</p>
           </div>
           <p style={{ fontSize: 10, margin: '6px 0 0', color: 'rgba(255,255,255,0.75)' }}>Round 2 &middot; Pick 4</p>
           <div style={{ position: 'absolute', top: 10, right: 10, textAlign: 'right' }}>
             <p style={{ fontSize: 9, margin: 0, color: 'rgba(255,255,255,0.75)' }}>Time left</p>
-            <p style={{ fontSize: 18, fontWeight: 600, margin: 0, color: '#ffffff' }}>0:33</p>
+            <p style={{ fontSize: 18, fontWeight: 600, margin: 0, color: 'var(--df-surface)' }}>0:33</p>
           </div>
         </div>
       ),
     },
     {
       icon: 'ti-star',
-      iconBg: '#faf3e3',
-      iconColor: '#f3c37a',
+      iconBg: 'var(--df-warning-bg-alt)',
+      iconColor: 'var(--df-warning-accent)',
       title: 'Star and rank your top picks now',
       body: 'Build a ranked list before the clock even starts \u2014 find your "starred" list under My Rankings.',
     },
@@ -1888,9 +1888,9 @@ function DraftPageContent() {
 
   if (!authChecked || !settings) {
     return (
-      <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
+      <main style={{ background: 'var(--df-surface)', minHeight: '100vh', paddingBottom: 48 }}>
         <BrandHeader pageLabel="Live draft" />
-        <p style={{ padding: 40, textAlign: 'center', color: '#5a6b7d', fontSize: 13 }}>Loading draft room…</p>
+        <p style={{ padding: 40, textAlign: 'center', color: 'var(--df-text-muted)', fontSize: 13 }}>Loading draft room…</p>
       </main>
     );
   }
@@ -1906,7 +1906,7 @@ function DraftPageContent() {
         onClick={() => setUpcomingPicksOpen((o) => !o)}
         className="w-full flex items-center justify-between"
       >
-        <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
+        <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: 'var(--df-text-muted)' }}>
           Upcoming picks
         </p>
         <i className={`ti ti-chevron-${upcomingPicksOpen ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
@@ -1914,7 +1914,7 @@ function DraftPageContent() {
       {upcomingPicksOpen && (
         <div className="flex gap-2 overflow-x-auto pb-1 pt-2 upcoming-picks-scroll">
           {upcomingPicks.map((n) => {
-            const color = n.team?.team_color || '#0074ff';
+            const color = n.team?.team_color || 'var(--df-accent-secondary)';
             return (
               <button
                 key={n.pickNumber}
@@ -1927,11 +1927,11 @@ function DraftPageContent() {
                   width: 100,
                   height: 52,
                   background: n.isSoonestMine ? lightenColor(color, 0.7) : lightenColor(color, 0.85),
-                  color: '#0c2340',
+                  color: 'var(--df-text-primary)',
                   border: n.isSoonestMine
                     ? `2px solid ${color}`
                     : n.isMine
-                    ? '3px solid #5a6b7d'
+                    ? '3px solid var(--df-text-muted)'
                     : 'none',
                   cursor: n.team ? 'pointer' : 'default',
                   transition: 'background 0.4s, border 0.4s',
@@ -1947,7 +1947,7 @@ function DraftPageContent() {
                   <FootballIcon color={color} size={11} />
                   <span className="truncate">{n.team?.name || '—'}</span>
                 </span>
-                <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
+                <span className="text-[10px]" style={{ color: 'var(--df-text-muted)' }}>
                   Rnd {n.round}{n.round > maxNormalRound ? ' Ext' : ''} . Pick {allSlots.filter((s) => s.round === n.round).findIndex((s) => s.pickNumber === n.pickNumber) + 1}
                 </span>
               </button>
@@ -1959,7 +1959,7 @@ function DraftPageContent() {
   );
 
   return (
-    <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
+    <main data-theme={profile?.dark_mode_enabled ? 'dark' : 'light'} style={{ background: 'var(--df-surface)', minHeight: '100vh', paddingBottom: 48 }}>
       <BrandHeader
         pageLabel={draftStatus === 'completed' ? 'Draft results' : draftStatus === 'paused' ? 'Draft paused' : 'Live draft'}
         liveIndicator={draftStatus === 'in_progress'}
@@ -1974,10 +1974,10 @@ function DraftPageContent() {
           <div className="bg-white rounded-xl p-6 text-center" style={{ maxWidth: 300 }}>
             <i
               className="ti ti-loader-2 animate-spin-wheel"
-              style={{ fontSize: 40, color: '#185fa5', display: 'inline-block' }}
+              style={{ fontSize: 40, color: 'var(--df-accent)', display: 'inline-block' }}
               aria-hidden="true"
             />
-            <p className="text-sm font-semibold m-0 mt-3" style={{ color: '#0c2340' }}>
+            <p className="text-sm font-semibold m-0 mt-3" style={{ color: 'var(--df-text-primary)' }}>
               The draft order is being randomized
             </p>
           </div>
@@ -1987,7 +1987,7 @@ function DraftPageContent() {
       {scarcityPopupQueue.length > 0 && (() => {
         const current = scarcityPopupQueue[0];
         const team = teamsById[current.teamId];
-        const teamColor = team?.team_color || '#0074ff';
+        const teamColor = team?.team_color || 'var(--df-accent-secondary)';
         return (
           <div
             style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
@@ -1995,8 +1995,8 @@ function DraftPageContent() {
           >
             <div className="bg-white rounded-xl p-5" style={{ maxWidth: 300, width: '100%' }}>
               <div className="flex items-center justify-center gap-2 mb-2.5">
-                <i className="ti ti-alert-triangle text-xl flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
-                <p className="text-[15px] font-semibold m-0" style={{ color: '#0c2340' }}>
+                <i className="ti ti-alert-triangle text-xl flex-shrink-0" style={{ color: 'var(--df-warning-text)' }} aria-hidden="true" />
+                <p className="text-[15px] font-semibold m-0" style={{ color: 'var(--df-text-primary)' }}>
                   Female players running low
                 </p>
               </div>
@@ -2008,7 +2008,7 @@ function DraftPageContent() {
                   {team?.name || 'Your team'}
                 </p>
               </div>
-              <p className="text-[13px] m-0 mb-4" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
+              <p className="text-[13px] m-0 mb-4" style={{ color: 'var(--df-text-muted)', lineHeight: 1.6 }}>
                 Only {current.femalesRemainingInPool} female player{current.femalesRemainingInPool === 1 ? '' : 's'} left in the pool,
                 with {current.picksUntilNextTurn} pick{current.picksUntilNextTurn === 1 ? '' : 's'} before your next turn -
                 you haven't drafted one yet.
@@ -2017,8 +2017,8 @@ function DraftPageContent() {
                 onClick={dismissScarcityPopup}
                 className="w-full text-center mb-2.5"
                 style={{
-                  background: '#185fa5',
-                  color: '#ffffff',
+                  background: 'var(--df-accent)',
+                  color: 'var(--df-surface)',
                   fontWeight: 600,
                   borderRadius: 8,
                   padding: '9px 14px',
@@ -2035,7 +2035,7 @@ function DraftPageContent() {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#5a6b7d',
+                  color: 'var(--df-text-muted)',
                   fontSize: 12,
                   textDecoration: 'underline',
                   cursor: 'pointer',
@@ -2058,19 +2058,19 @@ function DraftPageContent() {
             <div className="bg-white rounded-xl p-5" style={{ maxWidth: 320, width: '100%' }}>
               {current.type === 'forced' && (
                 <>
-                  <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: '#0c2340' }}>
+                  <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: 'var(--df-text-primary)' }}>
                     {current.reason === 'only_remaining' ? 'You Are the Only Team Without a Female' : 'Your Next Pick must be a Female'}
                   </p>
-                  <p className="text-[13px] m-0" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
+                  <p className="text-[13px] m-0" style={{ color: 'var(--df-text-muted)', lineHeight: 1.6 }}>
                     {ownerByTeam[current.team.id]?.name || 'You'}, your team must select a female player with this draft pick:
                   </p>
                   <div className="flex items-center gap-1.5" style={{ margin: '8px 0 12px' }}>
-                    <FootballIcon color={current.team.team_color || '#0074ff'} size={14} />
-                    <span className="text-[13px] font-semibold" style={{ color: current.team.team_color || '#0074ff' }}>
+                    <FootballIcon color={current.team.team_color || 'var(--df-accent-secondary)'} size={14} />
+                    <span className="text-[13px] font-semibold" style={{ color: current.team.team_color || 'var(--df-accent-secondary)' }}>
                       {current.team.name}
                     </span>
                   </div>
-                  <p className="text-[13px] m-0 mb-3.5" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
+                  <p className="text-[13px] m-0 mb-3.5" style={{ color: 'var(--df-text-muted)', lineHeight: 1.6 }}>
                     {current.reason === 'only_remaining'
                       ? 'Every other team has already met its female requirement, so you are the only team left that still needs one. Female players are the only players available for selection until you draft one.'
                       : 'Female players are the only players available for selection until you draft one.'}
@@ -2079,14 +2079,14 @@ function DraftPageContent() {
               )}
               {current.type === 'satisfied' && (
                 <>
-                  <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: '#0c2340' }}>
+                  <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: 'var(--df-text-primary)' }}>
                     You&apos;ve Met Your Female Minimum
                   </p>
-                  <p className="text-[13px] m-0" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
-                    <span style={{ fontWeight: 600, color: current.team.team_color || '#0074ff' }}>{current.team.name}</span> has enough
+                  <p className="text-[13px] m-0" style={{ color: 'var(--df-text-muted)', lineHeight: 1.6 }}>
+                    <span style={{ fontWeight: 600, color: current.team.team_color || 'var(--df-accent-secondary)' }}>{current.team.name}</span> has enough
                     female players for now.
                   </p>
-                  <p className="text-[13px] m-0 mb-3.5" style={{ color: '#5a6b7d', lineHeight: 1.6, marginTop: 6 }}>
+                  <p className="text-[13px] m-0 mb-3.5" style={{ color: 'var(--df-text-muted)', lineHeight: 1.6, marginTop: 6 }}>
                     Female players are being reserved for teams that still need one. You can draft female players again once they have
                     met their minimum.
                   </p>
@@ -2094,19 +2094,19 @@ function DraftPageContent() {
               )}
               {current.type === 'forfeited' && (
                 <>
-                  <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: '#0c2340' }}>
+                  <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: 'var(--df-text-primary)' }}>
                     Pick Automatically Forfeited
                   </p>
-                  <p className="text-[13px] m-0" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
+                  <p className="text-[13px] m-0" style={{ color: 'var(--df-text-muted)', lineHeight: 1.6 }}>
                     Your team
                   </p>
                   <div className="flex items-center gap-1.5" style={{ margin: '4px 0 12px' }}>
-                    <FootballIcon color={current.team?.team_color || '#0074ff'} size={14} />
-                    <span className="text-[13px] font-semibold" style={{ color: current.team?.team_color || '#0074ff' }}>
+                    <FootballIcon color={current.team?.team_color || 'var(--df-accent-secondary)'} size={14} />
+                    <span className="text-[13px] font-semibold" style={{ color: current.team?.team_color || 'var(--df-accent-secondary)' }}>
                       {current.team?.name}
                     </span>
                   </div>
-                  <p className="text-[13px] m-0 mb-3.5" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
+                  <p className="text-[13px] m-0 mb-3.5" style={{ color: 'var(--df-text-muted)', lineHeight: 1.6 }}>
                     has already met its roster and female minimums, and no eligible players remained for this pick -
                     it was automatically forfeited so the draft could continue.
                   </p>
@@ -2116,8 +2116,8 @@ function DraftPageContent() {
                 onClick={dismissFemaleReqNotification}
                 className="w-full text-center"
                 style={{
-                  background: '#185fa5',
-                  color: '#ffffff',
+                  background: 'var(--df-accent)',
+                  color: 'var(--df-surface)',
                   fontWeight: 600,
                   borderRadius: 8,
                   padding: '9px 14px',
@@ -2138,17 +2138,17 @@ function DraftPageContent() {
           <div
             ref={stickyHeaderRef}
             className="px-4 sm:px-5 pt-4 pb-3"
-            style={{ position: 'sticky', top: 0, zIndex: 30, background: '#ffffff', boxShadow: '0 2px 6px rgba(12,35,64,0.08)' }}
+            style={{ position: 'sticky', top: 0, zIndex: 30, background: 'var(--df-surface)', boxShadow: '0 2px 6px rgba(12,35,64,0.08)' }}
           >
             <div className="flex justify-center">
               <div
                 className="rounded-lg p-3 flex flex-col items-center justify-center"
-                style={{ background: '#185fa5', width: '100%', maxWidth: 320 }}
+                style={{ background: 'var(--df-accent)', width: '100%', maxWidth: 320 }}
               >
                 <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
                   Draft starts in
                 </p>
-                <p className="text-2xl font-semibold m-0" style={{ color: '#ffffff', letterSpacing: '0.03em' }}>
+                <p className="text-2xl font-semibold m-0" style={{ color: 'var(--df-surface)', letterSpacing: '0.03em' }}>
                   {draftStartCountdown}
                 </p>
               </div>
@@ -2167,7 +2167,7 @@ function DraftPageContent() {
           {/* Previous / current / next strip — frozen at top so GMs can always see the clock */}
           <div
             ref={stickyHeaderRef}
-            style={{ position: 'sticky', top: 0, zIndex: 30, background: '#ffffff', boxShadow: '0 2px 6px rgba(12,35,64,0.08)' }}
+            style={{ position: 'sticky', top: 0, zIndex: 30, background: 'var(--df-surface)', boxShadow: '0 2px 6px rgba(12,35,64,0.08)' }}
           >
           <div className="flex flex-col sm:flex-row gap-2 px-4 sm:px-5 pt-4 pb-3">
             <div className="flex-1 bg-surface rounded-lg p-3">
@@ -2175,7 +2175,7 @@ function DraftPageContent() {
               {previousPick ? (
                 <>
                   <div className="flex items-center gap-2">
-                    <FootballIcon color={teamsById[previousPick.team_id]?.team_color || '#0074ff'} size={16} />
+                    <FootballIcon color={teamsById[previousPick.team_id]?.team_color || 'var(--df-accent-secondary)'} size={16} />
                     <p className="text-xs text-ink m-0 truncate">
                       {previousPick.player_id
                         ? `${playersById[previousPick.player_id]?.full_name || 'Unknown'} — ${teamsById[previousPick.team_id]?.name || ''}`
@@ -2192,15 +2192,15 @@ function DraftPageContent() {
             </div>
             <div
               className={`flex-1 rounded-lg p-3 flex items-center justify-between gap-2 ${clockUrgent ? 'animate-pulse' : ''}`}
-              style={{ background: draftStatus === 'paused' ? '#854f0b' : clockUrgent ? '#c0392b' : '#185fa5' }}
+              style={{ background: draftStatus === 'paused' ? 'var(--df-warning-text)' : clockUrgent ? 'var(--df-error)' : 'var(--df-accent)' }}
             >
               <div className="min-w-0">
                 <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
                   {draftStatus === 'paused' ? 'On the clock \u00b7 paused' : 'On the clock'}
                 </p>
                 <div className="flex items-center gap-2">
-                  <FootballIcon color="#ffffff" size={16} />
-                  <p className="text-[13px] font-semibold truncate m-0" style={{ color: '#ffffff' }}>
+                  <FootballIcon color="var(--df-surface)" size={16} />
+                  <p className="text-[13px] font-semibold truncate m-0" style={{ color: 'var(--df-surface)' }}>
                     {teamOnClock?.name || '—'}
                   </p>
                 </div>
@@ -2208,7 +2208,7 @@ function DraftPageContent() {
                   Round {currentRound} &middot; Pick {allSlots.filter((s) => s.round === currentRound).findIndex((s) => s.pickNumber === currentPickNumber) + 1}
                 </p>
                 {canDraft && (
-                  <p className="text-xs font-semibold m-0 mt-1" style={{ color: '#ffffff' }}>
+                  <p className="text-xs font-semibold m-0 mt-1" style={{ color: 'var(--df-surface)' }}>
                     Drafting for: {teamOnClock?.name}
                   </p>
                 )}
@@ -2224,10 +2224,10 @@ function DraftPageContent() {
                     >
                       <i
                         className={`ti ${draftStatus === 'paused' ? 'ti-player-play' : 'ti-player-pause'} text-sm`}
-                        style={{ color: '#ffffff' }}
+                        style={{ color: 'var(--df-surface)' }}
                         aria-hidden="true"
                       />
-                      <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: '#ffffff' }}>
+                      <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: 'var(--df-surface)' }}>
                         {draftStatus === 'paused' ? 'Resume Draft' : 'Pause Draft'}
                       </span>
                     </button>
@@ -2235,15 +2235,15 @@ function DraftPageContent() {
                       onClick={() => setShowSkipConfirm(true)}
                       disabled={draftStatus === 'paused'}
                       className="rounded-md px-2 py-1.5 flex items-center justify-center"
-                      style={{ background: '#faeeda', border: 'none', width: 112 }}
+                      style={{ background: 'var(--df-warning-bg)', border: 'none', width: 112 }}
                     >
-                      <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: '#854f0b' }}>
+                      <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: 'var(--df-warning-text)' }}>
                         Skip Pick &raquo;
                       </span>
                     </button>
                   </div>
                 )}
-                <p className="text-xl font-medium" style={{ color: '#ffffff' }}>
+                <p className="text-xl font-medium" style={{ color: 'var(--df-surface)' }}>
                   {timerDisplay}
                 </p>
               </div>
@@ -2251,7 +2251,7 @@ function DraftPageContent() {
             <div className="flex-1 bg-surface rounded-lg p-3">
               <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Next up</p>
               <div className="flex items-center gap-2">
-                <FootballIcon color={teamNextOnClock?.team_color || '#0074ff'} size={16} />
+                <FootballIcon color={teamNextOnClock?.team_color || 'var(--df-accent-secondary)'} size={16} />
                 <p className="text-xs text-ink m-0 truncate">{teamNextOnClock?.name || '—'}</p>
               </div>
               {teamNextOnClock && (
@@ -2265,16 +2265,16 @@ function DraftPageContent() {
             <div className="px-4 sm:px-5 mt-3 pb-3">
               <div
                 className="w-full rounded-lg px-3 py-2.5 flex items-center gap-2"
-                style={{ background: draftStatus === 'paused' ? '#854f0b' : '#c0392b' }}
+                style={{ background: draftStatus === 'paused' ? 'var(--df-warning-text)' : 'var(--df-error)' }}
               >
                 <i
                   className={`ti ${draftStatus === 'paused' ? 'ti-player-pause' : 'ti-alert-triangle'} text-base flex-shrink-0 ${
                     draftStatus === 'in_progress' ? 'animate-pulse' : ''
                   }`}
-                  style={{ color: '#ffffff' }}
+                  style={{ color: 'var(--df-surface)' }}
                   aria-hidden="true"
                 />
-                <p className="text-xs font-medium m-0" style={{ color: '#ffffff' }}>
+                <p className="text-xs font-medium m-0" style={{ color: 'var(--df-surface)' }}>
                   {draftStatus === 'paused'
                     ? `The draft is paused, but you're on the clock${isProxyForClockTeam ? ` for ${teamOnClock?.name}` : ''} - get ready for when it resumes.`
                     : isProxyForClockTeam
@@ -2287,9 +2287,9 @@ function DraftPageContent() {
           </div>
 
           {draftStatus === 'paused' && profile?.role !== 'commissioner' && (
-            <div className="mx-4 sm:mx-5 mt-3 rounded-lg px-3 py-2.5 flex gap-2" style={{ background: '#faeeda' }}>
-              <i className="ti ti-player-pause text-base flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
-              <p className="text-xs m-0" style={{ color: '#633806' }}>
+            <div className="mx-4 sm:mx-5 mt-3 rounded-lg px-3 py-2.5 flex gap-2" style={{ background: 'var(--df-warning-bg)' }}>
+              <i className="ti ti-player-pause text-base flex-shrink-0" style={{ color: 'var(--df-warning-text)' }} aria-hidden="true" />
+              <p className="text-xs m-0" style={{ color: 'var(--df-warning-text-strong)' }}>
                 The commissioner has paused the draft. Grab a beer, have a smoke, we'll pick back up where we left off!
               </p>
             </div>
@@ -2309,7 +2309,7 @@ function DraftPageContent() {
         </>
       ) : draftStatus === 'completed' ? (
         <div className="bg-royal-pale mx-4 sm:mx-5 mt-4 rounded-lg p-3.5">
-          <p className="text-sm m-0" style={{ color: '#0c447c' }}>
+          <p className="text-sm m-0" style={{ color: 'var(--df-accent-dark)' }}>
             The draft has ended. Final rosters are below.
           </p>
         </div>
@@ -2325,7 +2325,7 @@ function DraftPageContent() {
           onClick={() => setViewByTeamOpen((o) => !o)}
           className="w-full flex items-center justify-between"
         >
-          <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
+          <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: 'var(--df-text-muted)' }}>
             View rosters
           </p>
           <i className={`ti ti-chevron-${viewByTeamOpen ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
@@ -2342,9 +2342,9 @@ function DraftPageContent() {
                 className="text-xs py-1.5 rounded-md font-medium text-center"
                 style={{
                   width: 104,
-                  background: rosterViewMode === 'team' ? '#185fa5' : '#ffffff',
-                  color: rosterViewMode === 'team' ? '#ffffff' : '#3d4a57',
-                  border: '1px solid #d8dde2',
+                  background: rosterViewMode === 'team' ? 'var(--df-accent)' : 'var(--df-surface)',
+                  color: rosterViewMode === 'team' ? 'var(--df-surface)' : 'var(--df-text-secondary)',
+                  border: '1px solid var(--df-border)',
                 }}
               >
                 View by team
@@ -2359,9 +2359,9 @@ function DraftPageContent() {
                 className="text-xs py-1.5 rounded-md font-medium text-center"
                 style={{
                   width: 104,
-                  background: rosterViewMode === 'round' ? '#185fa5' : '#ffffff',
-                  color: rosterViewMode === 'round' ? '#ffffff' : '#3d4a57',
-                  border: '1px solid #d8dde2',
+                  background: rosterViewMode === 'round' ? 'var(--df-accent)' : 'var(--df-surface)',
+                  color: rosterViewMode === 'round' ? 'var(--df-surface)' : 'var(--df-text-secondary)',
+                  border: '1px solid var(--df-border)',
                 }}
               >
                 View by round
@@ -2375,9 +2375,9 @@ function DraftPageContent() {
                 className="text-xs py-1.5 rounded-md font-medium text-center"
                 style={{
                   width: 104,
-                  background: rosterViewMode === 'board' ? '#185fa5' : '#ffffff',
-                  color: rosterViewMode === 'board' ? '#ffffff' : '#3d4a57',
-                  border: '1px solid #d8dde2',
+                  background: rosterViewMode === 'board' ? 'var(--df-accent)' : 'var(--df-surface)',
+                  color: rosterViewMode === 'board' ? 'var(--df-surface)' : 'var(--df-text-secondary)',
+                  border: '1px solid var(--df-border)',
                 }}
               >
                 Draft board
@@ -2391,10 +2391,10 @@ function DraftPageContent() {
               <>
                 <div className="flex gap-2 flex-wrap mb-2">
                   {teams.map((t) => {
-                    const color = t.team_color || '#0074ff';
+                    const color = t.team_color || 'var(--df-accent-secondary)';
                     const selected = viewingTeamId === t.id;
                     const isMine = profile?.team_id === t.id;
-                    const ring = isMine ? ', 0 0 0 2px #185fa5' : '';
+                    const ring = isMine ? ', 0 0 0 2px var(--df-accent)' : '';
                     return (
                       <button
                         key={t.id}
@@ -2404,7 +2404,7 @@ function DraftPageContent() {
                           width: 140,
                           boxSizing: 'border-box',
                           background: selected ? color : lightenColor(color, 0.85),
-                          color: selected ? '#ffffff' : '#0c2340',
+                          color: selected ? 'var(--df-surface)' : 'var(--df-text-primary)',
                           borderLeft: 'none',
                           borderRight: 'none',
                           borderTop: selected ? '3px solid rgba(0,0,0,0.25)' : '1px solid rgba(255,255,255,0.7)',
@@ -2414,7 +2414,7 @@ function DraftPageContent() {
                             : `0 1px 2px rgba(12,35,64,0.15)${ring}`,
                         }}
                       >
-                        <FootballIcon color={selected ? '#ffffff' : color} size={14} />
+                        <FootballIcon color={selected ? 'var(--df-surface)' : color} size={14} />
                         <span className="truncate">
                           {t.name}
                           {isMine ? ' (you)' : ''}
@@ -2427,7 +2427,7 @@ function DraftPageContent() {
                   const slots = buildTeamSlots(viewingTeamId);
                   const firstEmptyIndex = slots.findIndex((s) => !s);
                   const viewedTeam = teamsById[viewingTeamId];
-                  const teamColor = viewedTeam?.team_color || '#0074ff';
+                  const teamColor = viewedTeam?.team_color || 'var(--df-accent-secondary)';
                   const isTeamOnClock =
                     teamOnClock?.id === viewingTeamId && (draftStatus === 'in_progress' || draftStatus === 'paused');
                   return (
@@ -2435,7 +2435,7 @@ function DraftPageContent() {
                       <div className="flex justify-between items-center mb-1">
                         <p className="text-sm font-medium text-ink m-0">{viewedTeam?.name}</p>
                         {viewedTeam?.proxy_email && (
-                          <p className="text-xs m-0" style={{ color: '#854f0b' }}>
+                          <p className="text-xs m-0" style={{ color: 'var(--df-warning-text)' }}>
                             Proxy:{' '}
                             {viewedTeam.proxy_email
                               .split(',')
@@ -2447,7 +2447,7 @@ function DraftPageContent() {
                         )}
                       </div>
                       {ownerByTeam[viewingTeamId] && (
-                        <p className="text-[11px] m-0 mb-2" style={{ color: '#185fa5' }}>
+                        <p className="text-[11px] m-0 mb-2" style={{ color: 'var(--df-accent)' }}>
                           GM: {ownerByTeam[viewingTeamId].name}
                         </p>
                       )}
@@ -2463,7 +2463,7 @@ function DraftPageContent() {
                               style={{
                                 minHeight: 100,
                                 cursor: player ? 'pointer' : 'default',
-                                background: isClockSlot ? lightenColor(teamColor, 0.85) : '#f1f3f6',
+                                background: isClockSlot ? lightenColor(teamColor, 0.85) : 'var(--df-surface-alt)',
                                 border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
                               }}
                             >
@@ -2475,13 +2475,13 @@ function DraftPageContent() {
                                   >
                                     <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
                                   </div>
-                                  <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                                  <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: 'var(--df-text-primary)' }}>
                                     On the clock
                                   </p>
-                                  <p className="text-[9px] font-medium m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                                  <p className="text-[9px] font-medium m-0 leading-tight truncate w-full" style={{ color: 'var(--df-text-primary)' }}>
                                     {viewedTeam?.name}
                                   </p>
-                                  <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
+                                  <span className="text-[8px] mt-0.5" style={{ color: 'var(--df-text-muted)' }}>
                                     Rnd {currentRound} . Overall Pick # {getSharedPickNumber(currentPickNumber)}
                                   </span>
                                 </>
@@ -2497,7 +2497,7 @@ function DraftPageContent() {
                                 <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
                                   {player.full_name}
                                 </p>
-                                <span className="text-[9px] font-medium mt-0.5" style={{ color: '#185fa5' }}>
+                                <span className="text-[9px] font-medium mt-0.5" style={{ color: 'var(--df-accent)' }}>
                                   {roleByEmail[player.email?.toLowerCase()] === 'commissioner' ? 'Commish' : 'GM'}
                                 </span>
                               </>
@@ -2570,8 +2570,8 @@ function DraftPageContent() {
                       onClick={() => setSelectedRound(r)}
                       className="text-xs px-2.5 py-1.5 rounded-md font-medium"
                       style={{
-                        background: selectedRound === r ? '#185fa5' : '#e6f1fb',
-                        color: selectedRound === r ? '#ffffff' : '#0c447c',
+                        background: selectedRound === r ? 'var(--df-accent)' : 'var(--df-info-bg)',
+                        color: selectedRound === r ? 'var(--df-surface)' : 'var(--df-accent-dark)',
                         border: '2px solid transparent',
                       }}
                     >
@@ -2584,7 +2584,7 @@ function DraftPageContent() {
                     {roundSlots.map((slot) => {
                       const isSkippedPick = slot.pick && !slot.pick.player_id;
                       const isClockSlot = slot.pickNumber === currentPickNumber && !slot.player && !isSkippedPick;
-                      const teamColor = slot.team?.team_color || '#0074ff';
+                      const teamColor = slot.team?.team_color || 'var(--df-accent-secondary)';
                       const positionInRound = roundSlots.findIndex((s) => s.pickNumber === slot.pickNumber) + 1;
                       return (
                         <div
@@ -2593,7 +2593,7 @@ function DraftPageContent() {
                           className="rounded-lg flex flex-col items-center text-center px-1 py-2"
                           style={{
                             minHeight: 100,
-                            background: isClockSlot ? lightenColor(teamColor, 0.85) : '#f1f3f6',
+                            background: isClockSlot ? lightenColor(teamColor, 0.85) : 'var(--df-surface-alt)',
                             border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
                             cursor: slot.player ? 'pointer' : 'default',
                           }}
@@ -2631,13 +2631,13 @@ function DraftPageContent() {
                               >
                                 <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
                               </div>
-                              <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                              <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: 'var(--df-text-primary)' }}>
                                 On the clock
                               </p>
-                              <p className="text-[9px] font-medium m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                              <p className="text-[9px] font-medium m-0 leading-tight truncate w-full" style={{ color: 'var(--df-text-primary)' }}>
                                 {slot.team?.name}
                               </p>
-                              <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
+                              <span className="text-[8px] mt-0.5" style={{ color: 'var(--df-text-muted)' }}>
                                 Pick # {positionInRound}
                               </span>
                             </>
@@ -2680,11 +2680,11 @@ function DraftPageContent() {
                           position: 'sticky',
                           top: 0,
                           zIndex: 3,
-                          background: '#f1f3f6',
-                          color: '#0c2340',
+                          background: 'var(--df-surface-alt)',
+                          color: 'var(--df-text-primary)',
                           fontSize: 13,
                           fontWeight: 700,
-                          borderBottom: '2px solid #d8dde2',
+                          borderBottom: '2px solid var(--df-border)',
                         }}
                       >
                         Team / GM
@@ -2698,11 +2698,11 @@ function DraftPageContent() {
                             position: 'sticky',
                             top: 0,
                             zIndex: 2,
-                            background: '#f1f3f6',
-                            color: '#0c2340',
+                            background: 'var(--df-surface-alt)',
+                            color: 'var(--df-text-primary)',
                             fontSize: 13,
                             fontWeight: 700,
-                            borderBottom: '2px solid #d8dde2',
+                            borderBottom: '2px solid var(--df-border)',
                           }}
                         >
                           Round {r}{r > maxNormalRound ? ' Ext' : ''}
@@ -2717,10 +2717,10 @@ function DraftPageContent() {
                       .map((t) => {
                         const owner = ownerByTeam[t.id];
                         return (
-                          <tr key={t.id} className="border-t" style={{ borderColor: '#d8dde2' }}>
+                          <tr key={t.id} className="border-t" style={{ borderColor: 'var(--df-border)' }}>
                             <td className="p-2 sticky left-0 bg-white align-top">
                               <div className="flex items-center gap-1.5">
-                                <FootballIcon color={t.team_color || '#0074ff'} size={12} />
+                                <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={12} />
                                 <span className="font-medium text-ink">{t.name}</span>
                               </div>
                               {owner && <p className="text-[10px] text-muted m-0 mt-0.5">GM: {owner.name}</p>}
@@ -2729,7 +2729,7 @@ function DraftPageContent() {
                               const slot = allSlots.find((s) => s.round === r && s.team?.id === t.id);
                               if (!slot) {
                                 return (
-                                  <td key={r} className="p-2 text-center align-top" style={{ color: '#8b97a3' }}>
+                                  <td key={r} className="p-2 text-center align-top" style={{ color: 'var(--df-text-faint)' }}>
                                     &mdash;
                                   </td>
                                 );
@@ -2754,24 +2754,24 @@ function DraftPageContent() {
                                           <i className="ti ti-user text-faint text-sm" aria-hidden="true" />
                                         </div>
                                       )}
-                                      <p className="text-[10px] font-medium m-0 mt-1 truncate leading-tight" style={{ color: '#0c2340' }}>
+                                      <p className="text-[10px] font-medium m-0 mt-1 truncate leading-tight" style={{ color: 'var(--df-text-primary)' }}>
                                         {slot.player.full_name}
                                       </p>
-                                      <p className="text-[9px] m-0" style={{ color: '#5a6b7d' }}>
+                                      <p className="text-[9px] m-0" style={{ color: 'var(--df-text-muted)' }}>
                                         {slot.player.gender} &middot; Overall Pick #{slot.player.draft_pick_number}
                                       </p>
                                     </button>
                                   ) : isSkipped ? (
                                     <>
-                                      <p className="text-[10px] italic m-0" style={{ color: '#8b97a3' }}>
+                                      <p className="text-[10px] italic m-0" style={{ color: 'var(--df-text-faint)' }}>
                                         Skipped
                                       </p>
-                                      <p className="text-[9px] m-0" style={{ color: '#8b97a3' }}>
+                                      <p className="text-[9px] m-0" style={{ color: 'var(--df-text-faint)' }}>
                                         Pick #{getSharedPickNumber(slot.pickNumber)}
                                       </p>
                                     </>
                                   ) : (
-                                    <p className="m-0" style={{ color: '#8b97a3' }}>
+                                    <p className="m-0" style={{ color: 'var(--df-text-faint)' }}>
                                       &mdash;
                                     </p>
                                   )}
@@ -2798,11 +2798,11 @@ function DraftPageContent() {
         style={{ scrollMarginTop: 120 }}
       >
         <div className="flex items-center gap-3.5 mb-3">
-          <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#0c447c' }}>
+          <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: 'var(--df-accent-dark)' }}>
             Player selection
           </p>
           {!profile?.is_primary && (
-            <button onClick={handleReplayTour} className="text-[11px]" style={{ color: '#8b97a3' }}>
+            <button onClick={handleReplayTour} className="text-[11px]" style={{ color: 'var(--df-text-faint)' }}>
               How this works
             </button>
           )}
@@ -2817,14 +2817,14 @@ function DraftPageContent() {
               onChange={(e) => setSearchName(e.target.value)}
               placeholder="Search by name"
               className="w-full pl-8 text-xs"
-              style={{ borderColor: searchName ? '#185fa5' : undefined }}
+              style={{ borderColor: searchName ? 'var(--df-accent)' : undefined }}
             />
           </div>
           <select
             value={searchPosition}
             onChange={(e) => setSearchPosition(e.target.value)}
             className="flex-none text-xs"
-            style={{ width: 120, borderColor: searchPosition ? '#185fa5' : undefined }}
+            style={{ width: 120, borderColor: searchPosition ? 'var(--df-accent)' : undefined }}
           >
             <option value="">Position: any</option>
             <optgroup label="Offense">
@@ -2846,7 +2846,7 @@ function DraftPageContent() {
             value={searchGender}
             onChange={(e) => setSearchGender(e.target.value)}
             className="flex-none text-xs"
-            style={{ width: 84, borderColor: searchGender ? '#185fa5' : undefined }}
+            style={{ width: 84, borderColor: searchGender ? 'var(--df-accent)' : undefined }}
           >
             <option value="">M/F: any</option>
             <option value="M">M</option>
@@ -2856,7 +2856,7 @@ function DraftPageContent() {
             value={searchPreviousTeam}
             onChange={(e) => setSearchPreviousTeam(e.target.value)}
             className="flex-none text-xs"
-            style={{ width: 140, borderColor: searchPreviousTeam ? '#185fa5' : undefined }}
+            style={{ width: 140, borderColor: searchPreviousTeam ? 'var(--df-accent)' : undefined }}
           >
             <option value="">Previous team: any</option>
             {previousTeamOptions.map((t) => (
@@ -2869,7 +2869,7 @@ function DraftPageContent() {
             value={searchAvailability}
             onChange={(e) => setSearchAvailability(e.target.value)}
             className="flex-none text-xs"
-            style={{ width: 130, borderColor: searchAvailability ? '#185fa5' : undefined }}
+            style={{ width: 130, borderColor: searchAvailability ? 'var(--df-accent)' : undefined }}
           >
             <option value="">Availability: any</option>
             <option value="available">Available</option>
@@ -2909,8 +2909,8 @@ function DraftPageContent() {
         {teamOnClock &&
           (profile?.team_id === teamOnClock.id || isProxyForClockTeam) &&
           teamMustDraftFemaleNow(teamOnClock.id, currentPickNumber) && (
-            <div className="rounded-md px-3 py-2 mt-2" style={{ background: '#faeeda' }}>
-              <p className="text-xs m-0" style={{ color: '#633806' }}>
+            <div className="rounded-md px-3 py-2 mt-2" style={{ background: 'var(--df-warning-bg)' }}>
+              <p className="text-xs m-0" style={{ color: 'var(--df-warning-text-strong)' }}>
                 <i className="ti ti-info-circle text-sm" aria-hidden="true" style={{ verticalAlign: -2, marginRight: 4 }} />
                 {teamIsOnlyRemainingShortTeam(teamOnClock.id)
                   ? `${teamOnClock.name} is the only team that has not yet met the ${minFemale}-female minimum, so a female player must be drafted this pick — female players are sorted to the front below.`
@@ -2922,8 +2922,8 @@ function DraftPageContent() {
           isEnforceMinFemaleModeActive &&
           (profile?.team_id === teamOnClock.id || isProxyForClockTeam) &&
           teamIsFemaleCapped(teamOnClock.id) && (
-            <div className="rounded-md px-3 py-2 mt-2" style={{ background: '#faeeda' }}>
-              <p className="text-xs m-0" style={{ color: '#633806' }}>
+            <div className="rounded-md px-3 py-2 mt-2" style={{ background: 'var(--df-warning-bg)' }}>
+              <p className="text-xs m-0" style={{ color: 'var(--df-warning-text-strong)' }}>
                 <i className="ti ti-info-circle text-sm" aria-hidden="true" style={{ verticalAlign: -2, marginRight: 4 }} />
                 {teamOnClock.name} has met its female minimum. Female players are reserved for teams that still need
                 one. Currently only male players are available for you to draft.
@@ -2941,9 +2941,9 @@ function DraftPageContent() {
             }}
             className="flex-1 text-[10.5px] py-1.5 px-0.5 rounded-md font-medium text-center"
             style={{
-              background: mobileListTab === 'available' && leftColumnTab === 'available' ? '#185fa5' : '#ffffff',
-              color: mobileListTab === 'available' && leftColumnTab === 'available' ? '#ffffff' : '#3d4a57',
-              border: '1px solid #d8dde2',
+              background: mobileListTab === 'available' && leftColumnTab === 'available' ? 'var(--df-accent)' : 'var(--df-surface)',
+              color: mobileListTab === 'available' && leftColumnTab === 'available' ? 'var(--df-surface)' : 'var(--df-text-secondary)',
+              border: '1px solid var(--df-border)',
             }}
           >
             Available ({sortedAvailable.length})
@@ -2956,9 +2956,9 @@ function DraftPageContent() {
               }}
               className="flex-1 text-[10.5px] py-1.5 px-0.5 rounded-md font-medium text-center"
               style={{
-                background: mobileListTab === 'available' && leftColumnTab === 'rankings' ? '#185fa5' : '#ffffff',
-                color: mobileListTab === 'available' && leftColumnTab === 'rankings' ? '#ffffff' : '#3d4a57',
-                border: '1px solid #d8dde2',
+                background: mobileListTab === 'available' && leftColumnTab === 'rankings' ? 'var(--df-accent)' : 'var(--df-surface)',
+                color: mobileListTab === 'available' && leftColumnTab === 'rankings' ? 'var(--df-surface)' : 'var(--df-text-secondary)',
+                border: '1px solid var(--df-border)',
               }}
             >
               My Rankings{teamRankings.length ? ` (${teamRankings.length})` : ''}
@@ -2968,9 +2968,9 @@ function DraftPageContent() {
             onClick={() => setMobileListTab('myteam')}
             className="flex-1 text-[10.5px] py-1.5 px-0.5 rounded-md font-medium text-center"
             style={{
-              background: mobileListTab === 'myteam' ? '#185fa5' : '#ffffff',
-              color: mobileListTab === 'myteam' ? '#ffffff' : '#3d4a57',
-              border: '1px solid #d8dde2',
+              background: mobileListTab === 'myteam' ? 'var(--df-accent)' : 'var(--df-surface)',
+              color: mobileListTab === 'myteam' ? 'var(--df-surface)' : 'var(--df-text-secondary)',
+              border: '1px solid var(--df-border)',
             }}
           >
             My Team{rosterByTeam[profile?.team_id] ? ` (${rosterByTeam[profile.team_id].count})` : ''}
@@ -2986,9 +2986,9 @@ function DraftPageContent() {
               onClick={() => setLeftColumnTab('available')}
               className="flex-1 text-[11px] py-1.5 rounded-md font-medium text-center"
               style={{
-                background: leftColumnTab === 'available' ? '#185fa5' : '#ffffff',
-                color: leftColumnTab === 'available' ? '#ffffff' : '#3d4a57',
-                border: '1px solid #d8dde2',
+                background: leftColumnTab === 'available' ? 'var(--df-accent)' : 'var(--df-surface)',
+                color: leftColumnTab === 'available' ? 'var(--df-surface)' : 'var(--df-text-secondary)',
+                border: '1px solid var(--df-border)',
               }}
             >
               Available ({sortedAvailable.length})
@@ -2998,9 +2998,9 @@ function DraftPageContent() {
                 onClick={() => setLeftColumnTab('rankings')}
                 className="flex-1 text-[11px] py-1.5 rounded-md font-medium text-center"
                 style={{
-                  background: leftColumnTab === 'rankings' ? '#185fa5' : '#ffffff',
-                  color: leftColumnTab === 'rankings' ? '#ffffff' : '#3d4a57',
-                  border: '1px solid #d8dde2',
+                  background: leftColumnTab === 'rankings' ? 'var(--df-accent)' : 'var(--df-surface)',
+                  color: leftColumnTab === 'rankings' ? 'var(--df-surface)' : 'var(--df-text-secondary)',
+                  border: '1px solid var(--df-border)',
                 }}
               >
                 My Rankings{teamRankings.length ? ` (${teamRankings.length})` : ''}
@@ -3018,7 +3018,7 @@ function DraftPageContent() {
                   key={p.id}
                   onClick={() => openProfile(p.id)}
                   className={`relative rounded-md px-2.5 py-2 cursor-pointer hover:brightness-95 ${
-                    isInactive ? 'bg-[#e9ecef] opacity-60' : isDrafted ? 'bg-[#e9ecef] opacity-70' : 'bg-surface'
+                    isInactive ? 'bg-[var(--df-surface-subtle)] opacity-60' : isDrafted ? 'bg-[var(--df-surface-subtle)] opacity-70' : 'bg-surface'
                   }`}
                 >
                   {myActingTeamId && !isDrafted && !isInactive && (
@@ -3035,18 +3035,18 @@ function DraftPageContent() {
                   )}
                   <p className="text-xs font-medium text-ink m-0 pr-4">{p.full_name}</p>
                   {isInactive ? (
-                    <p className="text-[11px] font-medium m-0" style={{ color: '#5a6b7d' }}>
+                    <p className="text-[11px] font-medium m-0" style={{ color: 'var(--df-text-muted)' }}>
                       Inactive
                     </p>
                   ) : isDrafted ? (
                     <>
-                      <p className="text-[11px] font-medium m-0" style={{ color: '#185fa5' }}>
+                      <p className="text-[11px] font-medium m-0" style={{ color: 'var(--df-accent)' }}>
                         {p.draft_pick_number
                           ? `Drafted by ${teamsById[p.team_id]?.name || 'Unknown'}`
                           : `Added manually \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'}`}
                       </p>
                       {p.draft_pick_number && (
-                        <p className="text-[11px] font-medium m-0" style={{ color: '#185fa5' }}>
+                        <p className="text-[11px] font-medium m-0" style={{ color: 'var(--df-accent)' }}>
                           Round {roundByPlayerId[p.id]}{roundByPlayerId[p.id] > maxNormalRound ? ' Ext' : ''}, Pick {p.draft_pick_number}
                         </p>
                       )}
@@ -3094,7 +3094,7 @@ function DraftPageContent() {
                       }}
                       className="rounded-md px-2.5 py-2"
                       style={{
-                        background: isDrafted ? '#e9ecef' : isBeingDragged ? '#e6f1fb' : '#f1f3f6',
+                        background: isDrafted ? 'var(--df-surface-subtle)' : isBeingDragged ? 'var(--df-info-bg)' : 'var(--df-surface-alt)',
                         boxShadow: isBeingDragged ? '0 6px 16px rgba(12,35,64,0.25)' : 'none',
                         transform: isBeingDragged ? 'scale(1.03)' : 'scale(1)',
                         touchAction: isBeingDragged ? 'none' : 'auto',
@@ -3114,14 +3114,14 @@ function DraftPageContent() {
                           >
                             {pressingId === p.id ? (
                               <svg width="22" height="22" viewBox="0 0 22 22">
-                                <circle cx="11" cy="11" r="9" fill="none" stroke="#b5d4f4" strokeWidth="2.5" />
+                                <circle cx="11" cy="11" r="9" fill="none" stroke="var(--df-info-text)" strokeWidth="2.5" />
                                 <circle
                                   className="press-ring-progress"
                                   cx="11"
                                   cy="11"
                                   r="9"
                                   fill="none"
-                                  stroke="#185fa5"
+                                  stroke="var(--df-accent)"
                                   strokeWidth="2.5"
                                   strokeDasharray="56.5"
                                   strokeLinecap="round"
@@ -3131,7 +3131,7 @@ function DraftPageContent() {
                             ) : (
                               <i
                                 className="ti ti-grip-vertical text-base"
-                                style={{ color: isBeingDragged ? '#185fa5' : '#8b97a3' }}
+                                style={{ color: isBeingDragged ? 'var(--df-accent)' : 'var(--df-text-faint)' }}
                                 aria-hidden="true"
                               />
                             )}
@@ -3140,14 +3140,14 @@ function DraftPageContent() {
                         <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openProfile(p.id)}>
                           {isDrafted ? (
                             <>
-                              <p className="text-[10px] font-semibold m-0" style={{ color: '#3d4a57' }}>
+                              <p className="text-[10px] font-semibold m-0" style={{ color: 'var(--df-text-secondary)' }}>
                                 Drafted By: {teamsById[p.team_id]?.name || 'Unknown'}
                               </p>
-                              <p className="text-xs font-medium m-0 italic" style={{ color: '#5a6b7d' }}>
+                              <p className="text-xs font-medium m-0 italic" style={{ color: 'var(--df-text-muted)' }}>
                                 {p.full_name}
                               </p>
                               {p.draft_pick_number && (
-                                <p className="text-[10px] italic m-0" style={{ color: '#8b97a3' }}>
+                                <p className="text-[10px] italic m-0" style={{ color: 'var(--df-text-faint)' }}>
                                   Rnd {roundByPlayerId[p.id]} &middot; Overall Pick# {p.draft_pick_number}
                                 </p>
                               )}
@@ -3172,7 +3172,7 @@ function DraftPageContent() {
                               }}
                               disabled={disabled}
                               className="lg:hidden text-[11px] font-medium rounded-md px-3 py-1.5 whitespace-nowrap"
-                              style={{ background: disabled ? '#d8dde2' : '#185fa5', color: '#ffffff', border: 'none' }}
+                              style={{ background: disabled ? 'var(--df-border)' : 'var(--df-accent)', color: 'var(--df-surface)', border: 'none' }}
                             >
                               {drafting === p.id ? 'Drafting…' : 'Draft Player'}
                             </button>
@@ -3184,7 +3184,7 @@ function DraftPageContent() {
                               }}
                               disabled={disabled}
                               className="hidden lg:block text-[11px] font-medium rounded-md px-3 py-1.5 whitespace-nowrap"
-                              style={{ background: disabled ? '#d8dde2' : '#185fa5', color: '#ffffff', border: 'none' }}
+                              style={{ background: disabled ? 'var(--df-border)' : 'var(--df-accent)', color: 'var(--df-surface)', border: 'none' }}
                             >
                               {drafting === p.id ? 'Drafting…' : 'Draft Player'}
                             </button>
@@ -3195,7 +3195,7 @@ function DraftPageContent() {
                                   toggleRanking(p.id);
                                 }}
                                 className="text-[10px]"
-                                style={{ color: '#8b97a3' }}
+                                style={{ color: 'var(--df-text-faint)' }}
                               >
                                 Remove
                               </button>
@@ -3229,10 +3229,10 @@ function DraftPageContent() {
             {showDraftingForLabel && (
               <div
                 className="flex items-center gap-1.5 rounded-md flex-shrink-0"
-                style={{ background: '#e6f1fb', padding: '4px 10px' }}
+                style={{ background: 'var(--df-info-bg)', padding: '4px 10px' }}
               >
-                <FootballIcon color={draftingForTeam.team_color || '#0074ff'} size={14} />
-                <span className="text-[12px] font-semibold" style={{ color: '#0c2340' }}>
+                <FootballIcon color={draftingForTeam.team_color || 'var(--df-accent-secondary)'} size={14} />
+                <span className="text-[12px] font-semibold" style={{ color: 'var(--df-text-primary)' }}>
                   You are drafting for {draftingForTeam.name}
                 </span>
               </div>
@@ -3253,8 +3253,8 @@ function DraftPageContent() {
                     width: 'calc(33.333% - 8px)',
                     minWidth: 190,
                     height: 230,
-                    background: isInactive ? '#e9ecef' : isDrafted ? '#e9ecef' : isMatch ? '#e6f1fb' : '#f1f3f6',
-                    border: isMatch ? '1.5px solid #185fa5' : '1.5px solid transparent',
+                    background: isInactive ? 'var(--df-surface-subtle)' : isDrafted ? 'var(--df-surface-subtle)' : isMatch ? 'var(--df-info-bg)' : 'var(--df-surface-alt)',
+                    border: isMatch ? '1.5px solid var(--df-accent)' : '1.5px solid transparent',
                     opacity: isInactive ? 0.6 : isDrafted ? 0.65 : 1,
                   }}
                 >
@@ -3285,36 +3285,36 @@ function DraftPageContent() {
                     <div className="min-w-0">
                       <p
                         className="text-sm font-medium m-0 leading-snug"
-                        style={{ color: isMatch ? '#042c53' : '#0c2340' }}
+                        style={{ color: isMatch ? 'var(--df-accent-darkest)' : 'var(--df-text-primary)' }}
                       >
                         {p.full_name} <span className="font-normal text-muted">({p.gender})</span>
                       </p>
-                      <p className="text-[11px] m-0" style={{ color: isMatch ? '#0c447c' : '#5a6b7d' }}>
+                      <p className="text-[11px] m-0" style={{ color: isMatch ? 'var(--df-accent-dark)' : 'var(--df-text-muted)' }}>
                         {p.height_feet}'{p.height_inches}"
                       </p>
                     </div>
                   </div>
-                  <p className="text-[11px] my-0.5" style={{ color: isMatch ? '#0c447c' : '#5a6b7d' }}>
+                  <p className="text-[11px] my-0.5" style={{ color: isMatch ? 'var(--df-accent-dark)' : 'var(--df-text-muted)' }}>
                     Offense: {p.offensive_position} &nbsp; Defense: {p.defensive_position}
                   </p>
-                  <p className="text-[11px] my-0.5" style={{ color: isMatch ? '#0c447c' : '#5a6b7d' }}>
+                  <p className="text-[11px] my-0.5" style={{ color: isMatch ? 'var(--df-accent-dark)' : 'var(--df-text-muted)' }}>
                     Previous team: {previousTeamLabel(p.previous_team)}
                   </p>
                   {!isDrafted && (
-                    <p className="text-[11px] mt-0.5" style={{ color: isMatch ? '#0c447c' : '#5a6b7d' }}>
+                    <p className="text-[11px] mt-0.5" style={{ color: isMatch ? 'var(--df-accent-dark)' : 'var(--df-text-muted)' }}>
                       Injuries: {p.injury_status === 'None' ? 'None' : `${p.injury_status} (${p.weeks_until_recovered || '?'}w)`}
                     </p>
                   )}
                   {isInactive ? (
-                    <div className="w-full rounded-lg py-2 mt-auto flex items-center justify-center" style={{ background: '#d8dde2' }}>
-                      <span className="text-[11px] font-medium" style={{ color: '#3d4a57' }}>
+                    <div className="w-full rounded-lg py-2 mt-auto flex items-center justify-center" style={{ background: 'var(--df-border)' }}>
+                      <span className="text-[11px] font-medium" style={{ color: 'var(--df-text-secondary)' }}>
                         Inactive
                       </span>
                     </div>
                   ) : isDrafted ? (
-                    <div className="w-full rounded-lg py-2 mt-auto flex items-center justify-center gap-1.5" style={{ background: '#d8dde2' }}>
-                      <FootballIcon color={teamsById[p.team_id]?.team_color || '#0074ff'} size={13} />
-                      <span className="text-[11px] font-medium" style={{ color: '#3d4a57' }}>
+                    <div className="w-full rounded-lg py-2 mt-auto flex items-center justify-center gap-1.5" style={{ background: 'var(--df-border)' }}>
+                      <FootballIcon color={teamsById[p.team_id]?.team_color || 'var(--df-accent-secondary)'} size={13} />
+                      <span className="text-[11px] font-medium" style={{ color: 'var(--df-text-secondary)' }}>
                         {p.draft_pick_number
                           ? `Drafted By: ${teamsById[p.team_id]?.name || 'Unknown'}`
                           : `Added manually \u00b7 ${teamsById[p.team_id]?.name || 'Unknown'}`}
@@ -3329,8 +3329,8 @@ function DraftPageContent() {
                       disabled={!profile?.team_id || drafting === p.id}
                       className="w-full text-xs font-medium rounded-lg py-2 mt-auto"
                       style={{
-                        background: !profile?.team_id ? '#d8dde2' : '#185fa5',
-                        color: '#ffffff',
+                        background: !profile?.team_id ? 'var(--df-border)' : 'var(--df-accent)',
+                        color: 'var(--df-surface)',
                         border: 'none',
                       }}
                     >
@@ -3344,7 +3344,7 @@ function DraftPageContent() {
                       }}
                       disabled={disabled}
                       className="w-full text-xs font-medium rounded-lg py-2 mt-auto"
-                      style={{ background: disabled ? '#d8dde2' : '#185fa5', color: '#ffffff', border: 'none' }}
+                      style={{ background: disabled ? 'var(--df-border)' : 'var(--df-accent)', color: 'var(--df-surface)', border: 'none' }}
                     >
                       {drafting === p.id ? 'Drafting…' : 'Draft player'}
                     </button>
@@ -3357,7 +3357,7 @@ function DraftPageContent() {
 
         {yourTeamPanelTeamId && (() => {
           const myTeam = teamsById[yourTeamPanelTeamId];
-          const myColor = myTeam?.team_color || '#0074ff';
+          const myColor = myTeam?.team_color || 'var(--df-accent-secondary)';
           return (
             <aside
               className={`w-full lg:w-64 flex-shrink-0 order-4 lg:order-3 lg:pl-3 lg:border-l border-line ${
@@ -3370,18 +3370,18 @@ function DraftPageContent() {
                   <button
                     onClick={() => setTeamSwitcherOpen((o) => !o)}
                     className="w-full flex items-center justify-between rounded-md"
-                    style={{ background: '#f7f9fb', border: '1px solid #d8dde2', padding: '7px 9px' }}
+                    style={{ background: 'var(--df-surface-subtle)', border: '1px solid var(--df-border)', padding: '7px 9px' }}
                   >
                     <span className="flex items-center gap-1.5">
                       <FootballIcon color={myColor} size={13} />
-                      <span className="text-[11px] font-semibold" style={{ color: '#0c2340' }}>{myTeam?.name || '—'}</span>
+                      <span className="text-[11px] font-semibold" style={{ color: 'var(--df-text-primary)' }}>{myTeam?.name || '—'}</span>
                     </span>
-                    <i className={`ti ti-chevron-${teamSwitcherOpen ? 'up' : 'down'} text-sm`} style={{ color: '#8b97a3' }} aria-hidden="true" />
+                    <i className={`ti ti-chevron-${teamSwitcherOpen ? 'up' : 'down'} text-sm`} style={{ color: 'var(--df-text-faint)' }} aria-hidden="true" />
                   </button>
                   {teamSwitcherOpen && (
                     <div
                       className="absolute left-0 right-0 mt-1 rounded-md overflow-hidden"
-                      style={{ background: '#ffffff', border: '1px solid #d8dde2', boxShadow: '0 4px 12px rgba(12,35,64,0.15)', zIndex: 20, maxHeight: 200, overflowY: 'auto' }}
+                      style={{ background: 'var(--df-surface)', border: '1px solid var(--df-border)', boxShadow: '0 4px 12px rgba(12,35,64,0.15)', zIndex: 20, maxHeight: 200, overflowY: 'auto' }}
                     >
                       {[...myManagedTeamIds].map((tid) => {
                         const t = teamsById[tid];
@@ -3396,11 +3396,11 @@ function DraftPageContent() {
                             className="w-full flex items-center gap-1.5 text-left"
                             style={{
                               padding: '8px 10px',
-                              background: tid === yourTeamPanelTeamId ? '#e6f1fb' : 'transparent',
+                              background: tid === yourTeamPanelTeamId ? 'var(--df-info-bg)' : 'transparent',
                             }}
                           >
-                            <FootballIcon color={t.team_color || '#0074ff'} size={13} />
-                            <span className="text-[11px]" style={{ color: '#0c2340', fontWeight: tid === yourTeamPanelTeamId ? 600 : 400 }}>
+                            <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={13} />
+                            <span className="text-[11px]" style={{ color: 'var(--df-text-primary)', fontWeight: tid === yourTeamPanelTeamId ? 600 : 400 }}>
                               {t.name}
                             </span>
                           </button>
@@ -3420,12 +3420,12 @@ function DraftPageContent() {
                 <>
                   <p
                     className="text-xs mb-2 flex items-center gap-1"
-                    style={{ color: rosterByTeam[yourTeamPanelTeamId].femaleCount >= minFemale ? '#0c2340' : '#c0392b' }}
+                    style={{ color: rosterByTeam[yourTeamPanelTeamId].femaleCount >= minFemale ? 'var(--df-text-primary)' : 'var(--df-error)' }}
                   >
                     {rosterByTeam[yourTeamPanelTeamId].femaleCount >= minFemale ? (
                       <>
                         {rosterByTeam[yourTeamPanelTeamId].femaleCount} of {minFemale} Females Drafted
-                        <i className="ti ti-circle-check text-sm" style={{ color: '#3b6d11' }} aria-hidden="true" />
+                        <i className="ti ti-circle-check text-sm" style={{ color: 'var(--df-success)' }} aria-hidden="true" />
                       </>
                     ) : (
                       <>
@@ -3436,9 +3436,9 @@ function DraftPageContent() {
                   {draftStatus === 'completed' &&
                     (rosterByTeam[yourTeamPanelTeamId].count < minRoster ||
                       rosterByTeam[yourTeamPanelTeamId].femaleCount < minFemale) && (
-                      <div className="bg-[#faeeda] rounded-md px-2.5 py-2 mb-2 flex gap-1.5">
-                        <i className="ti ti-alert-triangle text-sm flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
-                        <p className="text-[11px] m-0" style={{ color: '#633806' }}>
+                      <div className="bg-[var(--df-warning-bg)] rounded-md px-2.5 py-2 mb-2 flex gap-1.5">
+                        <i className="ti ti-alert-triangle text-sm flex-shrink-0" style={{ color: 'var(--df-warning-text)' }} aria-hidden="true" />
+                        <p className="text-[11px] m-0" style={{ color: 'var(--df-warning-text-strong)' }}>
                           Below the {minRoster}-player / {minFemale}-female minimum. Use "Add to my team" on leftover
                           players below to fill remaining spots.
                         </p>
@@ -3461,16 +3461,16 @@ function DraftPageContent() {
                         style={{ background: lightenColor(myColor, 0.85) }}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs font-medium m-0" style={{ color: '#0c2340' }}>{p.full_name}</p>
+                          <p className="text-xs font-medium m-0" style={{ color: 'var(--df-text-primary)' }}>{p.full_name}</p>
                           {teamContacts[p.id]?.phone && p.email?.toLowerCase() !== myEmail && (
-                            <p className="text-[10px] m-0 flex items-center gap-1 flex-shrink-0" style={{ color: '#185fa5' }}>
+                            <p className="text-[10px] m-0 flex items-center gap-1 flex-shrink-0" style={{ color: 'var(--df-accent)' }}>
                               <i className="ti ti-phone text-xs" aria-hidden="true" />
                               {teamContacts[p.id].phone}
                             </p>
                           )}
                         </div>
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-[11px] m-0" style={{ color: '#5a6b7d' }}>
+                          <p className="text-[11px] m-0" style={{ color: 'var(--df-text-muted)' }}>
                             {p.height_feet}'{p.height_inches}" &middot; {p.gender}
                           </p>
                           {teamContacts[p.id]?.email && p.email?.toLowerCase() !== myEmail && (
@@ -3485,7 +3485,7 @@ function DraftPageContent() {
                                   setOpenEmailPopoverId((cur) => (cur === p.id ? null : p.id));
                                 }}
                                 className="text-[10px] flex items-center gap-1"
-                                style={{ color: '#185fa5' }}
+                                style={{ color: 'var(--df-accent)' }}
                               >
                                 <i className="ti ti-mail text-xs" aria-hidden="true" />
                                 Email
@@ -3494,9 +3494,9 @@ function DraftPageContent() {
                                 <div
                                   onClick={(e) => e.stopPropagation()}
                                   className="absolute right-0 top-full mt-1 z-20 rounded-md flex items-center gap-2 whitespace-nowrap"
-                                  style={{ background: '#ffffff', border: '1px solid #d8dde2', boxShadow: '0 4px 12px rgba(12,35,64,0.15)', padding: '6px 8px' }}
+                                  style={{ background: 'var(--df-surface)', border: '1px solid var(--df-border)', boxShadow: '0 4px 12px rgba(12,35,64,0.15)', padding: '6px 8px' }}
                                 >
-                                  <span className="text-[10px]" style={{ color: '#0c2340' }}>
+                                  <span className="text-[10px]" style={{ color: 'var(--df-text-primary)' }}>
                                     {teamContacts[p.id].email}
                                   </span>
                                   <button
@@ -3510,7 +3510,7 @@ function DraftPageContent() {
                                   >
                                     <i
                                       className={`ti ${copiedEmailId === p.id ? 'ti-check' : 'ti-copy'} text-xs`}
-                                      style={{ color: copiedEmailId === p.id ? '#3b6d11' : '#8b97a3' }}
+                                      style={{ color: copiedEmailId === p.id ? 'var(--df-success)' : 'var(--df-text-faint)' }}
                                       aria-hidden="true"
                                     />
                                   </button>
@@ -3519,11 +3519,11 @@ function DraftPageContent() {
                             </div>
                           )}
                         </div>
-                        <p className="text-[11px] m-0" style={{ color: '#5a6b7d' }}>
+                        <p className="text-[11px] m-0" style={{ color: 'var(--df-text-muted)' }}>
                           Off: {p.offensive_position} &middot; Def: {p.defensive_position}
                         </p>
                         {p.draft_pick_number && (
-                          <p className="text-[11px] m-0" style={{ color: '#5a6b7d' }}>
+                          <p className="text-[11px] m-0" style={{ color: 'var(--df-text-muted)' }}>
                             Rnd {roundByPlayerId[p.id]} &middot; Overall Pick# {p.draft_pick_number}
                           </p>
                         )}
@@ -3545,7 +3545,7 @@ function DraftPageContent() {
           style={{ boxShadow: '0 12px 32px rgba(12,35,64,0.3)', zIndex: 100 }}
         >
           <StarIcon filled size={22} />
-          <p className="text-base font-medium m-0" style={{ color: '#0c2340' }}>
+          <p className="text-base font-medium m-0" style={{ color: 'var(--df-text-primary)' }}>
             Added to your My Rankings
           </p>
         </div>
@@ -3554,10 +3554,10 @@ function DraftPageContent() {
       {draftConfirmation && (
         <div
           className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl px-6 py-4 flex items-center gap-3"
-          style={{ boxShadow: '0 12px 32px rgba(12,35,64,0.3)', zIndex: 100, background: '#185fa5' }}
+          style={{ boxShadow: '0 12px 32px rgba(12,35,64,0.3)', zIndex: 100, background: 'var(--df-accent)' }}
         >
-          <i className="ti ti-circle-check text-xl" style={{ color: '#ffffff' }} aria-hidden="true" />
-          <p className="text-base font-medium m-0" style={{ color: '#ffffff' }}>
+          <i className="ti ti-circle-check text-xl" style={{ color: 'var(--df-surface)' }} aria-hidden="true" />
+          <p className="text-base font-medium m-0" style={{ color: 'var(--df-surface)' }}>
             You have drafted {draftConfirmation}
           </p>
         </div>
@@ -3583,14 +3583,14 @@ function DraftPageContent() {
             style={{ maxWidth: 320, width: '100%' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-base font-semibold m-0 mb-4 text-center" style={{ color: '#0c2340' }}>
+            <p className="text-base font-semibold m-0 mb-4 text-center" style={{ color: 'var(--df-text-primary)' }}>
               Draft {pendingRankingDraft.full_name}?
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setPendingRankingDraft(null)}
                 className="flex-1 text-sm font-medium rounded-md py-2"
-                style={{ background: '#f1f3f6', color: '#3d4a57', border: 'none' }}
+                style={{ background: 'var(--df-surface-alt)', color: 'var(--df-text-secondary)', border: 'none' }}
               >
                 Cancel
               </button>
@@ -3600,7 +3600,7 @@ function DraftPageContent() {
                   setPendingRankingDraft(null);
                 }}
                 className="flex-1 text-sm font-medium rounded-md py-2"
-                style={{ background: '#185fa5', color: '#ffffff', border: 'none' }}
+                style={{ background: 'var(--df-accent)', color: 'var(--df-surface)', border: 'none' }}
               >
                 Draft
               </button>
@@ -3667,11 +3667,11 @@ function DraftPageContent() {
               <div>
                 <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Status</p>
                 {role === 'commissioner' ? (
-                  <p className="text-xs font-medium m-0" style={{ color: '#185fa5' }}>
+                  <p className="text-xs font-medium m-0" style={{ color: 'var(--df-accent)' }}>
                     Commissioner &middot; {team?.name || 'Unassigned'}
                   </p>
                 ) : role === 'gm' ? (
-                  <p className="text-xs font-medium m-0" style={{ color: '#185fa5' }}>
+                  <p className="text-xs font-medium m-0" style={{ color: 'var(--df-accent)' }}>
                     GM &middot; {team?.name || 'Unassigned'}
                   </p>
                 ) : p.draft_pick_number ? (
@@ -3745,7 +3745,7 @@ function DraftPageContent() {
           onClick={() => setShowSkipConfirm(false)}
         >
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-xl p-5 max-w-sm w-full">
-            <p className="text-sm font-semibold m-0 mb-1" style={{ color: '#0c2340' }}>
+            <p className="text-sm font-semibold m-0 mb-1" style={{ color: 'var(--df-text-primary)' }}>
               Skip this pick?
             </p>
             <p className="text-xs text-muted mb-3">
@@ -3767,7 +3767,7 @@ function DraftPageContent() {
                 }}
                 disabled={skipping}
                 className="text-xs flex-1 rounded-md font-medium"
-                style={{ background: '#c0392b', color: '#ffffff', border: 'none' }}
+                style={{ background: 'var(--df-error)', color: 'var(--df-surface)', border: 'none' }}
               >
                 {skipping ? 'Skipping…' : 'Confirm skip'}
               </button>
@@ -3787,11 +3787,11 @@ function DraftPageContent() {
           >
             <div
               className="w-14 h-14 rounded-full mx-auto flex items-center justify-center mb-3"
-              style={{ background: '#e6f1fb' }}
+              style={{ background: 'var(--df-info-bg)' }}
             >
-              <i className="ti ti-confetti text-3xl" style={{ color: '#185fa5' }} aria-hidden="true" />
+              <i className="ti ti-confetti text-3xl" style={{ color: 'var(--df-accent)' }} aria-hidden="true" />
             </div>
-            <p className="text-lg font-semibold m-0" style={{ color: '#0c2340' }}>
+            <p className="text-lg font-semibold m-0" style={{ color: 'var(--df-text-primary)' }}>
               Congratulations — the draft is complete!
             </p>
             <p className="text-sm text-muted mt-2 mb-4">

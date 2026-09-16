@@ -18,6 +18,8 @@ export default function ProfilePage() {
   const [proxyTeams, setProxyTeams] = useState([]);
   const [settings, setSettings] = useState(null);
   const [role, setRole] = useState(null);
+  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
+  const [savingDarkMode, setSavingDarkMode] = useState(false);
   const [teamNameDraft, setTeamNameDraft] = useState('');
   const [teamColorDraft, setTeamColorDraft] = useState('#0074ff');
 
@@ -91,7 +93,7 @@ export default function ProfilePage() {
     const [{ data: playerRow }, { data: settingsRow }, { data: profileRow }, { data: allTeamsRow }] = await Promise.all([
       supabase.from('players').select('*').eq('email', user.email).single(),
       supabase.from('draft_settings').select('*').eq('id', 1).single(),
-      supabase.from('profiles').select('role, team_id').eq('id', user.id).maybeSingle(),
+      supabase.from('profiles').select('role, team_id, dark_mode_enabled').eq('id', user.id).maybeSingle(),
       supabase.from('teams').select('id, name, proxy_email'),
     ]);
 
@@ -103,6 +105,7 @@ export default function ProfilePage() {
     setPlayer(playerRow);
     setSettings(settingsRow);
     setRole(profileRow?.role || null);
+    setDarkModeEnabled(Boolean(profileRow?.dark_mode_enabled));
 
     // A non-GM player can be designated as a draft-day proxy for a team -
     // they need the same "go draft" access as an actual GM would, even
@@ -163,6 +166,19 @@ export default function ProfilePage() {
       .eq('id', team.id);
     setTeam((t) => ({ ...t, name: teamNameDraft.trim(), team_color: teamColorDraft }));
     setSavingTeamName(false);
+  }
+
+  async function handleToggleDarkMode() {
+    const newValue = !darkModeEnabled;
+    setSavingDarkMode(true);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('profiles').update({ dark_mode_enabled: newValue }).eq('id', user.id);
+    }
+    setDarkModeEnabled(newValue);
+    setSavingDarkMode(false);
   }
 
   async function updatePassword() {
@@ -552,6 +568,50 @@ export default function ProfilePage() {
               >
                 Continue to Spectator Room
               </a>
+            </div>
+          </div>
+        )}
+
+        {role === 'commissioner' && (
+          <div className="rounded-lg border border-line px-3.5 py-3 mb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
+                  Dark Mode (GM Draft Page)
+                </p>
+                <p className="text-[11px] m-0 mt-1" style={{ color: '#8b97a3' }}>
+                  Applies only to the GM Draft page while this is being tested.
+                </p>
+              </div>
+              <button
+                onClick={handleToggleDarkMode}
+                disabled={savingDarkMode}
+                role="switch"
+                aria-checked={darkModeEnabled}
+                style={{
+                  width: 44,
+                  height: 24,
+                  borderRadius: 12,
+                  background: darkModeEnabled ? '#185fa5' : '#d8dde2',
+                  border: 'none',
+                  position: 'relative',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 2,
+                    left: darkModeEnabled ? 22 : 2,
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    background: '#ffffff',
+                    transition: 'left 0.15s ease',
+                  }}
+                />
+              </button>
             </div>
           </div>
         )}

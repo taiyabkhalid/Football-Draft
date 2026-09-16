@@ -2,6 +2,62 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Draft page theming - scoped specifically to app/draft/page.js for now.
+   Light values are the ORIGINAL, unchanged hardcoded colors (see
+   THEME_COLORS_BACKUP.md) - dark mode never applies unless the [data-theme="dark"]
+   attribute is explicitly set on a containing element, so nothing changes
+   for anyone who never uses the new toggle. */
+:root {
+  --df-surface: #ffffff;
+  --df-accent: #185fa5;
+  --df-accent-secondary: #0074ff;
+  --df-text-muted: #5a6b7d;
+  --df-text-primary: #0c2340;
+  --df-border: #d8dde2;
+  --df-text-secondary: #3d4a57;
+  --df-text-faint: #8b97a3;
+  --df-surface-alt: #f1f3f6;
+  --df-surface-subtle: #e9ecef;
+  --df-warning-text: #854f0b;
+  --df-warning-text-strong: #633806;
+  --df-warning-bg: #faeeda;
+  --df-warning-bg-alt: #faf3e3;
+  --df-warning-accent: #f3c37a;
+  --df-accent-dark: #0c447c;
+  --df-accent-darkest: #042c53;
+  --df-info-bg: #e6f1fb;
+  --df-info-text: #b5d4f4;
+  --df-error: #c0392b;
+  --df-error-bg: #fceded;
+  --df-success: #3b6d11;
+}
+
+[data-theme='dark'] {
+  --df-surface: #17212e;
+  --df-accent: #3399ff;
+  --df-accent-secondary: #3399ff;
+  --df-text-muted: #9fb0c2;
+  --df-text-primary: #f7f9fc;
+  --df-border: #31404f;
+  --df-text-secondary: #c3d0dc;
+  --df-text-faint: #7c8ea3;
+  --df-surface-alt: #0f1720;
+  --df-surface-subtle: #131c27;
+  --df-warning-text: #f0b884;
+  --df-warning-text-strong: #f0b884;
+  --df-warning-bg: #2a1f0e;
+  --df-warning-bg-alt: #2a1f0e;
+  --df-warning-accent: #f0b884;
+  --df-accent-dark: #0d3a63;
+  --df-accent-darkest: #062038;
+  --df-info-bg: #0d2438;
+  --df-info-text: #8fc4ff;
+  --df-error: #ff5c52;
+  --df-error-bg: #3a1414;
+  --df-success: #2ee68a;
+  background: #060b12;
+}
+
 body {
   background: #ffffff;
 }
