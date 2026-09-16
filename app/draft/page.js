@@ -267,6 +267,17 @@ function DraftPageContent() {
   function getSharedPickNumber(clockPickNumber) {
     return picks.filter((p) => p.player_id && p.pick_number < clockPickNumber).length + 1;
   }
+
+  // A team-color tint mixed toward white always looks pastel/light,
+  // which reads fine against a light page but is wrong against a dark
+  // one - here it mixes toward the app's own dark surface color instead
+  // whenever dark mode is active, so the result stays a genuinely dark,
+  // team-tinted card rather than a bright pastel one regardless of theme.
+  const isDarkMode = Boolean(profile?.dark_mode_enabled);
+  function teamTint(hex, amount) {
+    return lightenColor(hex, amount, isDarkMode ? [23, 33, 46] : [255, 255, 255]);
+  }
+
   const numTeams = settings?.num_teams || teams.length;
   const draftStatus = settings?.draft_status || 'not_started';
   const draftType = settings?.draft_type || 'snake';
@@ -1926,7 +1937,7 @@ function DraftPageContent() {
                 style={{
                   width: 100,
                   height: 52,
-                  background: n.isSoonestMine ? lightenColor(color, 0.7) : lightenColor(color, 0.85),
+                  background: n.isSoonestMine ? teamTint(color, 0.7) : teamTint(color, 0.85),
                   color: 'var(--df-text-primary)',
                   border: n.isSoonestMine
                     ? `2px solid ${color}`
@@ -2309,7 +2320,7 @@ function DraftPageContent() {
         </>
       ) : draftStatus === 'completed' ? (
         <div className="bg-royal-pale mx-4 sm:mx-5 mt-4 rounded-lg p-3.5">
-          <p className="text-sm m-0" style={{ color: 'var(--df-accent-dark)' }}>
+          <p className="text-sm m-0" style={{ color: 'var(--df-accent)' }}>
             The draft has ended. Final rosters are below.
           </p>
         </div>
@@ -2403,7 +2414,7 @@ function DraftPageContent() {
                         style={{
                           width: 140,
                           boxSizing: 'border-box',
-                          background: selected ? color : lightenColor(color, 0.85),
+                          background: selected ? color : teamTint(color, 0.85),
                           color: selected ? 'var(--df-surface)' : 'var(--df-text-primary)',
                           borderLeft: 'none',
                           borderRight: 'none',
@@ -2463,7 +2474,7 @@ function DraftPageContent() {
                               style={{
                                 minHeight: 100,
                                 cursor: player ? 'pointer' : 'default',
-                                background: isClockSlot ? lightenColor(teamColor, 0.85) : 'var(--df-surface-alt)',
+                                background: isClockSlot ? teamTint(teamColor, 0.85) : 'var(--df-surface-alt)',
                                 border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
                               }}
                             >
@@ -2571,7 +2582,7 @@ function DraftPageContent() {
                       className="text-xs px-2.5 py-1.5 rounded-md font-medium"
                       style={{
                         background: selectedRound === r ? 'var(--df-accent)' : 'var(--df-info-bg)',
-                        color: selectedRound === r ? 'var(--df-surface)' : 'var(--df-accent-dark)',
+                        color: selectedRound === r ? 'var(--df-surface)' : 'var(--df-accent)',
                         border: '2px solid transparent',
                       }}
                     >
@@ -2593,7 +2604,7 @@ function DraftPageContent() {
                           className="rounded-lg flex flex-col items-center text-center px-1 py-2"
                           style={{
                             minHeight: 100,
-                            background: isClockSlot ? lightenColor(teamColor, 0.85) : 'var(--df-surface-alt)',
+                            background: isClockSlot ? teamTint(teamColor, 0.85) : 'var(--df-surface-alt)',
                             border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
                             cursor: slot.player ? 'pointer' : 'default',
                           }}
@@ -2798,7 +2809,7 @@ function DraftPageContent() {
         style={{ scrollMarginTop: 120 }}
       >
         <div className="flex items-center gap-3.5 mb-3">
-          <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: 'var(--df-accent-dark)' }}>
+          <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: 'var(--df-accent)' }}>
             Player selection
           </p>
           {!profile?.is_primary && (
@@ -3285,23 +3296,23 @@ function DraftPageContent() {
                     <div className="min-w-0">
                       <p
                         className="text-sm font-medium m-0 leading-snug"
-                        style={{ color: isMatch ? 'var(--df-accent-darkest)' : 'var(--df-text-primary)' }}
+                        style={{ color: isMatch ? 'var(--df-accent)' : 'var(--df-text-primary)' }}
                       >
                         {p.full_name} <span className="font-normal text-muted">({p.gender})</span>
                       </p>
-                      <p className="text-[11px] m-0" style={{ color: isMatch ? 'var(--df-accent-dark)' : 'var(--df-text-muted)' }}>
+                      <p className="text-[11px] m-0" style={{ color: isMatch ? 'var(--df-accent)' : 'var(--df-text-muted)' }}>
                         {p.height_feet}'{p.height_inches}"
                       </p>
                     </div>
                   </div>
-                  <p className="text-[11px] my-0.5" style={{ color: isMatch ? 'var(--df-accent-dark)' : 'var(--df-text-muted)' }}>
+                  <p className="text-[11px] my-0.5" style={{ color: isMatch ? 'var(--df-accent)' : 'var(--df-text-muted)' }}>
                     Offense: {p.offensive_position} &nbsp; Defense: {p.defensive_position}
                   </p>
-                  <p className="text-[11px] my-0.5" style={{ color: isMatch ? 'var(--df-accent-dark)' : 'var(--df-text-muted)' }}>
+                  <p className="text-[11px] my-0.5" style={{ color: isMatch ? 'var(--df-accent)' : 'var(--df-text-muted)' }}>
                     Previous team: {previousTeamLabel(p.previous_team)}
                   </p>
                   {!isDrafted && (
-                    <p className="text-[11px] mt-0.5" style={{ color: isMatch ? 'var(--df-accent-dark)' : 'var(--df-text-muted)' }}>
+                    <p className="text-[11px] mt-0.5" style={{ color: isMatch ? 'var(--df-accent)' : 'var(--df-text-muted)' }}>
                       Injuries: {p.injury_status === 'None' ? 'None' : `${p.injury_status} (${p.weeks_until_recovered || '?'}w)`}
                     </p>
                   )}
@@ -3458,7 +3469,7 @@ function DraftPageContent() {
                         key={p.id}
                         onClick={() => openProfile(p.id)}
                         className="rounded-md px-2.5 py-2 cursor-pointer hover:brightness-95"
-                        style={{ background: lightenColor(myColor, 0.85) }}
+                        style={{ background: teamTint(myColor, 0.85) }}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-xs font-medium m-0" style={{ color: 'var(--df-text-primary)' }}>{p.full_name}</p>
