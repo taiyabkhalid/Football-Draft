@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock, getTeamOnTheClockExtended, getRoundExtended, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
-import FootballIcon, { lightenColor, StarIcon } from '../../lib/FootballIcon';
+import FootballIcon, { lightenColor, StarIcon, getLuminance } from '../../lib/FootballIcon';
 import OnboardingTour from '../../lib/OnboardingTour';
 import PrintRosterButton from '../../lib/PrintRosterButton';
 
@@ -524,6 +524,7 @@ function DraftPageContent() {
       setShowCompleteModal(true);
       setViewByTeamOpen(true);
       setRosterViewMode('board');
+      scrollRostersIntoView();
     }
     prevDraftStatusRef.current = draftStatus;
   }, [draftStatus]);
@@ -1338,7 +1339,7 @@ function DraftPageContent() {
             On the clock
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <FootballIcon color="var(--df-surface)" size={16} />
+            <FootballIcon color="var(--df-surface)" size={16} isDarkMode={isDarkMode} />
             {/* Deliberately a fixed example, not the viewer's real team - this
                 slide is a generic illustration of what the box looks like,
                 not a live readout, so it stays simple and never needs to be
@@ -2003,7 +2004,7 @@ function DraftPageContent() {
                   </span>
                 )}
                 <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
-                  <FootballIcon color={color} size={11} />
+                  <FootballIcon color={color} size={11} isDarkMode={isDarkMode} />
                   <span className="truncate">{n.team?.name || '—'}</span>
                 </span>
                 <span className="text-[10px]" style={{ color: 'var(--df-text-muted)' }}>
@@ -2061,7 +2062,7 @@ function DraftPageContent() {
               </div>
               <div style={{ position: 'relative', marginBottom: 12, minHeight: 20 }}>
                 <span style={{ position: 'absolute', left: 24, top: '50%', marginTop: -8 }}>
-                  <FootballIcon color={teamColor} size={16} />
+                  <FootballIcon color={teamColor} size={16} isDarkMode={isDarkMode} />
                 </span>
                 <p className="text-[15px] font-semibold m-0 text-center" style={{ color: teamColor }}>
                   {team?.name || 'Your team'}
@@ -2124,7 +2125,7 @@ function DraftPageContent() {
                     {ownerByTeam[current.team.id]?.name || 'You'}, your team must select a female player with this draft pick:
                   </p>
                   <div className="flex items-center gap-1.5" style={{ margin: '8px 0 12px' }}>
-                    <FootballIcon color={current.team.team_color || 'var(--df-accent-secondary)'} size={14} />
+                    <FootballIcon color={current.team.team_color || 'var(--df-accent-secondary)'} size={14} isDarkMode={isDarkMode} />
                     <span className="text-[13px] font-semibold" style={{ color: current.team.team_color || 'var(--df-accent-secondary)' }}>
                       {current.team.name}
                     </span>
@@ -2160,7 +2161,7 @@ function DraftPageContent() {
                     Your team
                   </p>
                   <div className="flex items-center gap-1.5" style={{ margin: '4px 0 12px' }}>
-                    <FootballIcon color={current.team?.team_color || 'var(--df-accent-secondary)'} size={14} />
+                    <FootballIcon color={current.team?.team_color || 'var(--df-accent-secondary)'} size={14} isDarkMode={isDarkMode} />
                     <span className="text-[13px] font-semibold" style={{ color: current.team?.team_color || 'var(--df-accent-secondary)' }}>
                       {current.team?.name}
                     </span>
@@ -2234,7 +2235,7 @@ function DraftPageContent() {
               {previousPick ? (
                 <>
                   <div className="flex items-center gap-2">
-                    <FootballIcon color={teamsById[previousPick.team_id]?.team_color || 'var(--df-accent-secondary)'} size={16} />
+                    <FootballIcon color={teamsById[previousPick.team_id]?.team_color || 'var(--df-accent-secondary)'} size={16} isDarkMode={isDarkMode} />
                     <p className="text-xs text-ink m-0 truncate">
                       {previousPick.player_id
                         ? `${playersById[previousPick.player_id]?.full_name || 'Unknown'} — ${teamsById[previousPick.team_id]?.name || ''}`
@@ -2258,7 +2259,7 @@ function DraftPageContent() {
                   {draftStatus === 'paused' ? 'On the clock \u00b7 paused' : 'On the clock'}
                 </p>
                 <div className="flex items-center gap-2">
-                  <FootballIcon color="var(--df-surface)" size={16} />
+                  <FootballIcon color="var(--df-surface)" size={16} isDarkMode={isDarkMode} />
                   <p className="text-[13px] font-semibold truncate m-0" style={{ color: 'var(--df-surface)' }}>
                     {teamOnClock?.name || '—'}
                   </p>
@@ -2310,7 +2311,7 @@ function DraftPageContent() {
             <div className="flex-1 bg-surface rounded-lg p-3">
               <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Next up</p>
               <div className="flex items-center gap-2">
-                <FootballIcon color={teamNextOnClock?.team_color || 'var(--df-accent-secondary)'} size={16} />
+                <FootballIcon color={teamNextOnClock?.team_color || 'var(--df-accent-secondary)'} size={16} isDarkMode={isDarkMode} />
                 <p className="text-xs text-ink m-0 truncate">{teamNextOnClock?.name || '—'}</p>
               </div>
               {teamNextOnClock && (
@@ -2450,6 +2451,7 @@ function DraftPageContent() {
                     const selected = viewingTeamId === t.id;
                     const isMine = profile?.team_id === t.id;
                     const ring = isMine ? ', 0 0 0 2px var(--df-accent)' : '';
+                    const needsContrastBorder = isDarkMode && selected && getLuminance(color) < 40;
                     return (
                       <button
                         key={t.id}
@@ -2459,17 +2461,17 @@ function DraftPageContent() {
                           width: 140,
                           boxSizing: 'border-box',
                           background: selected ? color : teamTint(color, 0.85),
-                          color: selected ? 'var(--df-surface)' : 'var(--df-text-primary)',
-                          borderLeft: 'none',
-                          borderRight: 'none',
-                          borderTop: selected ? '3px solid rgba(0,0,0,0.25)' : '1px solid rgba(255,255,255,0.7)',
-                          borderBottom: selected ? '1px solid rgba(255,255,255,0.25)' : '3px solid rgba(0,0,0,0.18)',
+                          color: selected ? (needsContrastBorder ? '#e2e8f0' : 'var(--df-surface)') : 'var(--df-text-primary)',
+                          borderLeft: needsContrastBorder ? '1px solid #e2e8f0' : 'none',
+                          borderRight: needsContrastBorder ? '1px solid #e2e8f0' : 'none',
+                          borderTop: needsContrastBorder ? '1px solid #e2e8f0' : selected ? '3px solid rgba(0,0,0,0.25)' : '1px solid rgba(255,255,255,0.7)',
+                          borderBottom: needsContrastBorder ? '1px solid #e2e8f0' : selected ? '1px solid rgba(255,255,255,0.25)' : '3px solid rgba(0,0,0,0.18)',
                           boxShadow: selected
                             ? `inset 0 1px 3px rgba(0,0,0,0.3)${ring}`
                             : `0 1px 2px rgba(12,35,64,0.15)${ring}`,
                         }}
                       >
-                        <FootballIcon color={selected ? 'var(--df-surface)' : color} size={14} />
+                        <FootballIcon color={selected ? (needsContrastBorder ? '#e2e8f0' : 'var(--df-surface)') : color} size={14} isDarkMode={isDarkMode} />
                         <span className="truncate">
                           {t.name}
                           {isMine ? ' (you)' : ''}
@@ -2708,7 +2710,7 @@ function DraftPageContent() {
                           )}
                           {!isClockSlot && (
                             <div className="mt-auto pt-1 flex items-center gap-1">
-                              <FootballIcon color={teamColor} size={10} />
+                              <FootballIcon color={teamColor} size={10} isDarkMode={isDarkMode} />
                               <span className="text-[9px] text-muted truncate">{slot.team?.name}</span>
                             </div>
                           )}
@@ -2722,16 +2724,16 @@ function DraftPageContent() {
 
             {rosterViewMode === 'board' && (
               <div
-                className="bg-df-surface rounded-lg p-3"
-                style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '65vh' }}
+                className="bg-df-surface rounded-lg p-3 max-h-[65vh] sm:max-h-[82vh]"
+                style={{ overflowX: 'auto', overflowY: 'auto' }}
               >
                 <table className="border-collapse text-xs" style={{ width: '100%' }}>
                   <thead>
                     <tr>
                       <th
-                        className="text-left p-2.5 sticky left-0"
+                        className="text-left p-1.5 sticky left-0"
                         style={{
-                          minWidth: 130,
+                          minWidth: 105,
                           position: 'sticky',
                           top: 0,
                           zIndex: 3,
@@ -2747,9 +2749,9 @@ function DraftPageContent() {
                       {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => (
                         <th
                           key={r}
-                          className="p-2.5 text-center"
+                          className="p-1.5 text-center"
                           style={{
-                            minWidth: 90,
+                            minWidth: 70,
                             position: 'sticky',
                             top: 0,
                             zIndex: 2,
@@ -2773,9 +2775,9 @@ function DraftPageContent() {
                         const owner = ownerByTeam[t.id];
                         return (
                           <tr key={t.id} className="border-t" style={{ borderColor: 'var(--df-border)' }}>
-                            <td className="p-2 sticky left-0 bg-df-surface align-top">
+                            <td className="p-1.5 sticky left-0 bg-df-surface align-top">
                               <div className="flex items-center gap-1.5">
-                                <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={12} />
+                                <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={12} isDarkMode={isDarkMode} />
                                 <span className="font-medium text-ink">{t.name}</span>
                               </div>
                               {owner && <p className="text-[10px] text-muted m-0 mt-0.5">GM: {owner.name}</p>}
@@ -2784,7 +2786,7 @@ function DraftPageContent() {
                               const slot = allSlots.find((s) => s.round === r && s.team?.id === t.id);
                               if (!slot) {
                                 return (
-                                  <td key={r} className="p-2 text-center align-top" style={{ color: 'var(--df-text-faint)' }}>
+                                  <td key={r} className="p-1.5 text-center align-top" style={{ color: 'var(--df-text-faint)' }}>
                                     &mdash;
                                   </td>
                                 );
@@ -2795,8 +2797,8 @@ function DraftPageContent() {
                                   {slot.player ? (
                                     <button
                                       onClick={() => openProfile(slot.player.id)}
-                                      className="bg-surface rounded-lg p-1.5 text-center"
-                                      style={{ width: 80 }}
+                                      className="bg-surface rounded-lg p-1 text-center"
+                                      style={{ width: 64 }}
                                     >
                                       {slot.player.headshot_url ? (
                                         <img
@@ -2813,7 +2815,7 @@ function DraftPageContent() {
                                         {slot.player.full_name}
                                       </p>
                                       <p className="text-[9px] m-0" style={{ color: 'var(--df-text-muted)' }}>
-                                        {slot.player.gender} &middot; Overall Pick #{slot.player.draft_pick_number}
+                                        {slot.player.gender} &middot; Pick #{slot.player.draft_pick_number}
                                       </p>
                                     </button>
                                   ) : isSkipped ? (
@@ -2879,7 +2881,7 @@ function DraftPageContent() {
             value={searchPosition}
             onChange={(e) => setSearchPosition(e.target.value)}
             className="flex-none text-xs"
-            style={{ width: 120, borderColor: searchPosition ? 'var(--df-accent)' : undefined }}
+            style={{ width: 'auto', minWidth: 130, borderColor: searchPosition ? 'var(--df-accent)' : undefined }}
           >
             <option value="">Position: any</option>
             <optgroup label="Offense">
@@ -2901,7 +2903,7 @@ function DraftPageContent() {
             value={searchGender}
             onChange={(e) => setSearchGender(e.target.value)}
             className="flex-none text-xs"
-            style={{ width: 84, borderColor: searchGender ? 'var(--df-accent)' : undefined }}
+            style={{ width: 'auto', minWidth: 95, borderColor: searchGender ? 'var(--df-accent)' : undefined }}
           >
             <option value="">M/F: any</option>
             <option value="M">M</option>
@@ -2911,7 +2913,7 @@ function DraftPageContent() {
             value={searchPreviousTeam}
             onChange={(e) => setSearchPreviousTeam(e.target.value)}
             className="flex-none text-xs"
-            style={{ width: 140, borderColor: searchPreviousTeam ? 'var(--df-accent)' : undefined }}
+            style={{ width: 'auto', minWidth: 170, borderColor: searchPreviousTeam ? 'var(--df-accent)' : undefined }}
           >
             <option value="">Previous team: any</option>
             {previousTeamOptions.map((t) => (
@@ -2924,7 +2926,7 @@ function DraftPageContent() {
             value={searchAvailability}
             onChange={(e) => setSearchAvailability(e.target.value)}
             className="flex-none text-xs"
-            style={{ width: 130, borderColor: searchAvailability ? 'var(--df-accent)' : undefined }}
+            style={{ width: 'auto', minWidth: 155, borderColor: searchAvailability ? 'var(--df-accent)' : undefined }}
           >
             <option value="">Availability: any</option>
             <option value="available">Available</option>
@@ -2935,7 +2937,7 @@ function DraftPageContent() {
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
             className="flex-none text-xs"
-            style={{ width: 92 }}
+            style={{ width: 'auto', minWidth: 135 }}
           >
             <option value="name">Sort: name</option>
             <option value="gender">Sort: M/F</option>
@@ -3286,7 +3288,7 @@ function DraftPageContent() {
                 className="flex items-center gap-1.5 rounded-md flex-shrink-0"
                 style={{ background: 'var(--df-info-bg)', padding: '4px 10px' }}
               >
-                <FootballIcon color={draftingForTeam.team_color || 'var(--df-accent-secondary)'} size={14} />
+                <FootballIcon color={draftingForTeam.team_color || 'var(--df-accent-secondary)'} size={14} isDarkMode={isDarkMode} />
                 <span className="text-[12px] font-semibold" style={{ color: 'var(--df-text-primary)' }}>
                   You are drafting for {draftingForTeam.name}
                 </span>
@@ -3368,7 +3370,7 @@ function DraftPageContent() {
                     </div>
                   ) : isDrafted ? (
                     <div className="w-full rounded-lg py-2 mt-auto flex items-center justify-center gap-1.5" style={{ background: 'var(--df-border)' }}>
-                      <FootballIcon color={teamsById[p.team_id]?.team_color || 'var(--df-accent-secondary)'} size={13} />
+                      <FootballIcon color={teamsById[p.team_id]?.team_color || 'var(--df-accent-secondary)'} size={13} isDarkMode={isDarkMode} />
                       <span className="text-[11px] font-medium" style={{ color: 'var(--df-text-secondary)' }}>
                         {p.draft_pick_number
                           ? `Drafted By: ${teamsById[p.team_id]?.name || 'Unknown'}`
@@ -3428,7 +3430,7 @@ function DraftPageContent() {
                     style={{ background: 'var(--df-surface-subtle)', border: '1px solid var(--df-border)', padding: '7px 9px' }}
                   >
                     <span className="flex items-center gap-1.5">
-                      <FootballIcon color={myColor} size={13} />
+                      <FootballIcon color={myColor} size={13} isDarkMode={isDarkMode} />
                       <span className="text-[11px] font-semibold" style={{ color: 'var(--df-text-primary)' }}>{myTeam?.name || '—'}</span>
                     </span>
                     <i className={`ti ti-chevron-${teamSwitcherOpen ? 'up' : 'down'} text-sm`} style={{ color: 'var(--df-text-faint)' }} aria-hidden="true" />
@@ -3454,7 +3456,7 @@ function DraftPageContent() {
                               background: tid === yourTeamPanelTeamId ? 'var(--df-info-bg)' : 'transparent',
                             }}
                           >
-                            <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={13} />
+                            <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={13} isDarkMode={isDarkMode} />
                             <span className="text-[11px]" style={{ color: 'var(--df-text-primary)', fontWeight: tid === yourTeamPanelTeamId ? 600 : 400 }}>
                               {t.name}
                             </span>
@@ -3467,7 +3469,7 @@ function DraftPageContent() {
               )}
               {myTeam && (
                 <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1 flex items-center gap-1.5">
-                  <FootballIcon color={myColor} size={13} />
+                  <FootballIcon color={myColor} size={13} isDarkMode={isDarkMode} />
                   {myTeam?.name || '—'}
                 </p>
               )}
