@@ -2751,7 +2751,7 @@ function DraftPageContent() {
                           key={r}
                           className="p-1.5 text-center"
                           style={{
-                            minWidth: 70,
+                            minWidth: 110,
                             position: 'sticky',
                             top: 0,
                             zIndex: 2,
@@ -2784,10 +2784,16 @@ function DraftPageContent() {
                             </td>
                             {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => {
                               const slot = allSlots.find((s) => s.round === r && s.team?.id === t.id);
+                              const cardBoxStyle = { width: 98, minHeight: 66 };
                               if (!slot) {
                                 return (
-                                  <td key={r} className="p-1.5 text-center align-top" style={{ color: 'var(--df-text-faint)' }}>
-                                    &mdash;
+                                  <td key={r} className="p-1.5 text-center align-top">
+                                    <div
+                                      className="bg-surface rounded-lg p-1 text-center flex items-center justify-center"
+                                      style={cardBoxStyle}
+                                    >
+                                      <span style={{ color: 'var(--df-text-faint)' }}>&mdash;</span>
+                                    </div>
                                   </td>
                                 );
                               }
@@ -2798,7 +2804,7 @@ function DraftPageContent() {
                                     <button
                                       onClick={() => openProfile(slot.player.id)}
                                       className="bg-surface rounded-lg p-1 text-center"
-                                      style={{ width: 64 }}
+                                      style={cardBoxStyle}
                                     >
                                       {slot.player.headshot_url ? (
                                         <img
@@ -2819,18 +2825,27 @@ function DraftPageContent() {
                                       </p>
                                     </button>
                                   ) : isSkipped ? (
-                                    <>
-                                      <p className="text-[10px] italic m-0" style={{ color: 'var(--df-text-faint)' }}>
+                                    <div
+                                      className="bg-surface rounded-lg p-1 text-center flex flex-col items-center justify-center"
+                                      style={cardBoxStyle}
+                                    >
+                                      <div className="w-7 h-7 rounded-full bg-df-surface mx-auto flex items-center justify-center">
+                                        <i className="ti ti-player-skip-forward text-faint text-sm" aria-hidden="true" />
+                                      </div>
+                                      <p className="text-[10px] italic m-0 mt-1" style={{ color: 'var(--df-text-faint)' }}>
                                         Skipped
                                       </p>
                                       <p className="text-[9px] m-0" style={{ color: 'var(--df-text-faint)' }}>
                                         Pick #{getSharedPickNumber(slot.pickNumber)}
                                       </p>
-                                    </>
+                                    </div>
                                   ) : (
-                                    <p className="m-0" style={{ color: 'var(--df-text-faint)' }}>
-                                      &mdash;
-                                    </p>
+                                    <div
+                                      className="bg-surface rounded-lg p-1 text-center flex items-center justify-center"
+                                      style={cardBoxStyle}
+                                    >
+                                      <span style={{ color: 'var(--df-text-faint)' }}>&mdash;</span>
+                                    </div>
                                   )}
                                 </td>
                               );
