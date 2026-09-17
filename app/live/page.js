@@ -165,6 +165,8 @@ function LiveDraftPageContent() {
   const [openProfileIds, setOpenProfileIds] = useState([]);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const prevDraftStatusRef = useRef(null);
+  const [showRandomizingAnimation, setShowRandomizingAnimation] = useState(false);
+  const prevShowDraftOrderPreviewRef = useRef(false);
 
   const currentPickRef = useRef(null);
   const draftedScrollRef = useRef(null);
@@ -666,16 +668,29 @@ function LiveDraftPageContent() {
   const msUntilRoomOpens = msUntilDraft !== null ? msUntilDraft - 30 * 60 * 1000 : null;
   const roomIsOpen = msUntilRoomOpens !== null && msUntilRoomOpens <= 0;
   const showDraftOrderPreview = msUntilDraft !== null && msUntilDraft <= 30 * 60 * 1000;
-  // Shown from the moment the page opens within the 30-minute window
-  // until randomize_draft_order_if_due actually completes (checked every
-  // 5 seconds by the effect above) - purely reflects real settings state,
-  // so it naturally disappears the instant draft_order_auto_randomized
-  // flips to true, no separate timer of its own needed.
-  const showRandomizingPopup =
-    draftStatus === 'not_started' &&
-    showDraftOrderPreview &&
-    settings?.auto_randomize_draft_order === true &&
-    settings?.draft_order_auto_randomized !== true;
+
+  // The actual randomization is completed by a backend cron job within
+  // ~15 seconds of the 30-minute mark, entirely independent of anyone
+  // having a page open. Gating the "being randomized" animation on the
+  // real draft_order_auto_randomized flag means most spectators arrive
+  // after it has already quietly finished and never see the animation
+  // at all - matches the identical fix on the GM draft page. Shows the
+  // animation for a fixed, guaranteed duration the moment THIS viewer's
+  // own page crosses into the 30-minute window, regardless of the
+  // backend's real timing. Waits for settings to have actually loaded
+  // first, so a spectator who opens the page already inside the window
+  // still gets it.
+  useEffect(() => {
+    if (!settings) return;
+    const justEntered = showDraftOrderPreview && !prevShowDraftOrderPreviewRef.current;
+    prevShowDraftOrderPreviewRef.current = showDraftOrderPreview;
+    if (!justEntered) return;
+    if (draftStatus === 'not_started' && settings.auto_randomize_draft_order === true) {
+      setShowRandomizingAnimation(true);
+      const timer = setTimeout(() => setShowRandomizingAnimation(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [showDraftOrderPreview, draftStatus, settings]);
 
   function formatCountdown(ms) {
     if (ms === null) return '--:--';
@@ -1180,7 +1195,7 @@ function LiveDraftPageContent() {
           </div>
         </div>
 
-        {showDraftOrderPreview && !showRandomizingPopup && upcomingPicksBlock}
+        {showDraftOrderPreview && !showRandomizingAnimation && upcomingPicksBlock}
       </>
     )}
 
@@ -2272,7 +2287,7 @@ function LiveDraftPageContent() {
         onToggleSound={handleToggleSound}
       />
 
-      {showRandomizingPopup && (
+      {showRandomizingAnimation && (
         <div
           style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
           className="flex items-center justify-center px-4"

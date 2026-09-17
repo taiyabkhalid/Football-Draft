@@ -79,6 +79,7 @@ function DraftPageContent() {
   const [sortBy, setSortBy] = useState('name');
   const [viewByTeamOpen, setViewByTeamOpen] = useState(false);
   const [upcomingPicksOpen, setUpcomingPicksOpen] = useState(false);
+  const [showRandomizingAnimation, setShowRandomizingAnimation] = useState(false);
   const rostersSectionRef = useRef(null);
   const stickyHeaderRef = useRef(null);
   const playerSelectionRef = useRef(null);
@@ -150,6 +151,7 @@ function DraftPageContent() {
   const activeDragRef = useRef(null);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const prevDraftStatusRef = useRef(null);
+  const prevShowDraftOrderPreviewRef = useRef(false);
 
   // ---- Auth check ----
   useEffect(() => {
@@ -428,17 +430,37 @@ function DraftPageContent() {
     return mmss;
   }, [msUntilDraft]);
   const showDraftOrderPreview = msUntilDraft !== null && msUntilDraft <= 30 * 60 * 1000;
-  // Shown from the moment the page opens within the 30-minute window
-  // until randomize_draft_order_if_due actually completes (checked every
-  // 5 seconds by the effect above) - purely reflects real settings state,
-  // so it naturally disappears the instant draft_order_auto_randomized
-  // flips to true, no separate timer of its own needed.
-  const showRandomizingPopup =
-    draftStatus === 'not_started' &&
-    showDraftOrderPreview &&
-    settings?.auto_randomize_draft_order === true &&
-    settings?.draft_order_auto_randomized !== true;
   const secondsUntilDraftGm = msUntilDraft !== null ? Math.floor(msUntilDraft / 1000) : null;
+
+  // The actual randomization is completed by a backend cron job within
+  // ~15 seconds of the 30-minute mark, entirely independent of anyone
+  // having a page open. Gating the "being randomized" animation on the
+  // real draft_order_auto_randomized flag means most viewers arrive
+  // after it has already quietly finished and never see the animation
+  // at all - they only ever see the already-randomized Upcoming Picks.
+  // This instead shows the animation for a fixed, guaranteed duration
+  // the moment THIS viewer's own page crosses into the 30-minute
+  // window, regardless of the backend's real timing, then opens
+  // Upcoming Picks right as it finishes (or immediately if there's
+  // nothing to randomize at all). Waits for settings to have actually
+  // loaded before tracking the transition, so a spectator who opens the
+  // page for the first time already inside the window still gets it.
+  useEffect(() => {
+    if (!settings) return;
+    const justEntered = showDraftOrderPreview && !prevShowDraftOrderPreviewRef.current;
+    prevShowDraftOrderPreviewRef.current = showDraftOrderPreview;
+    if (!justEntered) return;
+    if (draftStatus === 'not_started' && settings.auto_randomize_draft_order === true) {
+      setShowRandomizingAnimation(true);
+      const timer = setTimeout(() => {
+        setShowRandomizingAnimation(false);
+        setUpcomingPicksOpen(true);
+      }, 4000);
+      return () => clearTimeout(timer);
+    } else {
+      setUpcomingPicksOpen(true);
+    }
+  }, [showDraftOrderPreview, draftStatus, settings]);
 
   const scrolledToTopForStartRef = useRef(false);
   useEffect(() => {
@@ -2034,7 +2056,7 @@ function DraftPageContent() {
         pickTimer={draftStatus === 'in_progress' || draftStatus === 'paused' ? timerDisplay : undefined}
       />
 
-      {showRandomizingPopup && (
+      {showRandomizingAnimation && (
         <div
           style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
           className="flex items-center justify-center px-4"
@@ -2226,7 +2248,7 @@ function DraftPageContent() {
             </p>
           </div>
 
-          {showDraftOrderPreview && !showRandomizingPopup && upcomingPicksBlock}
+          {showDraftOrderPreview && !showRandomizingAnimation && upcomingPicksBlock}
         </>
       )}
 

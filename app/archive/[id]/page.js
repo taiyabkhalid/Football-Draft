@@ -52,7 +52,7 @@ export default function ArchivedDraftPage() {
   }, [archivedDraftId]);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 pb-10">
+    <div className="max-w-6xl mx-auto px-4 pb-10">
       <BrandHeader />
 
       <div className="flex items-center justify-between mb-4 mt-2">
@@ -88,65 +88,63 @@ export default function ArchivedDraftPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+            <table className="text-xs" style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1050 }}>
               <thead>
                 <tr style={{ background: '#f7f9fb' }}>
-                  <th className="text-left px-2 py-1.5" style={{ color: '#5a6b7d' }}>
+                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 55 }}>
                     Pick#
                   </th>
-                  <th className="text-left px-2 py-1.5" style={{ color: '#5a6b7d' }}>
+                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 170 }}>
                     Player
                   </th>
-                  <th className="text-left px-2 py-1.5" style={{ color: '#5a6b7d' }}>
+                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 70 }}>
                     Gender
                   </th>
-                  <th className="text-left px-2 py-1.5" style={{ color: '#5a6b7d' }}>
+                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 110 }}>
                     Pos (Off/Def)
                   </th>
-                  <th className="text-left px-2 py-1.5" style={{ color: '#5a6b7d' }}>
+                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 140 }}>
                     Team
                   </th>
-                  <th className="text-left px-2 py-1.5" style={{ color: '#5a6b7d' }}>
+                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 150 }}>
                     GM
                   </th>
-                  <th className="text-left px-2 py-1.5" style={{ color: '#5a6b7d' }}>
-                    Contact
+                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 220 }}>
+                    Email
+                  </th>
+                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 130 }}>
+                    Phone
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {picks.map((p) => (
                   <tr key={p.pick_id} style={{ borderTop: '1px solid #eef1f4' }}>
-                    <td className="px-2 py-1.5" style={{ color: '#0c2340' }}>
+                    <td className="px-3 py-2" style={{ color: '#0c2340', whiteSpace: 'nowrap' }}>
                       {p.overall_pick_number ?? '—'}
                     </td>
-                    <td className="px-2 py-1.5" style={{ color: '#0c2340' }}>
+                    <td className="px-3 py-2" style={{ color: '#0c2340', whiteSpace: 'nowrap' }}>
                       {p.player_full_name || (
                         <span style={{ fontStyle: 'italic', color: '#8b97a3' }}>Skipped</span>
                       )}
                     </td>
-                    <td className="px-2 py-1.5" style={{ color: '#0c2340' }}>
+                    <td className="px-3 py-2" style={{ color: '#0c2340', whiteSpace: 'nowrap' }}>
                       {p.gender || ''}
                     </td>
-                    <td className="px-2 py-1.5" style={{ color: '#0c2340' }}>
+                    <td className="px-3 py-2" style={{ color: '#0c2340', whiteSpace: 'nowrap' }}>
                       {p.player_full_name ? `${p.offensive_position || ''} / ${p.defensive_position || ''}` : ''}
                     </td>
-                    <td className="px-2 py-1.5" style={{ color: '#185fa5', fontWeight: 600 }}>
+                    <td className="px-3 py-2" style={{ color: '#185fa5', fontWeight: 600, whiteSpace: 'nowrap' }}>
                       {p.team_name}
                     </td>
-                    <td className="px-2 py-1.5" style={{ color: '#0c2340' }}>
+                    <td className="px-3 py-2" style={{ color: '#0c2340', whiteSpace: 'nowrap' }}>
                       {p.gm_name || ''}
                     </td>
-                    <td className="px-2 py-1.5" style={{ color: p.player_email || p.player_phone ? '#0c2340' : '#8b97a3' }}>
-                      {p.player_email || p.player_phone ? (
-                        <>
-                          {p.player_email}
-                          {p.player_email && p.player_phone ? ' · ' : ''}
-                          {p.player_phone}
-                        </>
-                      ) : (
-                        <span style={{ fontStyle: 'italic' }}>—</span>
-                      )}
+                    <td className="px-3 py-2" style={{ color: p.player_email ? '#0c2340' : '#8b97a3', whiteSpace: 'nowrap' }}>
+                      {p.player_email || <span style={{ fontStyle: 'italic' }}>—</span>}
+                    </td>
+                    <td className="px-3 py-2" style={{ color: p.player_phone ? '#0c2340' : '#8b97a3', whiteSpace: 'nowrap' }}>
+                      {p.player_phone || <span style={{ fontStyle: 'italic' }}>—</span>}
                     </td>
                   </tr>
                 ))}
