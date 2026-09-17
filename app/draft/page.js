@@ -6,6 +6,14 @@ import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock, getTeamOnTheClockExtended, getRoundExtended, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
 import FootballIcon, { lightenColor, StarIcon, getLuminance } from '../../lib/FootballIcon';
+import {
+  BOARD_CARD_WIDTH,
+  BOARD_CARD_MIN_HEIGHT,
+  BOARD_TEAM_COLUMN_MIN_WIDTH,
+  BOARD_ROUND_COLUMN_MIN_WIDTH,
+  BOARD_CONTAINER_HEIGHT_CLASS,
+  TEAM_BUTTON_WIDTH,
+} from '../../lib/rosterViewLayout';
 import OnboardingTour from '../../lib/OnboardingTour';
 import PrintRosterButton from '../../lib/PrintRosterButton';
 
@@ -2458,7 +2466,7 @@ function DraftPageContent() {
                         onClick={() => setViewingTeamId(viewingTeamId === t.id ? null : t.id)}
                         className="text-xs px-2 py-1.5 rounded-md font-medium flex items-center gap-1.5 justify-center"
                         style={{
-                          width: 140,
+                          width: TEAM_BUTTON_WIDTH,
                           boxSizing: 'border-box',
                           background: selected ? color : teamTint(color, 0.85),
                           color: selected ? (needsContrastBorder ? '#e2e8f0' : 'var(--df-surface)') : 'var(--df-text-primary)',
@@ -2724,7 +2732,7 @@ function DraftPageContent() {
 
             {rosterViewMode === 'board' && (
               <div
-                className="bg-df-surface rounded-lg p-3 max-h-[65vh] sm:max-h-[82vh]"
+                className={`bg-df-surface rounded-lg p-3 ${BOARD_CONTAINER_HEIGHT_CLASS}`}
                 style={{ overflowX: 'auto', overflowY: 'auto' }}
               >
                 <table className="border-collapse text-xs" style={{ width: '100%' }}>
@@ -2733,7 +2741,7 @@ function DraftPageContent() {
                       <th
                         className="text-left p-1.5 sticky left-0"
                         style={{
-                          minWidth: 105,
+                          minWidth: BOARD_TEAM_COLUMN_MIN_WIDTH,
                           position: 'sticky',
                           top: 0,
                           zIndex: 3,
@@ -2751,7 +2759,7 @@ function DraftPageContent() {
                           key={r}
                           className="p-1.5 text-center"
                           style={{
-                            minWidth: 110,
+                            minWidth: BOARD_ROUND_COLUMN_MIN_WIDTH,
                             position: 'sticky',
                             top: 0,
                             zIndex: 2,
@@ -2784,7 +2792,7 @@ function DraftPageContent() {
                             </td>
                             {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => {
                               const slot = allSlots.find((s) => s.round === r && s.team?.id === t.id);
-                              const cardBoxStyle = { width: 98, minHeight: 66 };
+                              const cardBoxStyle = { width: BOARD_CARD_WIDTH, minHeight: BOARD_CARD_MIN_HEIGHT };
                               if (!slot) {
                                 return (
                                   <td key={r} className="p-1.5 text-center align-top">

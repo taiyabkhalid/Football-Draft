@@ -6,6 +6,14 @@ import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock, getTeamOnTheClockExtended, getRoundExtended, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
 import FootballIcon, { lightenColor, StarIcon } from '../../lib/FootballIcon';
+import {
+  BOARD_CARD_WIDTH,
+  BOARD_CARD_MIN_HEIGHT,
+  BOARD_TEAM_COLUMN_MIN_WIDTH,
+  BOARD_ROUND_COLUMN_MIN_WIDTH,
+  BOARD_CONTAINER_HEIGHT_CLASS,
+  TEAM_BUTTON_WIDTH,
+} from '../../lib/rosterViewLayout';
 import PrintRosterButton from '../../lib/PrintRosterButton';
 
 const PUB_LINES_YES = [
@@ -1851,7 +1859,7 @@ function LiveDraftPageContent() {
                       onClick={() => setViewingTeamId(viewingTeamId === t.id ? null : t.id)}
                       className="text-xs px-2 py-1.5 rounded-md font-medium flex items-center gap-1.5 justify-center"
                       style={{
-                        width: 140,
+                        width: TEAM_BUTTON_WIDTH,
                         boxSizing: 'border-box',
                         background: selected ? color : lightenColor(color, 0.85),
                         color: selected ? '#ffffff' : '#0c2340',
@@ -2122,14 +2130,14 @@ function LiveDraftPageContent() {
           )}
 
           {rosterViewMode === 'board' && (
-            <div className="bg-white rounded-lg p-3" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '65vh' }}>
+            <div className={`bg-white rounded-lg p-3 ${BOARD_CONTAINER_HEIGHT_CLASS}`} style={{ overflowX: 'auto', overflowY: 'auto' }}>
               <table className="border-collapse text-xs" style={{ width: '100%' }}>
                 <thead>
                   <tr>
                     <th
-                      className="text-left p-2.5 sticky left-0"
+                      className="text-left p-1.5 sticky left-0"
                       style={{
-                        minWidth: 130,
+                        minWidth: BOARD_TEAM_COLUMN_MIN_WIDTH,
                         position: 'sticky',
                         top: 0,
                         zIndex: 3,
@@ -2145,9 +2153,9 @@ function LiveDraftPageContent() {
                     {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => (
                       <th
                         key={r}
-                        className="p-2.5 text-center"
+                        className="p-1.5 text-center"
                         style={{
-                          minWidth: 90,
+                          minWidth: BOARD_ROUND_COLUMN_MIN_WIDTH,
                           position: 'sticky',
                           top: 0,
                           zIndex: 2,
@@ -2171,7 +2179,7 @@ function LiveDraftPageContent() {
                       const owner = ownerByTeam[t.id];
                       return (
                         <tr key={t.id} className="border-t" style={{ borderColor: '#d8dde2' }}>
-                          <td className="p-2 sticky left-0 bg-white align-top">
+                          <td className="p-1.5 sticky left-0 bg-white align-top">
                             <div className="flex items-center gap-1.5">
                               <FootballIcon color={t.team_color || '#0074ff'} size={12} />
                               <span className="font-medium text-ink">{t.name}</span>
@@ -2180,10 +2188,13 @@ function LiveDraftPageContent() {
                           </td>
                           {Array.from({ length: maxRounds }, (_, i) => i + 1).map((r) => {
                             const slot = allSlots.find((s) => s.round === r && s.team?.id === t.id);
+                            const cardBoxStyle = { width: BOARD_CARD_WIDTH, minHeight: BOARD_CARD_MIN_HEIGHT };
                             if (!slot) {
                               return (
-                                <td key={r} className="p-2 text-center align-top" style={{ color: '#8b97a3' }}>
-                                  &mdash;
+                                <td key={r} className="p-1.5 text-center align-top">
+                                  <div className="bg-surface rounded-lg p-1 text-center flex items-center justify-center" style={cardBoxStyle}>
+                                    <span style={{ color: '#8b97a3' }}>&mdash;</span>
+                                  </div>
                                 </td>
                               );
                             }
@@ -2193,8 +2204,8 @@ function LiveDraftPageContent() {
                                 {slot.player ? (
                                   <button
                                     onClick={() => openProfile(slot.player.id)}
-                                    className="bg-surface rounded-lg p-1.5 text-center"
-                                    style={{ width: 80 }}
+                                    className="bg-surface rounded-lg p-1 text-center"
+                                    style={cardBoxStyle}
                                   >
                                     {slot.player.headshot_url ? (
                                       <img
@@ -2214,22 +2225,25 @@ function LiveDraftPageContent() {
                                       {slot.player.full_name}
                                     </p>
                                     <p className="text-[9px] m-0" style={{ color: '#5a6b7d' }}>
-                                      {slot.player.gender} &middot; Overall Pick #{slot.player.draft_pick_number}
+                                      {slot.player.gender} &middot; Pick #{slot.player.draft_pick_number}
                                     </p>
                                   </button>
                                 ) : isSkipped ? (
-                                  <>
-                                    <p className="text-[10px] italic m-0" style={{ color: '#8b97a3' }}>
+                                  <div className="bg-surface rounded-lg p-1 text-center flex flex-col items-center justify-center" style={cardBoxStyle}>
+                                    <div className="w-7 h-7 rounded-full bg-white mx-auto flex items-center justify-center">
+                                      <i className="ti ti-player-skip-forward text-faint text-sm" aria-hidden="true" />
+                                    </div>
+                                    <p className="text-[10px] italic m-0 mt-1" style={{ color: '#8b97a3' }}>
                                       Skipped
                                     </p>
                                     <p className="text-[9px] m-0" style={{ color: '#8b97a3' }}>
                                       Pick #{getSharedPickNumber(slot.pickNumber)}
                                     </p>
-                                  </>
+                                  </div>
                                 ) : (
-                                  <p className="m-0" style={{ color: '#8b97a3' }}>
-                                    &mdash;
-                                  </p>
+                                  <div className="bg-surface rounded-lg p-1 text-center flex items-center justify-center" style={cardBoxStyle}>
+                                    <span style={{ color: '#8b97a3' }}>&mdash;</span>
+                                  </div>
                                 )}
                               </td>
                             );
