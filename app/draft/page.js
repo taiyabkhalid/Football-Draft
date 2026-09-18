@@ -2184,7 +2184,10 @@ function DraftPageContent() {
                   </p>
                   <div className="flex items-center gap-1.5" style={{ margin: '8px 0 12px' }}>
                     <FootballIcon color={current.team.team_color || 'var(--df-accent-secondary)'} size={14} isDarkMode={isDarkMode} />
-                    <span className="text-[13px] font-semibold" style={{ color: current.team.team_color || 'var(--df-accent-secondary)' }}>
+                    <span
+                      className="text-[13px] font-semibold"
+                      style={{ color: isDarkMode && getLuminance(current.team.team_color) < 40 ? '#e2e8f0' : current.team.team_color || 'var(--df-accent-secondary)' }}
+                    >
                       {current.team.name}
                     </span>
                   </div>
@@ -2201,7 +2204,14 @@ function DraftPageContent() {
                     You&apos;ve Met Your Female Minimum
                   </p>
                   <p className="text-[13px] m-0" style={{ color: 'var(--df-text-muted)', lineHeight: 1.6 }}>
-                    <span style={{ fontWeight: 600, color: current.team.team_color || 'var(--df-accent-secondary)' }}>{current.team.name}</span> has enough
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        color: isDarkMode && getLuminance(current.team.team_color) < 40 ? '#e2e8f0' : current.team.team_color || 'var(--df-accent-secondary)',
+                      }}
+                    >
+                      {current.team.name}
+                    </span> has enough
                     female players for now.
                   </p>
                   <p className="text-[13px] m-0 mb-3.5" style={{ color: 'var(--df-text-muted)', lineHeight: 1.6, marginTop: 6 }}>
@@ -2220,7 +2230,15 @@ function DraftPageContent() {
                   </p>
                   <div className="flex items-center gap-1.5" style={{ margin: '4px 0 12px' }}>
                     <FootballIcon color={current.team?.team_color || 'var(--df-accent-secondary)'} size={14} isDarkMode={isDarkMode} />
-                    <span className="text-[13px] font-semibold" style={{ color: current.team?.team_color || 'var(--df-accent-secondary)' }}>
+                    <span
+                      className="text-[13px] font-semibold"
+                      style={{
+                        color:
+                          isDarkMode && getLuminance(current.team?.team_color) < 40
+                            ? '#e2e8f0'
+                            : current.team?.team_color || 'var(--df-accent-secondary)',
+                      }}
+                    >
                       {current.team?.name}
                     </span>
                   </div>

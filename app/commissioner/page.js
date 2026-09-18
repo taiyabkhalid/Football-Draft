@@ -752,7 +752,7 @@ export default function CommissionerToolsPage() {
               <div className="flex flex-col gap-2 mb-3">
                 {teamOrder.map((t) => (
                   <div key={t.id} className="flex items-center gap-2 bg-df-surface rounded-md px-3 py-2">
-                    <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={14} />
+                    <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={14} isDarkMode={darkModeEnabled} />
                     <span className="text-xs text-ink flex-1">{t.name}</span>
                     <input
                       type="number"
@@ -1105,7 +1105,7 @@ export default function CommissionerToolsPage() {
               return (
                 <div key={t.id} className="bg-df-surface rounded-md px-3 py-2">
                   <div className="flex items-center gap-2 mb-1">
-                    <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={14} />
+                    <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={14} isDarkMode={darkModeEnabled} />
                     <div className="flex-1 min-w-0">
                       <span className="text-xs text-ink block truncate">{t.name}</span>
                       <span className="text-[10px] text-muted block truncate">
@@ -1372,7 +1372,7 @@ export default function CommissionerToolsPage() {
                   <div key={g.email} className="flex items-center justify-between bg-df-surface rounded-md px-3 py-2 gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       {g.team_id ? (
-                        <FootballIcon color={teamsById[g.team_id]?.team_color || 'var(--df-accent-secondary)'} size={14} />
+                        <FootballIcon color={teamsById[g.team_id]?.team_color || 'var(--df-accent-secondary)'} size={14} isDarkMode={darkModeEnabled} />
                       ) : (
                         <i className="ti ti-shield text-sm text-muted" aria-hidden="true" />
                       )}

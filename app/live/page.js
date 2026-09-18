@@ -1165,10 +1165,24 @@ function LiveDraftPageContent() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (draftStatus === 'completed') {
-        if (draftedScrollRef.current) draftedScrollRef.current.scrollLeft = 0;
-      } else if (currentPickRef.current) {
+      if (activeReveal && currentPickRef.current) {
+        // A reveal is actively showing - always center it, even if
+        // draft_status has already flipped to 'completed' in the
+        // database while the visual reveal queue is still catching up
+        // on several picks made in quick succession. Previously this
+        // branch was only reached when draftStatus wasn't 'completed',
+        // so once the last pick of the draft landed, every subsequent
+        // queued reveal skipped centering entirely and only ever reset
+        // scroll position instead - leaving the popout wherever it
+        // happened to land, and jumping the scrollbar back to the start
+        // on every single one of those remaining reveals.
         currentPickRef.current.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+      } else if (draftStatus === 'completed' && draftedScrollRef.current) {
+        // Only reset to the beginning once the queue has actually
+        // drained (no reveal currently active) - not simply because
+        // the database status is 'completed', which can be true well
+        // before the queue has finished showing every pick.
+        draftedScrollRef.current.scrollLeft = 0;
       }
     }, 50);
     return () => clearTimeout(timer);

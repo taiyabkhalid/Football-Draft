@@ -368,7 +368,7 @@ export default function ProfilePage() {
           {team ? (
             <>
               <div className="flex items-center gap-2 mb-2">
-                <FootballIcon color={team.team_color || 'var(--df-accent-secondary)'} size={16} />
+                <FootballIcon color={team.team_color || 'var(--df-accent-secondary)'} size={16} isDarkMode={darkModeEnabled} />
                 <p className="text-sm font-medium text-ink m-0">{team.name}</p>
               </div>
               {gmContact && gmContact.email?.toLowerCase() !== player?.email?.toLowerCase() && (
@@ -401,7 +401,7 @@ export default function ProfilePage() {
               <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Proxy for</p>
               {proxyTeams.map((t) => (
                 <div key={t.id} className="flex items-center gap-2 mb-1">
-                  <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={14} />
+                  <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={14} isDarkMode={darkModeEnabled} />
                   <p className="text-xs font-medium text-ink m-0">{t.name}</p>
                 </div>
               ))}
