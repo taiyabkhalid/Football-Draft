@@ -2054,7 +2054,10 @@ function DraftPageContent() {
                 }}
               >
                 {n.isSoonestMine && (
-                  <span className="text-[9px] font-semibold" style={{ color }}>
+                  <span
+                    className="text-[9px] font-semibold"
+                    style={{ color: isDarkMode && getLuminance(color) < 40 ? '#e2e8f0' : color }}
+                  >
                     Your next pick
                   </span>
                 )}
@@ -2285,24 +2288,38 @@ function DraftPageContent() {
             style={{ position: 'sticky', top: 0, zIndex: 30, background: 'var(--df-surface)', boxShadow: '0 2px 6px rgba(12,35,64,0.08)' }}
           >
           <div className="flex flex-col sm:flex-row gap-2 px-4 sm:px-5 pt-4 pb-3">
-            <div className="flex-1 bg-surface rounded-lg p-3">
-              <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Previous pick</p>
+            <div
+              className="flex-1 rounded-lg p-3"
+              style={
+                previousPick
+                  ? (() => {
+                      const prevColor = teamsById[previousPick.team_id]?.team_color || 'var(--df-accent-secondary)';
+                      const prevNeedsContrast = isDarkMode && getLuminance(prevColor) < 40;
+                      return {
+                        background: teamTint(prevColor, 0.85),
+                        border: `2px solid ${prevNeedsContrast ? '#e2e8f0' : prevColor}`,
+                      };
+                    })()
+                  : { background: 'var(--df-surface-alt)', border: '2px solid transparent' }
+              }
+            >
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1" style={{ whiteSpace: 'nowrap' }}>Previous pick</p>
               {previousPick ? (
                 <>
                   <div className="flex items-center gap-2">
-                    <FootballIcon color={teamsById[previousPick.team_id]?.team_color || 'var(--df-accent-secondary)'} size={16} isDarkMode={isDarkMode} />
-                    <p className="text-xs text-ink m-0 truncate">
+                    <FootballIcon color={teamsById[previousPick.team_id]?.team_color || 'var(--df-accent-secondary)'} size={17} isDarkMode={isDarkMode} />
+                    <p className="text-sm text-ink m-0 truncate">
                       {previousPick.player_id
                         ? `${playersById[previousPick.player_id]?.full_name || 'Unknown'} — ${teamsById[previousPick.team_id]?.name || ''}`
                         : `Skipped — ${teamsById[previousPick.team_id]?.name || ''}`}
                     </p>
                   </div>
-                  <p className="text-[10px] text-muted m-0 mt-1">
+                  <p className="text-[11px] text-muted m-0 mt-1" style={{ whiteSpace: 'nowrap' }}>
                     Round {previousPick.round} &middot; Pick {allSlots.filter((s) => s.round === previousPick.round).findIndex((s) => s.pickNumber === previousPick.pick_number) + 1}
                   </p>
                 </>
               ) : (
-                <p className="text-xs text-faint">None yet</p>
+                <p className="text-sm text-faint">None yet</p>
               )}
             </div>
             <div
@@ -2310,20 +2327,20 @@ function DraftPageContent() {
               style={{ background: draftStatus === 'paused' ? 'var(--df-warning-text)' : clockUrgent ? 'var(--df-error)' : 'var(--df-accent)' }}
             >
               <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                <p className="text-[11px] font-bold uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)', whiteSpace: 'nowrap' }}>
                   {draftStatus === 'paused' ? 'On the clock \u00b7 paused' : 'On the clock'}
                 </p>
                 <div className="flex items-center gap-2">
-                  <FootballIcon color="var(--df-surface)" size={16} isDarkMode={isDarkMode} />
-                  <p className="text-[13px] font-semibold truncate m-0" style={{ color: 'var(--df-surface)' }}>
+                  <FootballIcon color="var(--df-surface)" size={17} isDarkMode={isDarkMode} />
+                  <p className="text-[15px] font-semibold truncate m-0" style={{ color: 'var(--df-surface)' }}>
                     {teamOnClock?.name || '—'}
                   </p>
                 </div>
-                <p className="text-[10px] m-0 mt-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                <p className="text-[11px] m-0 mt-1" style={{ color: 'rgba(255,255,255,0.75)', whiteSpace: 'nowrap' }}>
                   Round {currentRound} &middot; Pick {allSlots.filter((s) => s.round === currentRound).findIndex((s) => s.pickNumber === currentPickNumber) + 1}
                 </p>
                 {canDraft && (
-                  <p className="text-xs font-semibold m-0 mt-1" style={{ color: 'var(--df-surface)' }}>
+                  <p className="text-sm font-semibold m-0 mt-1" style={{ color: 'var(--df-surface)' }}>
                     Drafting for: {teamOnClock?.name}
                   </p>
                 )}
@@ -2358,19 +2375,33 @@ function DraftPageContent() {
                     </button>
                   </div>
                 )}
-                <p className="text-xl font-medium" style={{ color: 'var(--df-surface)' }}>
+                <p className="text-2xl font-medium" style={{ color: 'var(--df-surface)' }}>
                   {timerDisplay}
                 </p>
               </div>
             </div>
-            <div className="flex-1 bg-surface rounded-lg p-3">
-              <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Next up</p>
+            <div
+              className="flex-1 rounded-lg p-3"
+              style={
+                teamNextOnClock
+                  ? (() => {
+                      const nextColor = teamNextOnClock.team_color || 'var(--df-accent-secondary)';
+                      const nextNeedsContrast = isDarkMode && getLuminance(nextColor) < 40;
+                      return {
+                        background: teamTint(nextColor, 0.85),
+                        border: `2px solid ${nextNeedsContrast ? '#e2e8f0' : nextColor}`,
+                      };
+                    })()
+                  : { background: 'var(--df-surface-alt)', border: '2px solid transparent' }
+              }
+            >
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1" style={{ whiteSpace: 'nowrap' }}>Next up</p>
               <div className="flex items-center gap-2">
-                <FootballIcon color={teamNextOnClock?.team_color || 'var(--df-accent-secondary)'} size={16} isDarkMode={isDarkMode} />
-                <p className="text-xs text-ink m-0 truncate">{teamNextOnClock?.name || '—'}</p>
+                <FootballIcon color={teamNextOnClock?.team_color || 'var(--df-accent-secondary)'} size={17} isDarkMode={isDarkMode} />
+                <p className="text-sm text-ink m-0 truncate">{teamNextOnClock?.name || '—'}</p>
               </div>
               {teamNextOnClock && (
-                <p className="text-[10px] text-muted m-0 mt-1">
+                <p className="text-[11px] text-muted m-0 mt-1" style={{ whiteSpace: 'nowrap' }}>
                   Round {nextRound} &middot; Pick {allSlots.filter((s) => s.round === nextRound).findIndex((s) => s.pickNumber === currentPickNumber + 1) + 1}
                 </p>
               )}
