@@ -19,6 +19,19 @@ export default function ArchivedDraftPage() {
   const [errorMessage, setErrorMessage] = useState(null);
   const [draftInfo, setDraftInfo] = useState(null);
   const [picks, setPicks] = useState([]);
+  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
+
+  useEffect(() => {
+    async function loadDarkModePreference() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from('profiles').select('dark_mode_enabled').eq('id', user.id).maybeSingle();
+      setDarkModeEnabled(Boolean(data?.dark_mode_enabled));
+    }
+    loadDarkModePreference();
+  }, []);
 
   useEffect(() => {
     if (!archivedDraftId) return;
@@ -52,7 +65,11 @@ export default function ArchivedDraftPage() {
   }, [archivedDraftId]);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 pb-10">
+    <div
+      data-theme={darkModeEnabled ? 'dark' : 'light'}
+      className="max-w-6xl mx-auto px-4 pb-10"
+      style={{ background: 'var(--df-surface)', minHeight: '100vh' }}
+    >
       <BrandHeader />
 
       <div className="flex items-center justify-between mb-4 mt-2">
@@ -65,7 +82,7 @@ export default function ArchivedDraftPage() {
       {loading && <p className="text-sm text-muted">Loading…</p>}
 
       {errorMessage && (
-        <div className="rounded-md px-3 py-2 text-sm" style={{ background: '#fcebeb', color: '#791f1f' }}>
+        <div className="rounded-md px-3 py-2 text-sm" style={{ background: 'var(--df-error-bg)', color: 'var(--df-error-text-strong)' }}>
           {errorMessage}
         </div>
       )}
@@ -73,10 +90,10 @@ export default function ArchivedDraftPage() {
       {!loading && !errorMessage && draftInfo && (
         <>
           <div className="rounded-lg border border-line px-3.5 py-3 mb-4">
-            <p className="text-[15px] font-semibold m-0" style={{ color: '#0c2340' }}>
+            <p className="text-[15px] font-semibold m-0" style={{ color: 'var(--df-text-primary)' }}>
               {draftInfo.name}
             </p>
-            <p className="text-xs m-0 mt-1" style={{ color: '#5a6b7d' }}>
+            <p className="text-xs m-0 mt-1" style={{ color: 'var(--df-text-muted)' }}>
               Completed{' '}
               {new Date(draftInfo.completed_at).toLocaleDateString('en-US', {
                 month: 'short',
@@ -90,60 +107,60 @@ export default function ArchivedDraftPage() {
           <div className="overflow-x-auto">
             <table className="text-xs" style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1050 }}>
               <thead>
-                <tr style={{ background: '#f7f9fb' }}>
-                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 55 }}>
+                <tr style={{ background: 'var(--df-surface-subtle)' }}>
+                  <th className="text-left px-3 py-2" style={{ color: 'var(--df-text-muted)', minWidth: 55 }}>
                     Pick#
                   </th>
-                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 170 }}>
+                  <th className="text-left px-3 py-2" style={{ color: 'var(--df-text-muted)', minWidth: 170 }}>
                     Player
                   </th>
-                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 70 }}>
+                  <th className="text-left px-3 py-2" style={{ color: 'var(--df-text-muted)', minWidth: 70 }}>
                     Gender
                   </th>
-                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 110 }}>
+                  <th className="text-left px-3 py-2" style={{ color: 'var(--df-text-muted)', minWidth: 110 }}>
                     Pos (Off/Def)
                   </th>
-                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 140 }}>
+                  <th className="text-left px-3 py-2" style={{ color: 'var(--df-text-muted)', minWidth: 140 }}>
                     Team
                   </th>
-                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 150 }}>
+                  <th className="text-left px-3 py-2" style={{ color: 'var(--df-text-muted)', minWidth: 150 }}>
                     GM
                   </th>
-                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 220 }}>
+                  <th className="text-left px-3 py-2" style={{ color: 'var(--df-text-muted)', minWidth: 220 }}>
                     Email
                   </th>
-                  <th className="text-left px-3 py-2" style={{ color: '#5a6b7d', minWidth: 130 }}>
+                  <th className="text-left px-3 py-2" style={{ color: 'var(--df-text-muted)', minWidth: 130 }}>
                     Phone
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {picks.map((p) => (
-                  <tr key={p.pick_id} style={{ borderTop: '1px solid #eef1f4' }}>
-                    <td className="px-3 py-2" style={{ color: '#0c2340', whiteSpace: 'nowrap' }}>
+                  <tr key={p.pick_id} style={{ borderTop: '1px solid var(--df-border)' }}>
+                    <td className="px-3 py-2" style={{ color: 'var(--df-text-primary)', whiteSpace: 'nowrap' }}>
                       {p.overall_pick_number ?? '—'}
                     </td>
-                    <td className="px-3 py-2" style={{ color: '#0c2340', whiteSpace: 'nowrap' }}>
+                    <td className="px-3 py-2" style={{ color: 'var(--df-text-primary)', whiteSpace: 'nowrap' }}>
                       {p.player_full_name || (
-                        <span style={{ fontStyle: 'italic', color: '#8b97a3' }}>Skipped</span>
+                        <span style={{ fontStyle: 'italic', color: 'var(--df-text-faint)' }}>Skipped</span>
                       )}
                     </td>
-                    <td className="px-3 py-2" style={{ color: '#0c2340', whiteSpace: 'nowrap' }}>
+                    <td className="px-3 py-2" style={{ color: 'var(--df-text-primary)', whiteSpace: 'nowrap' }}>
                       {p.gender || ''}
                     </td>
-                    <td className="px-3 py-2" style={{ color: '#0c2340', whiteSpace: 'nowrap' }}>
+                    <td className="px-3 py-2" style={{ color: 'var(--df-text-primary)', whiteSpace: 'nowrap' }}>
                       {p.player_full_name ? `${p.offensive_position || ''} / ${p.defensive_position || ''}` : ''}
                     </td>
-                    <td className="px-3 py-2" style={{ color: '#185fa5', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    <td className="px-3 py-2" style={{ color: 'var(--df-accent)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                       {p.team_name}
                     </td>
-                    <td className="px-3 py-2" style={{ color: '#0c2340', whiteSpace: 'nowrap' }}>
+                    <td className="px-3 py-2" style={{ color: 'var(--df-text-primary)', whiteSpace: 'nowrap' }}>
                       {p.gm_name || ''}
                     </td>
-                    <td className="px-3 py-2" style={{ color: p.player_email ? '#0c2340' : '#8b97a3', whiteSpace: 'nowrap' }}>
+                    <td className="px-3 py-2" style={{ color: p.player_email ? 'var(--df-text-primary)' : 'var(--df-text-faint)', whiteSpace: 'nowrap' }}>
                       {p.player_email || <span style={{ fontStyle: 'italic' }}>—</span>}
                     </td>
-                    <td className="px-3 py-2" style={{ color: p.player_phone ? '#0c2340' : '#8b97a3', whiteSpace: 'nowrap' }}>
+                    <td className="px-3 py-2" style={{ color: p.player_phone ? 'var(--df-text-primary)' : 'var(--df-text-faint)', whiteSpace: 'nowrap' }}>
                       {p.player_phone || <span style={{ fontStyle: 'italic' }}>—</span>}
                     </td>
                   </tr>

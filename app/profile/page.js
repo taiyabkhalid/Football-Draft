@@ -21,7 +21,7 @@ export default function ProfilePage() {
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [savingDarkMode, setSavingDarkMode] = useState(false);
   const [teamNameDraft, setTeamNameDraft] = useState('');
-  const [teamColorDraft, setTeamColorDraft] = useState('#0074ff');
+  const [teamColorDraft, setTeamColorDraft] = useState('var(--df-accent-secondary)');
 
   const [gmContact, setGmContact] = useState(null);
   const [showWatchDraftModal, setShowWatchDraftModal] = useState(false);
@@ -136,7 +136,7 @@ export default function ProfilePage() {
       const { data: teamRow } = await supabase.from('teams').select('*').eq('id', teamId).single();
       setTeam(teamRow);
       setTeamNameDraft(teamRow?.name || '');
-      setTeamColorDraft(teamRow?.team_color || '#0074ff');
+      setTeamColorDraft(teamRow?.team_color || 'var(--df-accent-secondary)');
     }
 
     setLoading(false);
@@ -205,7 +205,7 @@ export default function ProfilePage() {
 
   if (loading || !player) {
     return (
-      <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
+      <main data-theme={darkModeEnabled ? 'dark' : 'light'} style={{ background: 'var(--df-surface)', minHeight: '100vh', paddingBottom: 48 }}>
         <BrandHeader pageLabel="Your profile" />
         <p className="text-center text-muted text-sm p-10">Loading your profile…</p>
       </main>
@@ -233,13 +233,13 @@ export default function ProfilePage() {
     draftStatus === 'in_progress' || draftStatus === 'paused' || (draftStatus === 'not_started' && withinThirtyMinutesOfDraft);
 
   return (
-    <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
+    <main data-theme={darkModeEnabled ? 'dark' : 'light'} style={{ background: 'var(--df-surface)', minHeight: '100vh', paddingBottom: 48 }}>
       <BrandHeader pageLabel="Your profile" />
 
       {draftDatetime && (
         <div className="bg-royal-pale px-5 py-2.5 flex items-center gap-2">
-          <i className="ti ti-calendar text-sm" style={{ color: '#0c447c' }} aria-hidden="true" />
-          <p className="text-xs m-0" style={{ color: '#0c447c' }}>
+          <i className="ti ti-calendar text-sm" style={{ color: 'var(--df-accent)' }} aria-hidden="true" />
+          <p className="text-xs m-0" style={{ color: 'var(--df-accent)' }}>
             Draft night:{' '}
             {draftDatetime.toLocaleString('en-US', {
               weekday: 'long',
@@ -258,8 +258,8 @@ export default function ProfilePage() {
             href={draftStatus === 'completed' ? '/draft?focus=results' : '/draft?focus=selection'}
             className="block text-center mb-4"
             style={{
-              background: draftStatus === 'completed' ? '#185fa5' : '#c0392b',
-              color: '#ffffff',
+              background: draftStatus === 'completed' ? 'var(--df-accent)' : 'var(--df-error)',
+              color: 'var(--df-surface)',
               fontWeight: 600,
               borderRadius: 8,
               padding: '10px 14px',
@@ -276,8 +276,8 @@ export default function ProfilePage() {
             href="/live?focus=results"
             className="block text-center mb-4"
             style={{
-              background: '#185fa5',
-              color: '#ffffff',
+              background: 'var(--df-accent)',
+              color: 'var(--df-surface)',
               fontWeight: 600,
               borderRadius: 8,
               padding: '10px 14px',
@@ -314,12 +314,12 @@ export default function ProfilePage() {
                 {player.height_inches}" &middot; {player.gender}
               </p>
               {role === 'commissioner' && (
-                <p className="text-[11px] font-medium m-0 mt-1" style={{ color: '#185fa5' }}>
+                <p className="text-[11px] font-medium m-0 mt-1" style={{ color: 'var(--df-accent)' }}>
                   Commish
                 </p>
               )}
               {role === 'gm' && (
-                <p className="text-[11px] font-medium m-0 mt-1" style={{ color: '#185fa5' }}>
+                <p className="text-[11px] font-medium m-0 mt-1" style={{ color: 'var(--df-accent)' }}>
                   General Manager
                 </p>
               )}
@@ -332,8 +332,8 @@ export default function ProfilePage() {
                 href="/register"
                 className="text-xs font-medium"
                 style={{
-                  color: '#185fa5',
-                  background: '#e6f1fb',
+                  color: 'var(--df-accent)',
+                  background: 'var(--df-info-bg)',
                   borderRadius: 6,
                   padding: '6px 10px',
                   whiteSpace: 'nowrap',
@@ -353,8 +353,8 @@ export default function ProfilePage() {
                 href="/commissioner"
                 className="text-xs font-medium"
                 style={{
-                  color: '#ffffff',
-                  background: '#185fa5',
+                  color: 'var(--df-surface)',
+                  background: 'var(--df-accent)',
                   borderRadius: 6,
                   padding: '6px 10px',
                   whiteSpace: 'nowrap',
@@ -374,15 +374,15 @@ export default function ProfilePage() {
           {team ? (
             <>
               <div className="flex items-center gap-2 mb-2">
-                <FootballIcon color={team.team_color || '#0074ff'} size={16} />
+                <FootballIcon color={team.team_color || 'var(--df-accent-secondary)'} size={16} />
                 <p className="text-sm font-medium text-ink m-0">{team.name}</p>
               </div>
               {gmContact && gmContact.email?.toLowerCase() !== player?.email?.toLowerCase() && (
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs m-0" style={{ color: '#3d4a57' }}>GM: {gmContact.full_name}</p>
+                  <p className="text-xs m-0" style={{ color: 'var(--df-text-secondary)' }}>GM: {gmContact.full_name}</p>
                   {gmContact.phone && (
-                    <p className="text-xs m-0 flex items-center gap-1 flex-shrink-0" style={{ color: '#3d4a57' }}>
-                      <i className="ti ti-phone text-xs" style={{ color: '#8b97a3' }} aria-hidden="true" />
+                    <p className="text-xs m-0 flex items-center gap-1 flex-shrink-0" style={{ color: 'var(--df-text-secondary)' }}>
+                      <i className="ti ti-phone text-xs" style={{ color: 'var(--df-text-faint)' }} aria-hidden="true" />
                       {gmContact.phone}
                     </p>
                   )}
@@ -392,7 +392,7 @@ export default function ProfilePage() {
           ) : player?.is_active === false ? (
             <p className="text-xs text-faint m-0" style={{ fontStyle: 'italic' }}>
               You are not eligible to be drafted -{' '}
-              <a href="https://wa.me/14045185304" target="_blank" rel="noopener noreferrer" style={{ color: '#185fa5', fontStyle: 'normal' }}>
+              <a href="https://wa.me/14045185304" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--df-accent)', fontStyle: 'normal' }}>
                 Whatsapp the commissioner if this is wrong (+1 404 518 5304)
               </a>
               .
@@ -403,11 +403,11 @@ export default function ProfilePage() {
             </p>
           )}
           {proxyTeams.length > 0 && (
-            <div className="mt-2 pt-2" style={{ borderTop: '1px solid #e2e6ea' }}>
+            <div className="mt-2 pt-2" style={{ borderTop: '1px solid var(--df-border)' }}>
               <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Proxy for</p>
               {proxyTeams.map((t) => (
                 <div key={t.id} className="flex items-center gap-2 mb-1">
-                  <FootballIcon color={t.team_color || '#0074ff'} size={14} />
+                  <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={14} />
                   <p className="text-xs font-medium text-ink m-0">{t.name}</p>
                 </div>
               ))}
@@ -416,7 +416,7 @@ export default function ProfilePage() {
         </div>
         {!team && draftStatus !== 'completed' && (
           <p className="text-[10px] text-faint mb-3 flex items-center gap-1">
-            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#639922', display: 'inline-block' }} />
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--df-success)', display: 'inline-block' }} />
             Updates automatically once you're picked
           </p>
         )}
@@ -445,8 +445,8 @@ export default function ProfilePage() {
                   style={{
                     width: 30,
                     height: 30,
-                    background: '#ffffff',
-                    border: teamColorDraft === c.hex ? `2px solid ${c.hex}` : '1px solid #d8dde2',
+                    background: 'var(--df-surface)',
+                    border: teamColorDraft === c.hex ? `2px solid ${c.hex}` : '1px solid var(--df-border)',
                   }}
                 >
                   <FootballIcon color={c.hex} size={16} />
@@ -466,7 +466,7 @@ export default function ProfilePage() {
 
         {draftStatus === 'completed' && (
           <div className="bg-royal-pale rounded-lg p-3.5 mb-3">
-            <p className="text-xs m-0" style={{ color: '#0c447c' }}>
+            <p className="text-xs m-0" style={{ color: 'var(--df-accent)' }}>
               The draft has ended.{' '}
               {team ? `You're on ${team.name}.` : "You weren't drafted this season."}
             </p>
@@ -474,9 +474,9 @@ export default function ProfilePage() {
         )}
 
         {locked && (
-          <div className="bg-[#faeeda] rounded-lg p-3.5 mb-4 flex gap-2">
-            <i className="ti ti-lock text-base flex-shrink-0" style={{ color: '#854f0b', marginTop: 1 }} aria-hidden="true" />
-            <p className="text-xs m-0" style={{ color: '#633806' }}>
+          <div className="bg-[var(--df-warning-bg)] rounded-lg p-3.5 mb-4 flex gap-2">
+            <i className="ti ti-lock text-base flex-shrink-0" style={{ color: 'var(--df-warning-text)', marginTop: 1 }} aria-hidden="true" />
+            <p className="text-xs m-0" style={{ color: 'var(--df-warning-text-strong)' }}>
               Profile updates are locked 2 hours before the draft. Contact the commissioner for any changes.
             </p>
           </div>
@@ -516,14 +516,14 @@ export default function ProfilePage() {
             onClick={() => setShowWatchDraftModal(false)}
           >
             <div
-              className="bg-white rounded-xl p-5"
+              className="bg-df-surface rounded-xl p-5 df-modal-card"
               style={{ maxWidth: 340, width: '100%' }}
               onClick={(e) => e.stopPropagation()}
             >
-              <p className="text-base font-semibold m-0 mb-2" style={{ color: '#0c2340' }}>
+              <p className="text-base font-semibold m-0 mb-2" style={{ color: 'var(--df-text-primary)' }}>
                 Heads up
               </p>
-              <p className="text-sm m-0 mb-4" style={{ color: '#3d4a57' }}>
+              <p className="text-sm m-0 mb-4" style={{ color: 'var(--df-text-secondary)' }}>
                 This is the Spectator Room for the draft. You can't make draft selections from here — you'll need to
                 go to My Draft Room to make your picks.
               </p>
@@ -536,8 +536,8 @@ export default function ProfilePage() {
                 }}
                 className="block text-center mb-2"
                 style={{
-                  background: '#185fa5',
-                  color: '#ffffff',
+                  background: 'var(--df-accent)',
+                  color: 'var(--df-surface)',
                   fontWeight: 600,
                   borderRadius: 8,
                   padding: '9px 14px',
@@ -557,7 +557,7 @@ export default function ProfilePage() {
                 }}
                 className="block text-center"
                 style={{
-                  color: '#5a6b7d',
+                  color: 'var(--df-text-muted)',
                   fontWeight: 500,
                   borderRadius: 8,
                   padding: '9px 14px',
@@ -576,10 +576,10 @@ export default function ProfilePage() {
           <div className="rounded-lg border border-line px-3.5 py-3 mb-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: 'var(--df-text-muted)' }}>
                   Dark Mode (GM Draft Page)
                 </p>
-                <p className="text-[11px] m-0 mt-1" style={{ color: '#8b97a3' }}>
+                <p className="text-[11px] m-0 mt-1" style={{ color: 'var(--df-text-faint)' }}>
                   Applies only to the GM Draft page while this is being tested.
                 </p>
               </div>
@@ -592,7 +592,7 @@ export default function ProfilePage() {
                   width: 44,
                   height: 24,
                   borderRadius: 12,
-                  background: darkModeEnabled ? '#185fa5' : '#d8dde2',
+                  background: darkModeEnabled ? 'var(--df-accent)' : 'var(--df-border)',
                   border: 'none',
                   position: 'relative',
                   cursor: 'pointer',
@@ -607,7 +607,7 @@ export default function ProfilePage() {
                     width: 20,
                     height: 20,
                     borderRadius: '50%',
-                    background: '#ffffff',
+                    background: 'var(--df-surface)',
                     transition: 'left 0.15s ease',
                   }}
                 />
@@ -618,7 +618,7 @@ export default function ProfilePage() {
 
         {myArchivedDrafts.length > 0 && (
           <div className="rounded-lg border border-line px-3.5 py-3 mb-4">
-            <p className="text-xs font-semibold uppercase tracking-wide m-0 mb-2" style={{ color: '#5a6b7d' }}>
+            <p className="text-xs font-semibold uppercase tracking-wide m-0 mb-2" style={{ color: 'var(--df-text-muted)' }}>
               Past Draft Results
             </p>
             <select
@@ -629,7 +629,7 @@ export default function ProfilePage() {
                 if (id) router.push(`/archive/${id}`);
               }}
               className="w-full rounded-md px-2.5 py-2 text-[13px]"
-              style={{ border: '1px solid #d8dde2' }}
+              style={{ border: '1px solid var(--df-border)' }}
             >
               <option value="">Select a draft to view</option>
               {myArchivedDrafts.map((d) => (
@@ -646,7 +646,7 @@ export default function ProfilePage() {
             onClick={() => setSecurityOpen((o) => !o)}
             className="w-full flex items-center justify-between"
           >
-            <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
+            <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: 'var(--df-text-muted)' }}>
               Update My Password
             </p>
             <i className={`ti ti-chevron-${securityOpen ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
@@ -658,8 +658,8 @@ export default function ProfilePage() {
                 <div
                   className="rounded-md px-3 py-2 mb-3 text-xs"
                   style={{
-                    background: passwordMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
-                    color: passwordMessage.type === 'error' ? '#791f1f' : '#27500a',
+                    background: passwordMessage.type === 'error' ? 'var(--df-error-bg)' : 'var(--df-success-bg)',
+                    color: passwordMessage.type === 'error' ? 'var(--df-error-text-strong)' : 'var(--df-success-text-strong)',
                   }}
                 >
                   {passwordMessage.text}
@@ -690,8 +690,8 @@ export default function ProfilePage() {
 
         <div className="border-t border-line my-3" />
 
-        <Link href="/" className="block text-center text-sm" style={{ color: '#5a6b7d' }}>
-          Not you? <span style={{ color: '#185fa5', fontWeight: 500 }}>Register or log in as someone else</span>
+        <Link href="/" className="block text-center text-sm" style={{ color: 'var(--df-text-muted)' }}>
+          Not you? <span style={{ color: 'var(--df-accent)', fontWeight: 500 }}>Register or log in as someone else</span>
         </Link>
       </div>
     </main>

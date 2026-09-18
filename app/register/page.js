@@ -42,7 +42,7 @@ const initialForm = {
   enjoys_pub: false,
 };
 
-const Req = () => <span style={{ color: '#c0392b' }}> *</span>;
+const Req = () => <span style={{ color: 'var(--df-error)' }}> *</span>;
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -50,6 +50,7 @@ export default function RegisterPage() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [locked, setLocked] = useState(false);
   const [registrationLocked, setRegistrationLocked] = useState(false);
+  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
 
   const [form, setForm] = useState(initialForm);
   const [photoBlob, setPhotoBlob] = useState(null);
@@ -96,10 +97,12 @@ export default function RegisterPage() {
         return;
       }
 
-      const [{ data: playerRow }, { data: settingsRow }] = await Promise.all([
+      const [{ data: playerRow }, { data: settingsRow }, { data: profileRow }] = await Promise.all([
         supabase.from('players').select('*').eq('email', user.email).single(),
         supabase.from('draft_settings').select('*').eq('id', 1).single(),
+        supabase.from('profiles').select('dark_mode_enabled').eq('id', user.id).maybeSingle(),
       ]);
+      setDarkModeEnabled(Boolean(profileRow?.dark_mode_enabled));
 
       if (!playerRow) {
         setCheckingSession(false);
@@ -307,7 +310,7 @@ export default function RegisterPage() {
 
   if (checkingSession) {
     return (
-      <main>
+      <main data-theme={darkModeEnabled ? 'dark' : 'light'} style={{ background: 'var(--df-surface)', minHeight: '100vh' }}>
         <BrandHeader pageLabel={mode === 'edit' ? 'Edit your profile' : 'Player registration'} />
         <p className="text-center text-muted text-sm p-10">Loading…</p>
       </main>
@@ -316,14 +319,14 @@ export default function RegisterPage() {
 
   if (registrationLocked) {
     return (
-      <main>
+      <main data-theme={darkModeEnabled ? 'dark' : 'light'} style={{ background: 'var(--df-surface)', minHeight: '100vh' }}>
         <BrandHeader pageLabel="Player registration" />
         <div
           className="flex items-center justify-center px-4"
           style={{ minHeight: '70vh' }}
         >
-          <div className="bg-white rounded-xl border border-line p-5 max-w-sm w-full text-center">
-            <i className="ti ti-lock text-2xl" style={{ color: '#854f0b' }} aria-hidden="true" />
+          <div className="bg-df-surface rounded-xl border border-line p-5 max-w-sm w-full text-center">
+            <i className="ti ti-lock text-2xl" style={{ color: 'var(--df-warning-text)' }} aria-hidden="true" />
             <p className="text-sm font-semibold text-ink mt-2 mb-1">Registration is currently closed</p>
             <p className="text-xs text-muted m-0">
               New player registration closes 5 minutes before the draft and stays closed while it's happening.
@@ -338,20 +341,20 @@ export default function RegisterPage() {
 
   if (locked) {
     return (
-      <main>
+      <main data-theme={darkModeEnabled ? 'dark' : 'light'} style={{ background: 'var(--df-surface)', minHeight: '100vh' }}>
         <BrandHeader pageLabel="Edit your profile" />
         <div className="max-w-md mx-auto px-4 py-10">
           <Link
             href="/profile"
             className="inline-flex items-center gap-1 text-xs font-medium mb-4"
-            style={{ color: '#185fa5', textDecoration: 'none' }}
+            style={{ color: 'var(--df-accent)', textDecoration: 'none' }}
           >
             <i className="ti ti-chevron-left text-sm" aria-hidden="true" />
             Back to profile
           </Link>
-          <div className="bg-[#faeeda] rounded-lg p-4 flex gap-2">
-            <i className="ti ti-lock text-base flex-shrink-0" style={{ color: '#854f0b', marginTop: 1 }} aria-hidden="true" />
-            <p className="text-xs m-0" style={{ color: '#633806' }}>
+          <div className="bg-[var(--df-warning-bg)] rounded-lg p-4 flex gap-2">
+            <i className="ti ti-lock text-base flex-shrink-0" style={{ color: 'var(--df-warning-text)', marginTop: 1 }} aria-hidden="true" />
+            <p className="text-xs m-0" style={{ color: 'var(--df-warning-text-strong)' }}>
               Profile updates are locked 2 hours before the draft. Contact the commissioner for any changes.
             </p>
           </div>
@@ -362,7 +365,7 @@ export default function RegisterPage() {
 
   if (done) {
     return (
-      <main>
+      <main data-theme={darkModeEnabled ? 'dark' : 'light'} style={{ background: 'var(--df-surface)', minHeight: '100vh' }}>
         <BrandHeader pageLabel={mode === 'edit' ? 'Edit your profile' : 'Player registration'} />
         <div className="max-w-lg mx-auto px-4 py-16 text-center">
           <p className="font-display text-4xl text-royal mb-3">{mode === 'edit' ? 'Changes saved' : "You're on the board"}</p>
@@ -386,21 +389,21 @@ export default function RegisterPage() {
   }
 
   return (
-    <main>
+    <main data-theme={darkModeEnabled ? 'dark' : 'light'} style={{ background: 'var(--df-surface)', minHeight: '100vh' }}>
       <BrandHeader pageLabel={mode === 'edit' ? 'Edit your profile' : 'Player registration'} />
       <div className="max-w-xl mx-auto px-4 py-10">
         {mode === 'edit' && (
           <Link
             href="/profile"
             className="inline-flex items-center gap-1 text-xs font-medium mb-4"
-            style={{ color: '#185fa5', textDecoration: 'none' }}
+            style={{ color: 'var(--df-accent)', textDecoration: 'none' }}
           >
             <i className="ti ti-chevron-left text-sm" aria-hidden="true" />
             Back to profile
           </Link>
         )}
         <p className="text-muted text-sm mb-6">
-          Fields marked <span style={{ color: '#c0392b' }}>*</span> are required.
+          Fields marked <span style={{ color: 'var(--df-error)' }}>*</span> are required.
         </p>
 
         {errors.length > 0 && (
@@ -417,7 +420,7 @@ export default function RegisterPage() {
         {mode !== 'edit' && (
           <p className="text-xs text-muted mb-6">
             Already registered?{' '}
-            <Link href="/login" style={{ color: '#185fa5', fontWeight: 500 }}>
+            <Link href="/login" style={{ color: 'var(--df-accent)', fontWeight: 500 }}>
               Log in instead
             </Link>
           </p>
@@ -463,7 +466,7 @@ export default function RegisterPage() {
                   onChange={set('email')}
                   placeholder="you@email.com"
                   disabled={mode === 'edit'}
-                  style={mode === 'edit' ? { background: '#f1f3f6', color: '#8b97a3' } : undefined}
+                  style={mode === 'edit' ? { background: 'var(--df-surface-alt)', color: 'var(--df-text-faint)' } : undefined}
                 />
               </div>
               {mode === 'create' && (

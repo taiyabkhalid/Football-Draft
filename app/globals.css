@@ -28,8 +28,11 @@
   --df-info-bg: #e6f1fb;
   --df-info-text: #b5d4f4;
   --df-error: #c0392b;
+  --df-error-text-strong: #791f1f;
   --df-error-bg: #fceded;
   --df-success: #3b6d11;
+  --df-success-bg: #eaf3de;
+  --df-success-text-strong: #27500a;
   --df-scrollbar-track: #eef0f2;
   --df-scrollbar-thumb: #b5c2cc;
 }
@@ -55,8 +58,11 @@
   --df-info-bg: #0d2438;
   --df-info-text: #8fc4ff;
   --df-error: #ff5c52;
+  --df-error-text-strong: #ffb3ad;
   --df-error-bg: #3a1414;
   --df-success: #2ee68a;
+  --df-success-bg: #16321a;
+  --df-success-text-strong: #a3e0a3;
   --df-scrollbar-track: #131c27;
   --df-scrollbar-thumb: #3d4f61;
   background: #060b12;

@@ -1,0 +1,12 @@
+// DISABLED - confirmed dead code as of Sep 2026. Renamed from page.js to
+// page.js.disabled so Next.js no longer treats this folder as a live
+// route (App Router only recognizes a file named exactly "page.js").
+// Nothing in the live app links here - the only files that once referenced
+// /staff-login were app/page (1).js and app/page (3).js, which are
+// themselves stray duplicate files Next.js never routes to at all.
+// To restore this route: rename this file back to "page.js".
+import { redirect } from 'next/navigation';
+
+export default function StaffLoginRedirect() {
+  redirect('/login');
+}

@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { getRound, getTeamOnTheClock, getTeamOnTheClockExtended, getRoundExtended, buildFullPickOrder, pickInRound } from '../../lib/draftLogic';
 import BrandHeader from '../../lib/BrandHeader';
-import FootballIcon, { lightenColor, StarIcon } from '../../lib/FootballIcon';
+import FootballIcon, { lightenColor, StarIcon, getLuminance } from '../../lib/FootballIcon';
 import {
   BOARD_CARD_WIDTH,
   BOARD_CARD_MIN_HEIGHT,
@@ -127,6 +127,7 @@ function LiveDraftPageContent() {
   const [myTeamId, setMyTeamId] = useState(null);
   const [myEmail, setMyEmail] = useState(null);
   const [myRole, setMyRole] = useState(null);
+  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [teamRankings, setTeamRankings] = useState([]);
   const [rankingToast, setRankingToast] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -218,9 +219,10 @@ function LiveDraftPageContent() {
       setMyEmail(user.email?.toLowerCase() || null);
       const [{ data: playerRow }, { data: profileRow }] = await Promise.all([
         supabase.from('players').select('team_id').eq('email', user.email).single(),
-        supabase.from('profiles').select('role, team_id').eq('email', user.email.toLowerCase()).maybeSingle(),
+        supabase.from('profiles').select('role, team_id, dark_mode_enabled').eq('email', user.email.toLowerCase()).maybeSingle(),
       ]);
       setMyRole(profileRow?.role || null);
+      setDarkModeEnabled(Boolean(profileRow?.dark_mode_enabled));
       if (playerRow?.team_id) {
         setMyTeamId(playerRow.team_id);
         setViewingTeamId(playerRow.team_id);
@@ -669,6 +671,16 @@ function LiveDraftPageContent() {
   const roomIsOpen = msUntilRoomOpens !== null && msUntilRoomOpens <= 0;
   const showDraftOrderPreview = msUntilDraft !== null && msUntilDraft <= 30 * 60 * 1000;
 
+  // Same fix as the GM draft page: a team-color tint mixed toward white
+  // always looks pastel/light, which is wrong against a dark page -
+  // mixes toward the app's own dark surface color instead whenever dark
+  // mode is active, so it stays a genuinely dark, team-tinted card
+  // rather than a bright pastel one regardless of theme.
+  const isDarkMode = darkModeEnabled;
+  function teamTint(hex, amount) {
+    return lightenColor(hex, amount, isDarkMode ? [23, 33, 46] : [255, 255, 255]);
+  }
+
   // The actual randomization is completed by a backend cron job within
   // ~15 seconds of the 30-minute mark, entirely independent of anyone
   // having a page open. Gating the "being randomized" animation on the
@@ -1109,7 +1121,7 @@ function LiveDraftPageContent() {
 
   if (loading) {
     return (
-      <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
+      <main data-theme={darkModeEnabled ? 'dark' : 'light'} style={{ background: 'var(--df-surface)', minHeight: '100vh', paddingBottom: 48 }}>
         <BrandHeader pageLabel="Live draft / results" />
         <p className="text-center text-muted text-sm p-10">Loading…</p>
       </main>
@@ -1123,12 +1135,12 @@ function LiveDraftPageContent() {
   // two different, drifting implementations.
   const upcomingPicksBlock = (
     <div className="mx-4 sm:mx-5 mt-4 rounded-xl border border-line bg-surface px-4 py-3">
-      <p className="text-xs font-semibold uppercase tracking-wide m-0 mb-2" style={{ color: '#5a6b7d' }}>
+      <p className="text-xs font-semibold uppercase tracking-wide m-0 mb-2" style={{ color: 'var(--df-text-muted)' }}>
         Upcoming picks
       </p>
       <div className="flex gap-2 overflow-x-auto pb-1 upcoming-picks-scroll">
         {upcomingPicks.map((n) => {
-          const color = n.team?.team_color || '#0074ff';
+          const color = n.team?.team_color || 'var(--df-accent-secondary)';
           const isOnClock = (draftStatus === 'in_progress' || draftStatus === 'paused') && n.pickNumber === currentPickNumber;
           return (
             <button
@@ -1141,8 +1153,8 @@ function LiveDraftPageContent() {
               style={{
                 width: 100,
                 height: 52,
-                background: isOnClock ? lightenColor(color, 0.7) : lightenColor(color, 0.85),
-                color: '#0c2340',
+                background: isOnClock ? teamTint(color, 0.7) : teamTint(color, 0.85),
+                color: 'var(--df-text-primary)',
                 border: isOnClock ? `2px solid ${color}` : 'none',
                 cursor: n.team ? 'pointer' : 'default',
                 transition: 'background 0.4s, border 0.4s',
@@ -1155,10 +1167,10 @@ function LiveDraftPageContent() {
                 </span>
               )}
               <span className="flex items-center gap-1 text-xs font-medium truncate w-full justify-center">
-                <FootballIcon color={color} size={11} />
+                <FootballIcon color={color} size={11} isDarkMode={isDarkMode} />
                 <span className="truncate">{n.team?.name || '—'}</span>
               </span>
-              <span className="text-[10px]" style={{ color: '#5a6b7d' }}>
+              <span className="text-[10px]" style={{ color: 'var(--df-text-muted)' }}>
                 Rnd {n.round}{n.round > maxNormalRound ? ' Ext' : ''} . Pick {allSlots.filter((s) => s.round === n.round).findIndex((s) => s.pickNumber === n.pickNumber) + 1}
               </span>
             </button>
@@ -1176,7 +1188,7 @@ function LiveDraftPageContent() {
           The spectator draft room opens automatically 30 minutes before the draft starts.
         </p>
         <p className="text-xs uppercase tracking-wide text-muted mb-2">Draft starts in</p>
-        <p className="text-4xl font-semibold m-0" style={{ color: '#0c2340', letterSpacing: '0.03em' }}>
+        <p className="text-4xl font-semibold m-0" style={{ color: 'var(--df-text-primary)', letterSpacing: '0.03em' }}>
           {formatCountdown(msUntilDraft)}
         </p>
       </div>
@@ -1184,11 +1196,11 @@ function LiveDraftPageContent() {
       <>
         <div className="px-4 sm:px-5 pt-4">
           <div className="flex justify-center">
-            <div className="rounded-lg p-3 flex flex-col items-center justify-center" style={{ background: '#185fa5', width: '100%', maxWidth: 320 }}>
+            <div className="rounded-lg p-3 flex flex-col items-center justify-center" style={{ background: 'var(--df-accent)', width: '100%', maxWidth: 320 }}>
               <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
                 Draft starts in
               </p>
-              <p className="text-2xl font-semibold m-0" style={{ color: '#ffffff', letterSpacing: '0.03em' }}>
+              <p className="text-2xl font-semibold m-0" style={{ color: 'var(--df-surface)', letterSpacing: '0.03em' }}>
                 {formatCountdown(msUntilDraft)}
               </p>
             </div>
@@ -1201,7 +1213,7 @@ function LiveDraftPageContent() {
 
       <div className="mx-4 sm:mx-5 mt-4 rounded-xl border border-line bg-surface px-4 py-3" ref={searchPanelRef}>
         <button onClick={() => setSearchPanelOpen((o) => !o)} className="w-full flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
+          <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: 'var(--df-text-muted)' }}>
             Search player
           </p>
           <i className={`ti ti-chevron-${searchPanelOpen ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
@@ -1217,14 +1229,14 @@ function LiveDraftPageContent() {
                   onChange={(e) => setSpSearchName(e.target.value)}
                   placeholder="Search by name"
                   className="w-full pl-8 text-xs"
-                  style={{ borderColor: spSearchName ? '#185fa5' : undefined }}
+                  style={{ borderColor: spSearchName ? 'var(--df-accent)' : undefined }}
                 />
               </div>
               <select
                 value={spSearchPosition}
                 onChange={(e) => setSpSearchPosition(e.target.value)}
                 className="flex-none text-xs"
-                style={{ width: 120, borderColor: spSearchPosition ? '#185fa5' : undefined }}
+                style={{ width: 'auto', minWidth: 130, borderColor: spSearchPosition ? 'var(--df-accent)' : undefined }}
               >
                 <option value="">Position: any</option>
                 <optgroup label="Offense">
@@ -1246,7 +1258,7 @@ function LiveDraftPageContent() {
                 value={spSearchGender}
                 onChange={(e) => setSpSearchGender(e.target.value)}
                 className="flex-none text-xs"
-                style={{ width: 100, borderColor: spSearchGender ? '#185fa5' : undefined }}
+                style={{ width: 'auto', minWidth: 95, borderColor: spSearchGender ? 'var(--df-accent)' : undefined }}
               >
                 <option value="">M/F: any</option>
                 <option value="M">M</option>
@@ -1256,7 +1268,7 @@ function LiveDraftPageContent() {
                 value={spSearchPreviousTeam}
                 onChange={(e) => setSpSearchPreviousTeam(e.target.value)}
                 className="flex-none text-xs"
-                style={{ width: 140, borderColor: spSearchPreviousTeam ? '#185fa5' : undefined }}
+                style={{ width: 'auto', minWidth: 170, borderColor: spSearchPreviousTeam ? 'var(--df-accent)' : undefined }}
               >
                 <option value="">Previous team: any</option>
                 {spPreviousTeamOptions.map((t) => (
@@ -1269,7 +1281,7 @@ function LiveDraftPageContent() {
                 value={spSearchAvailability}
                 onChange={(e) => setSpSearchAvailability(e.target.value)}
                 className="flex-none text-xs"
-                style={{ width: 130, borderColor: spSearchAvailability ? '#185fa5' : undefined }}
+                style={{ width: 'auto', minWidth: 155, borderColor: spSearchAvailability ? 'var(--df-accent)' : undefined }}
               >
                 <option value="">Availability: any</option>
                 <option value="available">Available</option>
@@ -1280,7 +1292,7 @@ function LiveDraftPageContent() {
                 value={spSortBy}
                 onChange={(e) => setSpSortBy(e.target.value)}
                 className="flex-none text-xs"
-                style={{ width: 110 }}
+                style={{ width: 'auto', minWidth: 135 }}
               >
                 <option value="name">Sort: name</option>
                 <option value="gender">Sort: M/F</option>
@@ -1294,7 +1306,7 @@ function LiveDraftPageContent() {
               {spResults.map((p) => {
                 const drafted = isRevealedDrafted(p);
                 const draftedTeam = drafted ? teamsById[p.team_id] : null;
-                const draftedTeamColor = draftedTeam?.team_color || '#0074ff';
+                const draftedTeamColor = draftedTeam?.team_color || 'var(--df-accent-secondary)';
                 const isGm = ['gm', 'commissioner'].includes(roleByEmail[p.email?.toLowerCase()]);
                 return (
                   <button
@@ -1303,8 +1315,8 @@ function LiveDraftPageContent() {
                     className="flex-none rounded-xl overflow-hidden flex flex-col items-center text-center relative"
                     style={{
                       width: 130,
-                      background: !p.is_active ? '#f1f3f6' : drafted ? '#f1f3f6' : '#ffffff',
-                      border: '1px solid #d8dde2',
+                      background: !p.is_active ? 'var(--df-surface-alt)' : drafted ? 'var(--df-surface-alt)' : 'var(--df-surface)',
+                      border: '1px solid var(--df-border)',
                       opacity: !p.is_active ? 0.6 : 1,
                     }}
                   >
@@ -1323,17 +1335,17 @@ function LiveDraftPageContent() {
                       </span>
                     )}
                     {!p.is_active ? (
-                      <div className="w-full py-1" style={{ background: '#d8dde2' }}>
-                        <p className="text-[10px] font-semibold m-0" style={{ color: '#3d4a57' }}>
+                      <div className="w-full py-1" style={{ background: 'var(--df-border)' }}>
+                        <p className="text-[10px] font-semibold m-0" style={{ color: 'var(--df-text-secondary)' }}>
                           Inactive
                         </p>
                       </div>
                     ) : drafted ? (
-                      <div className="w-full py-1" style={{ background: lightenColor(draftedTeamColor, 0.85) }}>
-                        <p className="text-[9px] font-medium m-0" style={{ color: '#0c2340' }}>
+                      <div className="w-full py-1" style={{ background: teamTint(draftedTeamColor, 0.85) }}>
+                        <p className="text-[9px] font-medium m-0" style={{ color: 'var(--df-text-primary)' }}>
                           {isGm ? 'General Manager' : 'Drafted By:'}
                         </p>
-                        <p className="text-[10px] font-semibold m-0 truncate px-1" style={{ color: '#0c2340' }}>
+                        <p className="text-[10px] font-semibold m-0 truncate px-1" style={{ color: 'var(--df-text-primary)' }}>
                           {draftedTeam?.name || 'Unknown'}
                         </p>
                       </div>
@@ -1367,7 +1379,7 @@ function LiveDraftPageContent() {
 
   const draftedPlayersBlock = (
     <div className="mx-4 sm:mx-5 mt-3 rounded-xl border border-line bg-royal-pale/40 px-4 py-3.5">
-      <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: '#0c447c' }}>
+      <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--df-accent)' }}>
         Drafted players
       </p>
 
@@ -1380,7 +1392,7 @@ function LiveDraftPageContent() {
             !slot.player &&
             !isSkippedPick &&
             (draftStatus === 'in_progress' || draftStatus === 'paused' || (draftStatus === 'not_started' && showDraftOrderPreview));
-          const teamColor = slot.team?.team_color || '#0074ff';
+          const teamColor = slot.team?.team_color || 'var(--df-accent-secondary)';
           const owner = ownerByTeam[slot.team?.id];
           const positionInRound = allSlots.filter((s) => s.round === slot.round).findIndex((s) => s.pickNumber === slot.pickNumber) + 1;
 
@@ -1396,7 +1408,7 @@ function LiveDraftPageContent() {
           if (isPoppedOut) {
             const player = playersById[activeReveal.player_id];
             if (!player) return null;
-            const poppedTeamColor = slot.team?.team_color || '#0074ff';
+            const poppedTeamColor = slot.team?.team_color || 'var(--df-accent-secondary)';
             const gmName = owner?.name;
             return (
               <div
@@ -1404,20 +1416,20 @@ function LiveDraftPageContent() {
                 ref={currentPickRef}
                 onClick={() => openProfile(player.id)}
                 className="flex-none rounded-2xl p-4 flex flex-col items-center text-center"
-                style={{ width: 210, border: `4px solid ${poppedTeamColor}`, background: '#ffffff', cursor: 'pointer' }}
+                style={{ width: 210, border: `4px solid ${poppedTeamColor}`, background: 'var(--df-surface)', cursor: 'pointer' }}
               >
                 <p className="text-[19px] font-medium m-0 mb-2.5 tracking-wide" style={{ color: poppedTeamColor }}>
                   JUST DRAFTED!
                 </p>
                 <div className="flex items-center justify-center gap-1.5 mb-1">
-                  <FootballIcon color={poppedTeamColor} size={15} />
-                  <span className="text-sm font-medium" style={{ color: '#0c2340' }}>{slot.team?.name}</span>
+                  <FootballIcon color={poppedTeamColor} size={15} isDarkMode={isDarkMode} />
+                  <span className="text-sm font-medium" style={{ color: 'var(--df-text-primary)' }}>{slot.team?.name}</span>
                 </div>
                 {gmName && (
-                  <p className="text-[13px] m-0 mb-3" style={{ color: '#5a6b7d' }}>
+                  <p className="text-[13px] m-0 mb-3" style={{ color: 'var(--df-text-muted)' }}>
                     <span
                       className="text-[10px] font-medium rounded px-1.5 py-px mr-1"
-                      style={{ color: poppedTeamColor, background: lightenColor(poppedTeamColor, 0.85) }}
+                      style={{ color: poppedTeamColor, background: teamTint(poppedTeamColor, 0.85) }}
                     >
                       GM
                     </span>
@@ -1431,16 +1443,16 @@ function LiveDraftPageContent() {
                     <i className="ti ti-user text-faint text-2xl" aria-hidden="true" />
                   </div>
                 )}
-                <p className="text-[19px] font-medium m-0" style={{ color: '#0c2340' }}>{player.full_name}</p>
-                <p className="text-xs m-0 mt-1 mb-1" style={{ color: '#5a6b7d' }}>
+                <p className="text-[19px] font-medium m-0" style={{ color: 'var(--df-text-primary)' }}>{player.full_name}</p>
+                <p className="text-xs m-0 mt-1 mb-1" style={{ color: 'var(--df-text-muted)' }}>
                   {player.offensive_position} / {player.defensive_position} &middot; {player.gender} &middot;{' '}
                   {player.height_feet}'{player.height_inches}"
                 </p>
-                <p className="text-[11px] m-0 mb-1.5" style={{ color: '#8b97a3' }}>
+                <p className="text-[11px] m-0 mb-1.5" style={{ color: 'var(--df-text-faint)' }}>
                   Previous Team: {previousTeamLabel(player.previous_team)}
                 </p>
                 {pubLineFor(player, players, gmName) && (
-                  <p className="text-[11px] italic m-0" style={{ color: '#5a6b7d' }}>
+                  <p className="text-[11px] italic m-0" style={{ color: 'var(--df-text-muted)' }}>
                     {pubLineFor(player, players, gmName)}
                   </p>
                 )}
@@ -1449,41 +1461,41 @@ function LiveDraftPageContent() {
           }
 
           if (isPoppedOutSkip) {
-            const skipTeamColor = slot.team?.team_color || '#0074ff';
+            const skipTeamColor = slot.team?.team_color || 'var(--df-accent-secondary)';
             const gmName = owner?.name;
             return (
               <div
                 key={slot.pickNumber}
                 ref={currentPickRef}
                 className="flex-none rounded-2xl p-4 flex flex-col items-center text-center"
-                style={{ width: 210, border: '4px solid #c0392b', background: '#ffffff' }}
+                style={{ width: 210, border: '4px solid var(--df-error)', background: 'var(--df-surface)' }}
               >
-                <p className="text-[19px] font-medium m-0 mb-2.5 tracking-wide" style={{ color: '#c0392b' }}>
+                <p className="text-[19px] font-medium m-0 mb-2.5 tracking-wide" style={{ color: 'var(--df-error)' }}>
                   SKIPPED
                 </p>
                 <div className="flex items-center justify-center gap-1.5 mb-1">
-                  <FootballIcon color={skipTeamColor} size={15} />
-                  <span className="text-[13px] font-semibold" style={{ color: '#0c2340' }}>{slot.team?.name}</span>
+                  <FootballIcon color={skipTeamColor} size={15} isDarkMode={isDarkMode} />
+                  <span className="text-[13px] font-semibold" style={{ color: 'var(--df-text-primary)' }}>{slot.team?.name}</span>
                 </div>
                 {gmName && (
                   <div className="flex items-center justify-center gap-1 mb-3 w-full">
                     <span
                       className="text-[10px] font-medium rounded px-1.5 py-px"
-                      style={{ color: skipTeamColor, background: lightenColor(skipTeamColor, 0.85) }}
+                      style={{ color: skipTeamColor, background: teamTint(skipTeamColor, 0.85) }}
                     >
                       GM
                     </span>
-                    <span className="text-[13px]" style={{ color: '#5a6b7d' }}>{gmName}</span>
+                    <span className="text-[13px]" style={{ color: 'var(--df-text-muted)' }}>{gmName}</span>
                   </div>
                 )}
                 <div className="w-16 h-16 rounded-full bg-surface flex items-center justify-center mb-2.5">
-                  <i className="ti ti-x text-3xl" style={{ color: '#c0392b' }} aria-hidden="true" />
+                  <i className="ti ti-x text-3xl" style={{ color: 'var(--df-error)' }} aria-hidden="true" />
                 </div>
-                <p className="text-[19px] font-medium m-0" style={{ color: '#0c2340' }}>
+                <p className="text-[19px] font-medium m-0" style={{ color: 'var(--df-text-primary)' }}>
                   Round {slot.round}{slot.round > maxNormalRound ? ' Ext' : ''} &middot; Pick {positionInRound}
                 </p>
                 {skipMessage && (
-                  <p className="text-[13px] italic m-0 mt-1.5" style={{ color: '#5a6b7d' }}>{skipMessage}</p>
+                  <p className="text-[13px] italic m-0 mt-1.5" style={{ color: 'var(--df-text-muted)' }}>{skipMessage}</p>
                 )}
               </div>
             );
@@ -1501,12 +1513,12 @@ function LiveDraftPageContent() {
               style={{
                 width: 150,
                 height: 210,
-                background: isClockSlot ? lightenColor(teamColor, 0.85) : '#ffffff',
+                background: isClockSlot ? teamTint(teamColor, 0.85) : 'var(--df-surface)',
                 border: isClockSlot
                   ? `2px solid ${teamColor}`
                   : slot.pickNumber === currentPickNumber
-                  ? '1.5px solid #185fa5'
-                  : '1px solid #d8dde2',
+                  ? '1.5px solid var(--df-accent)'
+                  : '1px solid var(--df-border)',
                 cursor: slot.player ? 'pointer' : 'default',
               }}
             >
@@ -1543,21 +1555,21 @@ function LiveDraftPageContent() {
                 </>
               ) : isClockSlot ? (
                 <>
-                  <p className="text-xs font-medium m-0 leading-tight" style={{ color: '#0c2340' }}>
+                  <p className="text-xs font-medium m-0 leading-tight" style={{ color: 'var(--df-text-primary)' }}>
                     On the clock
                   </p>
                   <div
-                    className="w-10 h-10 rounded-full bg-white flex items-center justify-center my-1.5"
+                    className="w-10 h-10 rounded-full bg-df-surface flex items-center justify-center my-1.5"
                     style={{ border: `2px solid ${teamColor}` }}
                   >
                     <i className="ti ti-clock text-xl" style={{ color: teamColor }} aria-hidden="true" />
                   </div>
-                  <p className="text-base font-semibold m-0 mb-1.5" style={{ color: '#0c2340' }}>
+                  <p className="text-base font-semibold m-0 mb-1.5" style={{ color: 'var(--df-text-primary)' }}>
                     {timerDisplay}
                   </p>
                   <div className="flex items-center gap-1 justify-center">
-                    <FootballIcon color={teamColor} size={13} />
-                    <span className="text-[13px] font-semibold leading-tight" style={{ color: '#0c2340' }}>
+                    <FootballIcon color={teamColor} size={13} isDarkMode={isDarkMode} />
+                    <span className="text-[13px] font-semibold leading-tight" style={{ color: 'var(--df-text-primary)' }}>
                       {slot.team?.name}
                     </span>
                   </div>
@@ -1577,8 +1589,8 @@ function LiveDraftPageContent() {
                 {slot.player ? (
                   <>
                     <div className="flex items-center gap-1.5 justify-center">
-                      <FootballIcon color={teamColor} size={16} />
-                      <span className="text-[13px] font-semibold leading-none" style={{ color: '#0c2340' }}>
+                      <FootballIcon color={teamColor} size={16} isDarkMode={isDarkMode} />
+                      <span className="text-[13px] font-semibold leading-none" style={{ color: 'var(--df-text-primary)' }}>
                         Drafted by: {slot.team?.name}
                       </span>
                     </div>
@@ -1587,8 +1599,8 @@ function LiveDraftPageContent() {
                 ) : isSkippedPick ? (
                   <>
                     <div className="flex items-center gap-1.5 justify-center">
-                      <FootballIcon color={teamColor} size={16} />
-                      <span className="text-[13px] font-semibold leading-none" style={{ color: '#0c2340' }}>
+                      <FootballIcon color={teamColor} size={16} isDarkMode={isDarkMode} />
+                      <span className="text-[13px] font-semibold leading-none" style={{ color: 'var(--df-text-primary)' }}>
                         {slot.team?.name}
                       </span>
                     </div>
@@ -1597,7 +1609,7 @@ function LiveDraftPageContent() {
                 ) : !isClockSlot ? (
                   <div className="flex flex-col items-center gap-0.5 min-w-0 w-full">
                     <div className="flex items-center gap-1.5 justify-center min-w-0 w-full">
-                      <FootballIcon color={teamColor} size={12} />
+                      <FootballIcon color={teamColor} size={12} isDarkMode={isDarkMode} />
                       <span className="text-[10px] text-muted truncate leading-none">{slot.team?.name}</span>
                     </div>
                     {owner && <span className="text-[9px] text-muted truncate w-full text-center">GM: {owner.name}</span>}
@@ -1626,7 +1638,7 @@ function LiveDraftPageContent() {
         }}
         className="w-full flex items-center justify-between"
       >
-        <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: '#5a6b7d' }}>
+        <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: 'var(--df-text-muted)' }}>
           View rosters / Search players
         </p>
         <i className={`ti ti-chevron-${viewByTeamOpen ? 'up' : 'down'} text-base text-muted`} aria-hidden="true" />
@@ -1643,9 +1655,9 @@ function LiveDraftPageContent() {
               className="text-xs py-1.5 rounded-md font-medium text-center"
               style={{
                 width: 104,
-                background: rosterViewMode === 'team' ? '#185fa5' : '#ffffff',
-                color: rosterViewMode === 'team' ? '#ffffff' : '#3d4a57',
-                border: '1px solid #d8dde2',
+                background: rosterViewMode === 'team' ? 'var(--df-accent)' : 'var(--df-surface)',
+                color: rosterViewMode === 'team' ? 'var(--df-surface)' : 'var(--df-text-secondary)',
+                border: '1px solid var(--df-border)',
               }}
             >
               View by team
@@ -1660,9 +1672,9 @@ function LiveDraftPageContent() {
               className="text-xs py-1.5 rounded-md font-medium text-center"
               style={{
                 width: 104,
-                background: rosterViewMode === 'round' ? '#185fa5' : '#ffffff',
-                color: rosterViewMode === 'round' ? '#ffffff' : '#3d4a57',
-                border: '1px solid #d8dde2',
+                background: rosterViewMode === 'round' ? 'var(--df-accent)' : 'var(--df-surface)',
+                color: rosterViewMode === 'round' ? 'var(--df-surface)' : 'var(--df-text-secondary)',
+                border: '1px solid var(--df-border)',
               }}
             >
               View by round
@@ -1676,9 +1688,9 @@ function LiveDraftPageContent() {
               className="text-xs py-1.5 rounded-md font-medium text-center"
               style={{
                 width: 104,
-                background: rosterViewMode === 'board' ? '#185fa5' : '#ffffff',
-                color: rosterViewMode === 'board' ? '#ffffff' : '#3d4a57',
-                border: '1px solid #d8dde2',
+                background: rosterViewMode === 'board' ? 'var(--df-accent)' : 'var(--df-surface)',
+                color: rosterViewMode === 'board' ? 'var(--df-surface)' : 'var(--df-text-secondary)',
+                border: '1px solid var(--df-border)',
               }}
             >
               Draft board
@@ -1692,9 +1704,9 @@ function LiveDraftPageContent() {
               className="text-xs py-1.5 rounded-md font-medium text-center"
               style={{
                 width: 104,
-                background: rosterViewMode === 'search' ? '#185fa5' : '#ffffff',
-                color: rosterViewMode === 'search' ? '#ffffff' : '#3d4a57',
-                border: '1px solid #d8dde2',
+                background: rosterViewMode === 'search' ? 'var(--df-accent)' : 'var(--df-surface)',
+                color: rosterViewMode === 'search' ? 'var(--df-surface)' : 'var(--df-text-secondary)',
+                border: '1px solid var(--df-border)',
               }}
             >
               Search players
@@ -1715,14 +1727,14 @@ function LiveDraftPageContent() {
                     onChange={(e) => setSpSearchName(e.target.value)}
                     placeholder="Search by name"
                     className="w-full pl-8 text-xs"
-                    style={{ borderColor: spSearchName ? '#185fa5' : undefined }}
+                    style={{ borderColor: spSearchName ? 'var(--df-accent)' : undefined }}
                   />
                 </div>
                 <select
                   value={spSearchPosition}
                   onChange={(e) => setSpSearchPosition(e.target.value)}
                   className="flex-none text-xs"
-                  style={{ width: 120, borderColor: spSearchPosition ? '#185fa5' : undefined }}
+                  style={{ width: 'auto', minWidth: 130, borderColor: spSearchPosition ? 'var(--df-accent)' : undefined }}
                 >
                   <option value="">Position: any</option>
                   <optgroup label="Offense">
@@ -1744,7 +1756,7 @@ function LiveDraftPageContent() {
                   value={spSearchGender}
                   onChange={(e) => setSpSearchGender(e.target.value)}
                   className="flex-none text-xs"
-                  style={{ width: 100, borderColor: spSearchGender ? '#185fa5' : undefined }}
+                  style={{ width: 'auto', minWidth: 95, borderColor: spSearchGender ? 'var(--df-accent)' : undefined }}
                 >
                   <option value="">M/F: any</option>
                   <option value="M">M</option>
@@ -1754,7 +1766,7 @@ function LiveDraftPageContent() {
                   value={spSearchPreviousTeam}
                   onChange={(e) => setSpSearchPreviousTeam(e.target.value)}
                   className="flex-none text-xs"
-                  style={{ width: 140, borderColor: spSearchPreviousTeam ? '#185fa5' : undefined }}
+                  style={{ width: 'auto', minWidth: 170, borderColor: spSearchPreviousTeam ? 'var(--df-accent)' : undefined }}
                 >
                   <option value="">Previous team: any</option>
                   {spPreviousTeamOptions.map((t) => (
@@ -1767,7 +1779,7 @@ function LiveDraftPageContent() {
                   value={spSearchAvailability}
                   onChange={(e) => setSpSearchAvailability(e.target.value)}
                   className="flex-none text-xs"
-                  style={{ width: 130, borderColor: spSearchAvailability ? '#185fa5' : undefined }}
+                  style={{ width: 'auto', minWidth: 155, borderColor: spSearchAvailability ? 'var(--df-accent)' : undefined }}
                 >
                   <option value="">Availability: any</option>
                   <option value="available">Available</option>
@@ -1778,7 +1790,7 @@ function LiveDraftPageContent() {
                   value={spSortBy}
                   onChange={(e) => setSpSortBy(e.target.value)}
                   className="flex-none text-xs"
-                  style={{ width: 110 }}
+                  style={{ width: 'auto', minWidth: 135 }}
                 >
                   <option value="name">Sort: name</option>
                   <option value="gender">Sort: M/F</option>
@@ -1792,7 +1804,7 @@ function LiveDraftPageContent() {
                 {spResults.map((p) => {
                   const drafted = isRevealedDrafted(p);
                   const draftedTeam = drafted ? teamsById[p.team_id] : null;
-                  const draftedTeamColor = draftedTeam?.team_color || '#0074ff';
+                  const draftedTeamColor = draftedTeam?.team_color || 'var(--df-accent-secondary)';
                   const isGm = ['gm', 'commissioner'].includes(roleByEmail[p.email?.toLowerCase()]);
                   return (
                     <button
@@ -1801,8 +1813,8 @@ function LiveDraftPageContent() {
                       className="flex-none rounded-xl overflow-hidden flex flex-col items-center text-center relative"
                       style={{
                         width: 130,
-                        background: !p.is_active ? '#f1f3f6' : drafted ? '#f1f3f6' : '#ffffff',
-                        border: '1px solid #d8dde2',
+                        background: !p.is_active ? 'var(--df-surface-alt)' : drafted ? 'var(--df-surface-alt)' : 'var(--df-surface)',
+                        border: '1px solid var(--df-border)',
                         opacity: !p.is_active ? 0.6 : 1,
                       }}
                     >
@@ -1821,17 +1833,17 @@ function LiveDraftPageContent() {
                         </span>
                       )}
                       {!p.is_active ? (
-                        <div className="w-full py-1" style={{ background: '#d8dde2' }}>
-                          <p className="text-[10px] font-semibold m-0" style={{ color: '#3d4a57' }}>
+                        <div className="w-full py-1" style={{ background: 'var(--df-border)' }}>
+                          <p className="text-[10px] font-semibold m-0" style={{ color: 'var(--df-text-secondary)' }}>
                             Inactive
                           </p>
                         </div>
                       ) : drafted ? (
-                        <div className="w-full py-1" style={{ background: lightenColor(draftedTeamColor, 0.85) }}>
-                          <p className="text-[9px] font-medium m-0" style={{ color: '#0c2340' }}>
+                        <div className="w-full py-1" style={{ background: teamTint(draftedTeamColor, 0.85) }}>
+                          <p className="text-[9px] font-medium m-0" style={{ color: 'var(--df-text-primary)' }}>
                             {isGm ? 'General Manager' : 'Drafted By:'}
                           </p>
-                          <p className="text-[10px] font-semibold m-0 truncate px-1" style={{ color: '#0c2340' }}>
+                          <p className="text-[10px] font-semibold m-0 truncate px-1" style={{ color: 'var(--df-text-primary)' }}>
                             {draftedTeam?.name || 'Unknown'}
                           </p>
                         </div>
@@ -1864,10 +1876,11 @@ function LiveDraftPageContent() {
             <>
               <div className="flex gap-2 flex-wrap mb-2">
                 {teams.map((t) => {
-                  const color = t.team_color || '#0074ff';
+                  const color = t.team_color || 'var(--df-accent-secondary)';
                   const selected = viewingTeamId === t.id;
                   const isMine = t.id === myTeamId;
-                  const ring = isMine ? ', 0 0 0 2px #185fa5' : '';
+                  const ring = isMine ? ', 0 0 0 2px var(--df-accent)' : '';
+                  const needsContrastBorder = isDarkMode && selected && getLuminance(color) < 40;
                   return (
                     <button
                       key={t.id}
@@ -1876,18 +1889,18 @@ function LiveDraftPageContent() {
                       style={{
                         width: TEAM_BUTTON_WIDTH,
                         boxSizing: 'border-box',
-                        background: selected ? color : lightenColor(color, 0.85),
-                        color: selected ? '#ffffff' : '#0c2340',
-                        borderLeft: 'none',
-                        borderRight: 'none',
-                        borderTop: selected ? '3px solid rgba(0,0,0,0.25)' : '1px solid rgba(255,255,255,0.7)',
-                        borderBottom: selected ? '1px solid rgba(255,255,255,0.25)' : '3px solid rgba(0,0,0,0.18)',
+                        background: selected ? color : teamTint(color, 0.85),
+                        color: selected ? (needsContrastBorder ? '#e2e8f0' : 'var(--df-surface)') : 'var(--df-text-primary)',
+                        borderLeft: needsContrastBorder ? '1px solid #e2e8f0' : 'none',
+                        borderRight: needsContrastBorder ? '1px solid #e2e8f0' : 'none',
+                        borderTop: needsContrastBorder ? '1px solid #e2e8f0' : selected ? '3px solid rgba(0,0,0,0.25)' : '1px solid rgba(255,255,255,0.7)',
+                        borderBottom: needsContrastBorder ? '1px solid #e2e8f0' : selected ? '1px solid rgba(255,255,255,0.25)' : '3px solid rgba(0,0,0,0.18)',
                         boxShadow: selected
                           ? `inset 0 1px 3px rgba(0,0,0,0.3)${ring}`
                           : `0 1px 2px rgba(12,35,64,0.15)${ring}`,
                       }}
                     >
-                      <FootballIcon color={selected ? '#ffffff' : color} size={14} />
+                      <FootballIcon color={selected ? (needsContrastBorder ? '#e2e8f0' : 'var(--df-surface)') : color} size={14} isDarkMode={isDarkMode} />
                       <span className="truncate">
                         {t.name}
                         {isMine ? ' (you)' : ''}
@@ -1901,15 +1914,15 @@ function LiveDraftPageContent() {
                 const slots = buildTeamSlots(viewingTeamId);
                 const firstEmptyIndex = slots.findIndex((s) => !s);
                 const viewedTeam = teamsById[viewingTeamId];
-                const teamColor = viewedTeam?.team_color || '#0074ff';
+                const teamColor = viewedTeam?.team_color || 'var(--df-accent-secondary)';
                 const isTeamOnClock =
                   teamOnClock?.id === viewingTeamId && (draftStatus === 'in_progress' || draftStatus === 'paused');
                 return (
-                  <div className="bg-white rounded-lg p-3 mb-1">
+                  <div className="bg-df-surface rounded-lg p-3 mb-1">
                     <div className="flex justify-between items-center mb-1">
                       <p className="text-sm font-medium text-ink m-0">{viewedTeam?.name}</p>
                       {viewedTeam?.proxy_email && (
-                        <p className="text-xs m-0" style={{ color: '#854f0b' }}>
+                        <p className="text-xs m-0" style={{ color: 'var(--df-warning-text)' }}>
                           Proxy:{' '}
                           {viewedTeam.proxy_email
                             .split(',')
@@ -1921,7 +1934,7 @@ function LiveDraftPageContent() {
                       )}
                     </div>
                     {ownerByTeam[viewingTeamId] && (
-                      <p className="text-[11px] m-0 mb-2" style={{ color: '#185fa5' }}>
+                      <p className="text-[11px] m-0 mb-2" style={{ color: 'var(--df-accent)' }}>
                         GM: {ownerByTeam[viewingTeamId].name}
                       </p>
                     )}
@@ -1937,25 +1950,25 @@ function LiveDraftPageContent() {
                             style={{
                               minHeight: 100,
                               cursor: player ? 'pointer' : 'default',
-                              background: isClockSlot ? lightenColor(teamColor, 0.85) : '#f1f3f6',
+                              background: isClockSlot ? teamTint(teamColor, 0.85) : 'var(--df-surface-alt)',
                               border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
                             }}
                           >
                             {isClockSlot ? (
                               <>
                                 <div
-                                  className="w-8 h-8 rounded-full bg-white flex items-center justify-center"
+                                  className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center"
                                   style={{ border: `2px solid ${teamColor}` }}
                                 >
                                   <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
                                 </div>
-                                <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                                <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: 'var(--df-text-primary)' }}>
                                   On the clock
                                 </p>
-                                <p className="text-[9px] font-medium m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                                <p className="text-[9px] font-medium m-0 leading-tight truncate w-full" style={{ color: 'var(--df-text-primary)' }}>
                                   {viewedTeam?.name}
                                 </p>
-                                <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
+                                <span className="text-[8px] mt-0.5" style={{ color: 'var(--df-text-muted)' }}>
                                   Rnd {currentRound} . Overall Pick # {getSharedPickNumber(currentPickNumber)}
                                 </span>
                               </>
@@ -1964,14 +1977,14 @@ function LiveDraftPageContent() {
                                 {player.headshot_url ? (
                                   <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
                                 ) : (
-                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                  <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center">
                                     <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                                   </div>
                                 )}
                                 <p className="text-[10px] font-medium text-ink m-0 mt-1 leading-tight truncate w-full">
                                   {player.full_name}
                                 </p>
-                                <span className="text-[9px] font-medium mt-0.5" style={{ color: '#185fa5' }}>
+                                <span className="text-[9px] font-medium mt-0.5" style={{ color: 'var(--df-accent)' }}>
                                   {roleByEmail[player.email?.toLowerCase()] === 'commissioner' ? 'Commish' : 'GM'}
                                 </span>
                               </>
@@ -1980,7 +1993,7 @@ function LiveDraftPageContent() {
                                 {player.headshot_url ? (
                                   <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
                                 ) : (
-                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                  <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center">
                                     <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                                   </div>
                                 )}
@@ -1993,7 +2006,7 @@ function LiveDraftPageContent() {
                               </>
                             ) : entry?.kind === 'skipped' ? (
                               <>
-                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center">
                                   <i className="ti ti-x text-faint text-base" aria-hidden="true" />
                                 </div>
                                 <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
@@ -2006,7 +2019,7 @@ function LiveDraftPageContent() {
                                 {player.headshot_url ? (
                                   <img src={player.headshot_url} alt={player.full_name} className="w-8 h-8 rounded-full object-cover" />
                                 ) : (
-                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                  <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center">
                                     <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                                   </div>
                                 )}
@@ -2017,7 +2030,7 @@ function LiveDraftPageContent() {
                               </>
                             ) : (
                               <>
-                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-50">
+                                <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center opacity-50">
                                   <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                                 </div>
                                 <p className="text-[9px] text-faint m-0 mt-1" style={{ fontStyle: 'italic' }}>
@@ -2044,8 +2057,8 @@ function LiveDraftPageContent() {
                     onClick={() => setSelectedRound(r)}
                     className="text-xs px-2.5 py-1.5 rounded-md font-medium"
                     style={{
-                      background: selectedRound === r ? '#185fa5' : '#e6f1fb',
-                      color: selectedRound === r ? '#ffffff' : '#0c447c',
+                      background: selectedRound === r ? 'var(--df-accent)' : 'var(--df-info-bg)',
+                      color: selectedRound === r ? 'var(--df-surface)' : 'var(--df-accent)',
                       border: '2px solid transparent',
                     }}
                   >
@@ -2053,12 +2066,12 @@ function LiveDraftPageContent() {
                   </button>
                 ))}
               </div>
-              <div className="bg-white rounded-lg p-3">
+              <div className="bg-df-surface rounded-lg p-3">
                 <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
                   {roundSlots.map((slot) => {
                     const isSkippedPick = slot.pick && !slot.pick.player_id;
                     const isClockSlot = slot.pickNumber === currentPickNumber && !slot.player && !isSkippedPick;
-                    const teamColor = slot.team?.team_color || '#0074ff';
+                    const teamColor = slot.team?.team_color || 'var(--df-accent-secondary)';
                     const positionInRound = roundSlots.findIndex((s) => s.pickNumber === slot.pickNumber) + 1;
                     return (
                       <div
@@ -2067,7 +2080,7 @@ function LiveDraftPageContent() {
                         className="rounded-lg flex flex-col items-center text-center px-1 py-2"
                         style={{
                           minHeight: 100,
-                          background: isClockSlot ? lightenColor(teamColor, 0.85) : '#f1f3f6',
+                          background: isClockSlot ? teamTint(teamColor, 0.85) : 'var(--df-surface-alt)',
                           border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
                           cursor: slot.player ? 'pointer' : 'default',
                         }}
@@ -2081,7 +2094,7 @@ function LiveDraftPageContent() {
                                 className="w-8 h-8 rounded-full object-cover"
                               />
                             ) : (
-                              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                              <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center">
                                 <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                               </div>
                             )}
@@ -2092,7 +2105,7 @@ function LiveDraftPageContent() {
                           </>
                         ) : isSkippedPick ? (
                           <>
-                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center">
                               <i className="ti ti-x text-faint text-base" aria-hidden="true" />
                             </div>
                             <p className="text-[10px] text-muted m-0 mt-1">Skipped</p>
@@ -2105,24 +2118,24 @@ function LiveDraftPageContent() {
                         ) : isClockSlot ? (
                           <>
                             <div
-                              className="w-8 h-8 rounded-full bg-white flex items-center justify-center"
+                              className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center"
                               style={{ border: `2px solid ${teamColor}` }}
                             >
                               <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
                             </div>
-                            <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                            <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: 'var(--df-text-primary)' }}>
                               On the clock
                             </p>
-                            <p className="text-[9px] font-medium m-0 leading-tight truncate w-full" style={{ color: '#0c2340' }}>
+                            <p className="text-[9px] font-medium m-0 leading-tight truncate w-full" style={{ color: 'var(--df-text-primary)' }}>
                               {slot.team?.name}
                             </p>
-                            <span className="text-[8px] mt-0.5" style={{ color: '#5a6b7d' }}>
+                            <span className="text-[8px] mt-0.5" style={{ color: 'var(--df-text-muted)' }}>
                               Pick # {positionInRound}
                             </span>
                           </>
                         ) : (
                           <>
-                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-50">
+                            <div className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center opacity-50">
                               <i className="ti ti-user text-faint text-base" aria-hidden="true" />
                             </div>
                             <p className="text-[9px] text-faint m-0 mt-1" style={{ fontStyle: 'italic' }}>
@@ -2132,7 +2145,7 @@ function LiveDraftPageContent() {
                         )}
                         {!isClockSlot && (
                           <div className="mt-auto pt-1 flex items-center gap-1">
-                            <FootballIcon color={teamColor} size={10} />
+                            <FootballIcon color={teamColor} size={10} isDarkMode={isDarkMode} />
                             <span className="text-[9px] text-muted truncate">{slot.team?.name}</span>
                           </div>
                         )}
@@ -2145,7 +2158,7 @@ function LiveDraftPageContent() {
           )}
 
           {rosterViewMode === 'board' && (
-            <div className={`bg-white rounded-lg p-3 ${BOARD_CONTAINER_HEIGHT_CLASS}`} style={{ overflowX: 'auto', overflowY: 'auto' }}>
+            <div className={`bg-df-surface rounded-lg p-3 ${BOARD_CONTAINER_HEIGHT_CLASS}`} style={{ overflowX: 'auto', overflowY: 'auto' }}>
               <table className="border-collapse text-xs" style={{ width: '100%' }}>
                 <thead>
                   <tr>
@@ -2156,11 +2169,11 @@ function LiveDraftPageContent() {
                         position: 'sticky',
                         top: 0,
                         zIndex: 3,
-                        background: '#f1f3f6',
-                        color: '#0c2340',
+                        background: 'var(--df-surface-alt)',
+                        color: 'var(--df-text-primary)',
                         fontSize: 13,
                         fontWeight: 700,
-                        borderBottom: '2px solid #d8dde2',
+                        borderBottom: '2px solid var(--df-border)',
                       }}
                     >
                       Team / GM
@@ -2174,11 +2187,11 @@ function LiveDraftPageContent() {
                           position: 'sticky',
                           top: 0,
                           zIndex: 2,
-                          background: '#f1f3f6',
-                          color: '#0c2340',
+                          background: 'var(--df-surface-alt)',
+                          color: 'var(--df-text-primary)',
                           fontSize: 13,
                           fontWeight: 700,
-                          borderBottom: '2px solid #d8dde2',
+                          borderBottom: '2px solid var(--df-border)',
                         }}
                       >
                         Round {r}{r > maxNormalRound ? ' Ext' : ''}
@@ -2193,10 +2206,10 @@ function LiveDraftPageContent() {
                     .map((t) => {
                       const owner = ownerByTeam[t.id];
                       return (
-                        <tr key={t.id} className="border-t" style={{ borderColor: '#d8dde2' }}>
-                          <td className="p-1.5 sticky left-0 bg-white align-top">
+                        <tr key={t.id} className="border-t" style={{ borderColor: 'var(--df-border)' }}>
+                          <td className="p-1.5 sticky left-0 bg-df-surface align-top">
                             <div className="flex items-center gap-1.5">
-                              <FootballIcon color={t.team_color || '#0074ff'} size={12} />
+                              <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={12} isDarkMode={isDarkMode} />
                               <span className="font-medium text-ink">{t.name}</span>
                             </div>
                             {owner && <p className="text-[10px] text-muted m-0 mt-0.5">GM: {owner.name}</p>}
@@ -2208,7 +2221,7 @@ function LiveDraftPageContent() {
                               return (
                                 <td key={r} className="p-1.5 text-center align-top">
                                   <div className="bg-surface rounded-lg p-1 text-center flex items-center justify-center" style={cardBoxStyle}>
-                                    <span style={{ color: '#8b97a3' }}>&mdash;</span>
+                                    <span style={{ color: 'var(--df-text-faint)' }}>&mdash;</span>
                                   </div>
                                 </td>
                               );
@@ -2229,35 +2242,35 @@ function LiveDraftPageContent() {
                                         className="w-7 h-7 rounded-full object-cover mx-auto"
                                       />
                                     ) : (
-                                      <div className="w-7 h-7 rounded-full bg-white mx-auto flex items-center justify-center">
+                                      <div className="w-7 h-7 rounded-full bg-df-surface mx-auto flex items-center justify-center">
                                         <i className="ti ti-user text-faint text-sm" aria-hidden="true" />
                                       </div>
                                     )}
                                     <p
                                       className="text-[10px] font-medium m-0 mt-1 truncate leading-tight"
-                                      style={{ color: '#0c2340' }}
+                                      style={{ color: 'var(--df-text-primary)' }}
                                     >
                                       {slot.player.full_name}
                                     </p>
-                                    <p className="text-[9px] m-0" style={{ color: '#5a6b7d' }}>
+                                    <p className="text-[9px] m-0" style={{ color: 'var(--df-text-muted)' }}>
                                       {slot.player.gender} &middot; Pick #{slot.player.draft_pick_number}
                                     </p>
                                   </button>
                                 ) : isSkipped ? (
                                   <div className="bg-surface rounded-lg p-1 text-center flex flex-col items-center justify-center" style={cardBoxStyle}>
-                                    <div className="w-7 h-7 rounded-full bg-white mx-auto flex items-center justify-center">
+                                    <div className="w-7 h-7 rounded-full bg-df-surface mx-auto flex items-center justify-center">
                                       <i className="ti ti-player-skip-forward text-faint text-sm" aria-hidden="true" />
                                     </div>
-                                    <p className="text-[10px] italic m-0 mt-1" style={{ color: '#8b97a3' }}>
+                                    <p className="text-[10px] italic m-0 mt-1" style={{ color: 'var(--df-text-faint)' }}>
                                       Skipped
                                     </p>
-                                    <p className="text-[9px] m-0" style={{ color: '#8b97a3' }}>
+                                    <p className="text-[9px] m-0" style={{ color: 'var(--df-text-faint)' }}>
                                       Pick #{getSharedPickNumber(slot.pickNumber)}
                                     </p>
                                   </div>
                                 ) : (
                                   <div className="bg-surface rounded-lg p-1 text-center flex items-center justify-center" style={cardBoxStyle}>
-                                    <span style={{ color: '#8b97a3' }}>&mdash;</span>
+                                    <span style={{ color: 'var(--df-text-faint)' }}>&mdash;</span>
                                   </div>
                                 )}
                               </td>
@@ -2277,7 +2290,7 @@ function LiveDraftPageContent() {
   );
 
   return (
-    <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
+    <main data-theme={darkModeEnabled ? 'dark' : 'light'} style={{ background: 'var(--df-surface)', minHeight: '100vh', paddingBottom: 48 }}>
       <BrandHeader
         pageLabel={draftStatus === 'completed' ? 'Draft results' : draftStatus === 'paused' ? 'Draft paused' : draftStatus === 'not_started' ? 'Draft room' : 'Live draft'}
         liveIndicator={draftStatus === 'in_progress'}
@@ -2292,13 +2305,13 @@ function LiveDraftPageContent() {
           style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
           className="flex items-center justify-center px-4"
         >
-          <div className="bg-white rounded-xl p-6 text-center" style={{ maxWidth: 300 }}>
+          <div className="bg-df-surface rounded-xl p-6 text-center df-modal-card" style={{ maxWidth: 300 }}>
             <i
               className="ti ti-loader-2 animate-spin-wheel"
-              style={{ fontSize: 40, color: '#185fa5', display: 'inline-block' }}
+              style={{ fontSize: 40, color: 'var(--df-accent)', display: 'inline-block' }}
               aria-hidden="true"
             />
-            <p className="text-sm font-semibold m-0 mt-3" style={{ color: '#0c2340' }}>
+            <p className="text-sm font-semibold m-0 mt-3" style={{ color: 'var(--df-text-primary)' }}>
               The draft order is being randomized
             </p>
           </div>
@@ -2309,10 +2322,10 @@ function LiveDraftPageContent() {
         <button
           onClick={unlockAudio}
           className="w-full flex items-center justify-center gap-2 py-2.5"
-          style={{ background: '#185fa5', border: 'none', cursor: 'pointer' }}
+          style={{ background: 'var(--df-accent)', border: 'none', cursor: 'pointer' }}
         >
-          <i className="ti ti-volume text-base" style={{ color: '#ffffff' }} aria-hidden="true" />
-          <span className="text-xs font-medium" style={{ color: '#ffffff' }}>
+          <i className="ti ti-volume text-base" style={{ color: 'var(--df-surface)' }} aria-hidden="true" />
+          <span className="text-xs font-medium" style={{ color: 'var(--df-surface)' }}>
             Tap to enable the draft pick chime
           </span>
         </button>
@@ -2321,9 +2334,9 @@ function LiveDraftPageContent() {
       {preDraftWaitingRoomBlock}
 
       {draftStatus === 'paused' && (
-        <div className="bg-[#faeeda] mx-4 sm:mx-5 mt-4 rounded-lg p-3.5 flex gap-2">
-          <i className="ti ti-player-pause text-base flex-shrink-0" style={{ color: '#854f0b' }} aria-hidden="true" />
-          <p className="text-sm m-0" style={{ color: '#633806' }}>
+        <div className="bg-[var(--df-warning-bg)] mx-4 sm:mx-5 mt-4 rounded-lg p-3.5 flex gap-2">
+          <i className="ti ti-player-pause text-base flex-shrink-0" style={{ color: 'var(--df-warning-text)' }} aria-hidden="true" />
+          <p className="text-sm m-0" style={{ color: 'var(--df-warning-text-strong)' }}>
             The commissioner has paused the draft. Grab a beer, have a smoke, we'll pick back up where we left off!
           </p>
         </div>
@@ -2333,7 +2346,7 @@ function LiveDraftPageContent() {
         <>
           {upcomingPicksBlock}
 
-          <p className="text-2xl font-semibold text-center m-0 pt-2" style={{ color: '#0c2340' }}>
+          <p className="text-2xl font-semibold text-center m-0 pt-2" style={{ color: 'var(--df-text-primary)' }}>
             Round {currentRound}, Pick {allSlots.filter((s) => s.round === currentRound).findIndex((s) => s.pickNumber === currentPickNumber) + 1}
           </p>
         </>
@@ -2341,7 +2354,7 @@ function LiveDraftPageContent() {
 
       {draftStatus === 'completed' && (
         <div className="bg-royal-pale mx-4 sm:mx-5 mt-4 rounded-lg p-3.5">
-          <p className="text-sm m-0" style={{ color: '#0c447c' }}>
+          <p className="text-sm m-0" style={{ color: 'var(--df-accent)' }}>
             The draft has ended. Final rosters are below.
           </p>
         </div>
@@ -2368,7 +2381,7 @@ function LiveDraftPageContent() {
         return (
           <div
             key={id}
-            className="fixed rounded-xl bg-white border border-line"
+            className="fixed rounded-xl bg-df-surface border border-line"
             style={{
               width: 290,
               right: 16 + idx * 20,
@@ -2417,11 +2430,11 @@ function LiveDraftPageContent() {
               <div>
                 <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Status</p>
                 {role === 'commissioner' ? (
-                  <p className="text-xs font-medium m-0" style={{ color: '#185fa5' }}>
+                  <p className="text-xs font-medium m-0" style={{ color: 'var(--df-accent)' }}>
                     Commissioner &middot; {team?.name || 'Unassigned'}
                   </p>
                 ) : role === 'gm' ? (
-                  <p className="text-xs font-medium m-0" style={{ color: '#185fa5' }}>
+                  <p className="text-xs font-medium m-0" style={{ color: 'var(--df-accent)' }}>
                     GM &middot; {team?.name || 'Unassigned'}
                   </p>
                 ) : p.draft_pick_number ? (
@@ -2495,14 +2508,14 @@ function LiveDraftPageContent() {
           style={{ background: 'rgba(12,35,64,0.55)', zIndex: 100 }}
           onClick={() => setShowCompleteModal(false)}
         >
-          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-xl p-6 text-center max-w-sm w-full">
+          <div onClick={(e) => e.stopPropagation()} className="bg-df-surface rounded-xl p-6 text-center max-w-sm w-full df-modal-card">
             <div
               className="w-14 h-14 rounded-full mx-auto flex items-center justify-center mb-3"
-              style={{ background: '#e6f1fb' }}
+              style={{ background: 'var(--df-info-bg)' }}
             >
-              <i className="ti ti-confetti text-3xl" style={{ color: '#185fa5' }} aria-hidden="true" />
+              <i className="ti ti-confetti text-3xl" style={{ color: 'var(--df-accent)' }} aria-hidden="true" />
             </div>
-            <p className="text-lg font-semibold m-0" style={{ color: '#0c2340' }}>
+            <p className="text-lg font-semibold m-0" style={{ color: 'var(--df-text-primary)' }}>
               Congratulations — the draft is complete!
             </p>
             <p className="text-sm text-muted mt-2 mb-4">
@@ -2517,11 +2530,11 @@ function LiveDraftPageContent() {
 
       {rankingToast && (
         <div
-          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl px-6 py-4 flex items-center gap-3"
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-df-surface rounded-xl px-6 py-4 flex items-center gap-3"
           style={{ boxShadow: '0 12px 32px rgba(12,35,64,0.3)', zIndex: 100 }}
         >
           <StarIcon filled size={22} />
-          <p className="text-base font-medium m-0" style={{ color: '#0c2340' }}>
+          <p className="text-base font-medium m-0" style={{ color: 'var(--df-text-primary)' }}>
             Added to your My Rankings
           </p>
         </div>

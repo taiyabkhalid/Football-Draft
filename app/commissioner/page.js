@@ -18,6 +18,7 @@ export default function CommissionerToolsPage() {
   }
   const [myEmail, setMyEmail] = useState('');
   const [myIsPrimary, setMyIsPrimary] = useState(false);
+  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
 
   const [players, setPlayers] = useState([]);
   const [teams, setTeams] = useState([]);
@@ -97,12 +98,13 @@ export default function CommissionerToolsPage() {
         return;
       }
       setMyEmail(user.email?.toLowerCase() || '');
-      const { data: profileRow } = await supabase.from('profiles').select('role, is_primary').eq('id', user.id).single();
+      const { data: profileRow } = await supabase.from('profiles').select('role, is_primary, dark_mode_enabled').eq('id', user.id).single();
       if (profileRow?.role !== 'commissioner') {
         router.push('/profile');
         return;
       }
       setMyIsPrimary(!!profileRow.is_primary);
+      setDarkModeEnabled(Boolean(profileRow.dark_mode_enabled));
       setChecked(true);
     }
     checkAccess();
@@ -568,7 +570,7 @@ export default function CommissionerToolsPage() {
 
   if (!checked) {
     return (
-      <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
+      <main data-theme={darkModeEnabled ? 'dark' : 'light'} style={{ background: 'var(--df-surface)', minHeight: '100vh', paddingBottom: 48 }}>
         <BrandHeader pageLabel="Commish Tools" />
         <p className="text-center text-muted text-sm p-10">Checking access…</p>
       </main>
@@ -576,13 +578,13 @@ export default function CommissionerToolsPage() {
   }
 
   return (
-    <main style={{ background: '#ffffff', minHeight: '100vh', paddingBottom: 48 }}>
+    <main data-theme={darkModeEnabled ? 'dark' : 'light'} style={{ background: 'var(--df-surface)', minHeight: '100vh', paddingBottom: 48 }}>
       <BrandHeader pageLabel="Commish Tools" />
       <div className="max-w-xl mx-auto px-4 py-8">
         <Link
           href="/profile"
           className="inline-flex items-center gap-1 text-xs font-medium mb-4"
-          style={{ color: '#185fa5', textDecoration: 'none' }}
+          style={{ color: 'var(--df-accent)', textDecoration: 'none' }}
         >
           <i className="ti ti-chevron-left text-sm" aria-hidden="true" />
           Back to profile
@@ -606,8 +608,8 @@ export default function CommissionerToolsPage() {
             <div
               className="rounded-md px-3 py-2 mb-3 text-xs"
               style={{
-                background: settingsMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
-                color: settingsMessage.type === 'error' ? '#791f1f' : '#27500a',
+                background: settingsMessage.type === 'error' ? 'var(--df-error-bg)' : 'var(--df-success-bg)',
+                color: settingsMessage.type === 'error' ? 'var(--df-error-text-strong)' : 'var(--df-success-text-strong)',
               }}
             >
               {settingsMessage.text}
@@ -692,7 +694,7 @@ export default function CommissionerToolsPage() {
               : 'Set each team\u2019s draft position, or randomize.'}
           </p>
 
-          <div className="rounded-md bg-white px-3 py-2.5 mb-3 flex items-center justify-between">
+          <div className="rounded-md bg-df-surface px-3 py-2.5 mb-3 flex items-center justify-between">
             <p className="text-xs text-muted m-0 pr-3">
               Auto-randomize the draft order 30 minutes before the draft starts, so it's visible to everyone the
               moment the pages are open. Turning this on hides manual ordering below, since it's no longer needed.
@@ -704,7 +706,7 @@ export default function CommissionerToolsPage() {
               style={{
                 width: 44,
                 height: 24,
-                background: settings?.auto_randomize_draft_order ? '#185fa5' : '#d8dde2',
+                background: settings?.auto_randomize_draft_order ? 'var(--df-accent)' : 'var(--df-border)',
                 border: 'none',
                 position: 'relative',
               }}
@@ -718,7 +720,7 @@ export default function CommissionerToolsPage() {
                   width: 20,
                   height: 20,
                   borderRadius: '50%',
-                  background: '#ffffff',
+                  background: 'var(--df-surface)',
                   transition: 'left 0.15s',
                 }}
               />
@@ -729,8 +731,8 @@ export default function CommissionerToolsPage() {
             <div
               className="rounded-md px-3 py-2 mb-3 text-xs"
               style={{
-                background: orderMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
-                color: orderMessage.type === 'error' ? '#791f1f' : '#27500a',
+                background: orderMessage.type === 'error' ? 'var(--df-error-bg)' : 'var(--df-success-bg)',
+                color: orderMessage.type === 'error' ? 'var(--df-error-text-strong)' : 'var(--df-success-text-strong)',
               }}
             >
               {orderMessage.text}
@@ -741,8 +743,8 @@ export default function CommissionerToolsPage() {
             <>
               <div className="flex flex-col gap-2 mb-3">
                 {teamOrder.map((t) => (
-                  <div key={t.id} className="flex items-center gap-2 bg-white rounded-md px-3 py-2">
-                    <FootballIcon color={t.team_color || '#0074ff'} size={14} />
+                  <div key={t.id} className="flex items-center gap-2 bg-df-surface rounded-md px-3 py-2">
+                    <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={14} />
                     <span className="text-xs text-ink flex-1">{t.name}</span>
                     <input
                       type="number"
@@ -788,7 +790,7 @@ export default function CommissionerToolsPage() {
           </p>
 
           {draftStatus === 'not_started' && teamsWithoutGM.length > 0 && (
-            <div className="rounded-md px-3 py-2 mb-3 text-xs" style={{ background: '#faeeda', color: '#633806' }}>
+            <div className="rounded-md px-3 py-2 mb-3 text-xs" style={{ background: 'var(--df-warning-bg)', color: 'var(--df-warning-text-strong)' }}>
               Every team needs a GM before the draft can start. Still missing one: {teamsWithoutGM.map((t) => t.name).join(', ')}.
             </div>
           )}
@@ -797,8 +799,8 @@ export default function CommissionerToolsPage() {
             <div
               className="rounded-md px-3 py-2 mb-3 text-xs"
               style={{
-                background: startMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
-                color: startMessage.type === 'error' ? '#791f1f' : '#27500a',
+                background: startMessage.type === 'error' ? 'var(--df-error-bg)' : 'var(--df-success-bg)',
+                color: startMessage.type === 'error' ? 'var(--df-error-text-strong)' : 'var(--df-success-text-strong)',
               }}
             >
               {startMessage.text}
@@ -837,7 +839,7 @@ export default function CommissionerToolsPage() {
                 style={{
                   width: 44,
                   height: 24,
-                  background: settings?.profile_edits_unlocked_override ? '#185fa5' : '#d8dde2',
+                  background: settings?.profile_edits_unlocked_override ? 'var(--df-accent)' : 'var(--df-border)',
                   border: 'none',
                   position: 'relative',
                 }}
@@ -851,7 +853,7 @@ export default function CommissionerToolsPage() {
                     width: 20,
                     height: 20,
                     borderRadius: '50%',
-                    background: '#ffffff',
+                    background: 'var(--df-surface)',
                     transition: 'left 0.15s',
                   }}
                 />
@@ -876,7 +878,7 @@ export default function CommissionerToolsPage() {
                 style={{
                   width: 44,
                   height: 24,
-                  background: settings?.registration_unlocked_override ? '#185fa5' : '#d8dde2',
+                  background: settings?.registration_unlocked_override ? 'var(--df-accent)' : 'var(--df-border)',
                   border: 'none',
                   position: 'relative',
                 }}
@@ -890,14 +892,14 @@ export default function CommissionerToolsPage() {
                     width: 20,
                     height: 20,
                     borderRadius: '50%',
-                    background: '#ffffff',
+                    background: 'var(--df-surface)',
                     transition: 'left 0.15s',
                   }}
                 />
               </button>
             </div>
             {settings?.registration_unlocked_override && draftStatus !== 'paused' && (
-              <p className="text-[11px] mt-1.5" style={{ color: '#854f0b' }}>
+              <p className="text-[11px] mt-1.5" style={{ color: 'var(--df-warning-text)' }}>
                 This is on, but registration is only actually open while the draft is paused — pause it to let the
                 new player register.
               </p>
@@ -922,7 +924,7 @@ export default function CommissionerToolsPage() {
                 style={{
                   width: 44,
                   height: 24,
-                  background: settings?.enforce_min_female_draft ? '#185fa5' : '#d8dde2',
+                  background: settings?.enforce_min_female_draft ? 'var(--df-accent)' : 'var(--df-border)',
                   border: 'none',
                   position: 'relative',
                 }}
@@ -936,7 +938,7 @@ export default function CommissionerToolsPage() {
                     width: 20,
                     height: 20,
                     borderRadius: '50%',
-                    background: '#ffffff',
+                    background: 'var(--df-surface)',
                     transition: 'left 0.15s',
                   }}
                 />
@@ -954,8 +956,8 @@ export default function CommissionerToolsPage() {
               <div
                 className="rounded-md px-3 py-2 mb-2 text-xs"
                 style={{
-                  background: resetDraftMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
-                  color: resetDraftMessage.type === 'error' ? '#791f1f' : '#27500a',
+                  background: resetDraftMessage.type === 'error' ? 'var(--df-error-bg)' : 'var(--df-success-bg)',
+                  color: resetDraftMessage.type === 'error' ? 'var(--df-error-text-strong)' : 'var(--df-success-text-strong)',
                 }}
               >
                 {resetDraftMessage.text}
@@ -966,7 +968,7 @@ export default function CommissionerToolsPage() {
               onClick={handleResetDraft}
               disabled={resettingDraft}
               className="text-xs w-full rounded-md py-2 font-medium"
-              style={{ background: resetDraftConfirming ? '#c0392b' : '#fcebeb', color: resetDraftConfirming ? '#ffffff' : '#791f1f' }}
+              style={{ background: resetDraftConfirming ? 'var(--df-error)' : 'var(--df-error-bg)', color: resetDraftConfirming ? 'var(--df-surface)' : 'var(--df-error-text-strong)' }}
             >
               {resettingDraft ? 'Resetting…' : resetDraftConfirming ? 'Click again to confirm reset' : 'Reset the draft'}
             </button>
@@ -981,15 +983,15 @@ export default function CommissionerToolsPage() {
                 style={{ position: 'fixed', inset: 0, background: 'rgba(12,35,64,0.5)', zIndex: 300 }}
                 className="flex items-center justify-center px-4"
               >
-                <div className="bg-white rounded-xl p-5" style={{ maxWidth: 360, width: '100%' }}>
-                  <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: '#0c2340' }}>
+                <div className="bg-df-surface rounded-xl p-5 df-modal-card" style={{ maxWidth: 360, width: '100%' }}>
+                  <p className="text-[15px] font-semibold m-0 mb-2.5 text-center" style={{ color: 'var(--df-text-primary)' }}>
                     Save this draft's results?
                   </p>
-                  <p className="text-[13px] m-0 mb-3" style={{ color: '#5a6b7d', lineHeight: 1.6 }}>
+                  <p className="text-[13px] m-0 mb-3" style={{ color: 'var(--df-text-muted)', lineHeight: 1.6 }}>
                     This draft has completed. Would you like to save its results before resetting? Once reset, this
                     information cannot be recovered unless it's saved now.
                   </p>
-                  <label className="text-[12px] font-medium block mb-1" style={{ color: '#0c2340' }}>
+                  <label className="text-[12px] font-medium block mb-1" style={{ color: 'var(--df-text-primary)' }}>
                     Draft name
                   </label>
                   <input
@@ -997,15 +999,15 @@ export default function CommissionerToolsPage() {
                     value={archiveNameInput}
                     onChange={(e) => setArchiveNameInput(e.target.value)}
                     className="w-full rounded-md px-2.5 py-2 text-[13px] mb-3.5"
-                    style={{ border: '1px solid #d8dde2' }}
+                    style={{ border: '1px solid var(--df-border)' }}
                   />
                   <button
                     onClick={handleSaveArchiveAndReset}
                     disabled={savingArchive}
                     className="w-full text-center mb-2"
                     style={{
-                      background: '#185fa5',
-                      color: '#ffffff',
+                      background: 'var(--df-accent)',
+                      color: 'var(--df-surface)',
                       fontWeight: 600,
                       borderRadius: 8,
                       padding: '9px 14px',
@@ -1020,7 +1022,7 @@ export default function CommissionerToolsPage() {
                     onClick={handleResetWithoutSaving}
                     disabled={savingArchive}
                     className="w-full text-center"
-                    style={{ background: 'none', border: 'none', color: '#5a6b7d', fontSize: 12, textDecoration: 'underline', cursor: 'pointer' }}
+                    style={{ background: 'none', border: 'none', color: 'var(--df-text-muted)', fontSize: 12, textDecoration: 'underline', cursor: 'pointer' }}
                   >
                     No, reset without saving
                   </button>
@@ -1048,8 +1050,8 @@ export default function CommissionerToolsPage() {
             <div
               className="rounded-md px-3 py-2 mb-3 text-xs"
               style={{
-                background: teamMgmtMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
-                color: teamMgmtMessage.type === 'error' ? '#791f1f' : '#27500a',
+                background: teamMgmtMessage.type === 'error' ? 'var(--df-error-bg)' : 'var(--df-success-bg)',
+                color: teamMgmtMessage.type === 'error' ? 'var(--df-error-text-strong)' : 'var(--df-success-text-strong)',
               }}
             >
               {teamMgmtMessage.text}
@@ -1059,8 +1061,8 @@ export default function CommissionerToolsPage() {
             <div
               className="rounded-md px-3 py-2 mb-3 text-xs"
               style={{
-                background: message.type === 'error' ? '#fcebeb' : '#eaf3de',
-                color: message.type === 'error' ? '#791f1f' : '#27500a',
+                background: message.type === 'error' ? 'var(--df-error-bg)' : 'var(--df-success-bg)',
+                color: message.type === 'error' ? 'var(--df-error-text-strong)' : 'var(--df-success-text-strong)',
               }}
             >
               {message.text}
@@ -1070,8 +1072,8 @@ export default function CommissionerToolsPage() {
             <div
               className="rounded-md px-3 py-2 mb-3 text-xs"
               style={{
-                background: proxyMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
-                color: proxyMessage.type === 'error' ? '#791f1f' : '#27500a',
+                background: proxyMessage.type === 'error' ? 'var(--df-error-bg)' : 'var(--df-success-bg)',
+                color: proxyMessage.type === 'error' ? 'var(--df-error-text-strong)' : 'var(--df-success-text-strong)',
               }}
             >
               {proxyMessage.text}
@@ -1093,9 +1095,9 @@ export default function CommissionerToolsPage() {
                 player: players.find((p) => p.email?.toLowerCase() === email.toLowerCase()),
               }));
               return (
-                <div key={t.id} className="bg-white rounded-md px-3 py-2">
+                <div key={t.id} className="bg-df-surface rounded-md px-3 py-2">
                   <div className="flex items-center gap-2 mb-1">
-                    <FootballIcon color={t.team_color || '#0074ff'} size={14} />
+                    <FootballIcon color={t.team_color || 'var(--df-accent-secondary)'} size={14} />
                     <div className="flex-1 min-w-0">
                       <span className="text-xs text-ink block truncate">{t.name}</span>
                       <span className="text-[10px] text-muted block truncate">
@@ -1104,7 +1106,7 @@ export default function CommissionerToolsPage() {
                     </div>
                   </div>
                   {proxyPlayers.map(({ email, player }) => (
-                    <p key={email} className="text-[11px] m-0 mb-1.5 flex items-center gap-1.5" style={{ color: '#854f0b' }}>
+                    <p key={email} className="text-[11px] m-0 mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--df-warning-text)' }}>
                       <span>
                         Proxy: {player?.full_name || email}
                         {player?.team_id && player.team_id !== t.id ? ` (drafted on ${teamsById[player.team_id]?.name})` : ''}
@@ -1113,7 +1115,7 @@ export default function CommissionerToolsPage() {
                         <button
                           onClick={() => handleRemoveOneProxy(t.id, email)}
                           className="text-[10px] underline"
-                          style={{ color: '#791f1f' }}
+                          style={{ color: 'var(--df-error-text-strong)' }}
                         >
                           remove
                         </button>
@@ -1129,7 +1131,7 @@ export default function CommissionerToolsPage() {
                           setReassignEmail('');
                         }}
                         className="text-[11px] font-medium rounded-md py-1"
-                        style={{ background: '#e6f1fb', color: '#0c447c', width: 92, textAlign: 'center' }}
+                        style={{ background: 'var(--df-info-bg)', color: 'var(--df-accent)', width: 92, textAlign: 'center' }}
                       >
                         Change GM
                       </button>
@@ -1140,7 +1142,7 @@ export default function CommissionerToolsPage() {
                           setReassignEmail('');
                         }}
                         className="text-[11px] font-medium rounded-md py-1"
-                        style={{ background: '#185fa5', color: '#ffffff', width: 92, textAlign: 'center' }}
+                        style={{ background: 'var(--df-accent)', color: 'var(--df-surface)', width: 92, textAlign: 'center' }}
                       >
                         Assign GM
                       </button>
@@ -1150,7 +1152,7 @@ export default function CommissionerToolsPage() {
                         onClick={() => handleClearProxy(t.id)}
                         disabled={clearingProxyTeamId === t.id}
                         className="text-[11px] font-medium rounded-md py-1"
-                        style={{ background: '#faeeda', color: '#854f0b', width: 92, textAlign: 'center' }}
+                        style={{ background: 'var(--df-warning-bg)', color: 'var(--df-warning-text)', width: 92, textAlign: 'center' }}
                       >
                         {clearingProxyTeamId === t.id ? '…' : 'Remove proxy'}
                       </button>
@@ -1158,7 +1160,7 @@ export default function CommissionerToolsPage() {
                       <button
                         onClick={() => setExpandedProxyTeamId(expandedProxyTeamId === t.id ? null : t.id)}
                         className="text-[11px] font-medium rounded-md py-1"
-                        style={{ background: '#faeeda', color: '#854f0b', width: 92, textAlign: 'center' }}
+                        style={{ background: 'var(--df-warning-bg)', color: 'var(--df-warning-text)', width: 92, textAlign: 'center' }}
                       >
                         Add proxy
                       </button>
@@ -1169,8 +1171,8 @@ export default function CommissionerToolsPage() {
                         disabled={draftLocked || clearingGmTeamId === t.id}
                         className="text-[11px] font-medium rounded-md py-1"
                         style={{
-                          background: '#fcebeb',
-                          color: '#791f1f',
+                          background: 'var(--df-error-bg)',
+                          color: 'var(--df-error-text-strong)',
                           width: 92,
                           textAlign: 'center',
                           opacity: draftLocked ? 0.4 : 1,
@@ -1194,8 +1196,8 @@ export default function CommissionerToolsPage() {
                       disabled={draftLocked || deletingTeamId === t.id}
                       className="text-[11px] font-medium rounded-md py-1"
                       style={{
-                        background: '#fcebeb',
-                        color: '#791f1f',
+                        background: 'var(--df-error-bg)',
+                        color: 'var(--df-error-text-strong)',
                         width: 92,
                         textAlign: 'center',
                         opacity: draftLocked ? 0.4 : 1,
@@ -1263,7 +1265,7 @@ export default function CommissionerToolsPage() {
           </div>
 
           {!draftLocked && (
-            <div className="flex items-center gap-2 bg-white rounded-md px-3 py-2.5">
+            <div className="flex items-center gap-2 bg-df-surface rounded-md px-3 py-2.5">
               <span className="text-xs text-ink flex-1">
                 Number of teams in the league
                 <span className="block text-[11px] text-muted">Currently {teams.length}</span>
@@ -1316,8 +1318,8 @@ export default function CommissionerToolsPage() {
             <div
               className="rounded-md px-3 py-2 mb-3 text-xs"
               style={{
-                background: commissionerMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
-                color: commissionerMessage.type === 'error' ? '#791f1f' : '#27500a',
+                background: commissionerMessage.type === 'error' ? 'var(--df-error-bg)' : 'var(--df-success-bg)',
+                color: commissionerMessage.type === 'error' ? 'var(--df-error-text-strong)' : 'var(--df-success-text-strong)',
               }}
             >
               {commissionerMessage.text}
@@ -1359,10 +1361,10 @@ export default function CommissionerToolsPage() {
               {currentGMs
                 .filter((g) => g.role === 'commissioner')
                 .map((g) => (
-                  <div key={g.email} className="flex items-center justify-between bg-white rounded-md px-3 py-2 gap-2">
+                  <div key={g.email} className="flex items-center justify-between bg-df-surface rounded-md px-3 py-2 gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       {g.team_id ? (
-                        <FootballIcon color={teamsById[g.team_id]?.team_color || '#0074ff'} size={14} />
+                        <FootballIcon color={teamsById[g.team_id]?.team_color || 'var(--df-accent-secondary)'} size={14} />
                       ) : (
                         <i className="ti ti-shield text-sm text-muted" aria-hidden="true" />
                       )}
@@ -1373,7 +1375,7 @@ export default function CommissionerToolsPage() {
                       {g.is_primary && (
                         <span
                           className="text-[10px] font-medium rounded px-1.5 py-0.5"
-                          style={{ background: '#e6f1fb', color: '#0c447c' }}
+                          style={{ background: 'var(--df-info-bg)', color: 'var(--df-accent)' }}
                         >
                           Primary
                         </span>
@@ -1384,7 +1386,7 @@ export default function CommissionerToolsPage() {
                         onClick={() => handleRevokeCommissioner(g.email)}
                         disabled={revokingEmail === g.email}
                         className="text-[11px] font-medium rounded-md px-2 py-1 flex-shrink-0"
-                        style={{ background: '#fcebeb', color: '#791f1f' }}
+                        style={{ background: 'var(--df-error-bg)', color: 'var(--df-error-text-strong)' }}
                       >
                         {revokingEmail === g.email ? '…' : 'Revoke'}
                       </button>
@@ -1414,9 +1416,9 @@ export default function CommissionerToolsPage() {
               onClick={() => setPlayerPoolFilter('active')}
               className="text-xs px-2.5 py-1 rounded-md font-medium"
               style={{
-                background: playerPoolFilter === 'active' ? '#185fa5' : '#ffffff',
-                color: playerPoolFilter === 'active' ? '#ffffff' : '#3d4a57',
-                border: '1px solid #d8dde2',
+                background: playerPoolFilter === 'active' ? 'var(--df-accent)' : 'var(--df-surface)',
+                color: playerPoolFilter === 'active' ? 'var(--df-surface)' : 'var(--df-text-secondary)',
+                border: '1px solid var(--df-border)',
               }}
             >
               Active ({players.filter((p) => p.is_active).length})
@@ -1425,9 +1427,9 @@ export default function CommissionerToolsPage() {
               onClick={() => setPlayerPoolFilter('inactive')}
               className="text-xs px-2.5 py-1 rounded-md font-medium"
               style={{
-                background: playerPoolFilter === 'inactive' ? '#185fa5' : '#ffffff',
-                color: playerPoolFilter === 'inactive' ? '#ffffff' : '#3d4a57',
-                border: '1px solid #d8dde2',
+                background: playerPoolFilter === 'inactive' ? 'var(--df-accent)' : 'var(--df-surface)',
+                color: playerPoolFilter === 'inactive' ? 'var(--df-surface)' : 'var(--df-text-secondary)',
+                border: '1px solid var(--df-border)',
               }}
             >
               Inactive ({players.filter((p) => !p.is_active).length})
@@ -1451,7 +1453,7 @@ export default function CommissionerToolsPage() {
               <p className="text-xs text-muted">No {playerPoolFilter} players match.</p>
             )}
             {playerPool.map((p) => (
-              <div key={p.id} className="flex items-center justify-between bg-white rounded-md px-3 py-2">
+              <div key={p.id} className="flex items-center justify-between bg-df-surface rounded-md px-3 py-2">
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-ink m-0 truncate">{p.full_name}</p>
                   <p className="text-[11px] text-muted m-0">
@@ -1463,8 +1465,8 @@ export default function CommissionerToolsPage() {
                   disabled={togglingPlayerId === p.id}
                   className="text-xs font-medium rounded-md px-2.5 py-1.5 flex-shrink-0"
                   style={{
-                    background: p.is_active ? '#fcebeb' : '#eaf3de',
-                    color: p.is_active ? '#791f1f' : '#27500a',
+                    background: p.is_active ? 'var(--df-error-bg)' : 'var(--df-success-bg)',
+                    color: p.is_active ? 'var(--df-error-text-strong)' : 'var(--df-success-text-strong)',
                   }}
                 >
                   {togglingPlayerId === p.id ? '…' : p.is_active ? 'Inactivate' : 'Reactivate'}
@@ -1492,8 +1494,8 @@ export default function CommissionerToolsPage() {
             <div
               className="rounded-md px-3 py-2 mb-3 text-xs"
               style={{
-                background: resetMessage.type === 'error' ? '#fcebeb' : '#eaf3de',
-                color: resetMessage.type === 'error' ? '#791f1f' : '#27500a',
+                background: resetMessage.type === 'error' ? 'var(--df-error-bg)' : 'var(--df-success-bg)',
+                color: resetMessage.type === 'error' ? 'var(--df-error-text-strong)' : 'var(--df-success-text-strong)',
               }}
             >
               {resetMessage.text}
