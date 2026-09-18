@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import BrandHeader from '../../lib/BrandHeader';
-import FootballIcon, { TEAM_COLORS } from '../../lib/FootballIcon';
+import FootballIcon, { TEAM_COLORS, getLuminance } from '../../lib/FootballIcon';
 import PrintRosterButton from '../../lib/PrintRosterButton';
 
 export default function ProfilePage() {
@@ -19,7 +19,6 @@ export default function ProfilePage() {
   const [settings, setSettings] = useState(null);
   const [role, setRole] = useState(null);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
-  const [savingDarkMode, setSavingDarkMode] = useState(false);
   const [teamNameDraft, setTeamNameDraft] = useState('');
   const [teamColorDraft, setTeamColorDraft] = useState('var(--df-accent-secondary)');
 
@@ -166,19 +165,6 @@ export default function ProfilePage() {
       .eq('id', team.id);
     setTeam((t) => ({ ...t, name: teamNameDraft.trim(), team_color: teamColorDraft }));
     setSavingTeamName(false);
-  }
-
-  async function handleToggleDarkMode() {
-    const newValue = !darkModeEnabled;
-    setSavingDarkMode(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      await supabase.from('profiles').update({ dark_mode_enabled: newValue }).eq('id', user.id);
-    }
-    setDarkModeEnabled(newValue);
-    setSavingDarkMode(false);
   }
 
   async function updatePassword() {
@@ -435,23 +421,29 @@ export default function ProfilePage() {
 
             <p className="text-[10px] uppercase tracking-wide text-muted mb-2">Team color</p>
             <div className="flex gap-2 flex-wrap mb-3">
-              {TEAM_COLORS.map((c) => (
-                <button
-                  key={c.hex}
-                  type="button"
-                  onClick={() => setTeamColorDraft(c.hex)}
-                  aria-label={c.name}
-                  className="rounded-full flex items-center justify-center"
-                  style={{
-                    width: 30,
-                    height: 30,
-                    background: 'var(--df-surface)',
-                    border: teamColorDraft === c.hex ? `2px solid ${c.hex}` : '1px solid var(--df-border)',
-                  }}
-                >
-                  <FootballIcon color={c.hex} size={16} />
-                </button>
-              ))}
+              {TEAM_COLORS.map((c) => {
+                const needsContrastBorder = darkModeEnabled && teamColorDraft === c.hex && getLuminance(c.hex) < 40;
+                return (
+                  <button
+                    key={c.hex}
+                    type="button"
+                    onClick={() => setTeamColorDraft(c.hex)}
+                    aria-label={c.name}
+                    className="rounded-full flex items-center justify-center"
+                    style={{
+                      width: 30,
+                      height: 30,
+                      background: 'var(--df-surface)',
+                      border:
+                        teamColorDraft === c.hex
+                          ? `2px solid ${needsContrastBorder ? '#e2e8f0' : c.hex}`
+                          : '1px solid var(--df-border)',
+                    }}
+                  >
+                    <FootballIcon color={c.hex} size={16} isDarkMode={darkModeEnabled} />
+                  </button>
+                );
+              })}
             </div>
 
             <button
@@ -568,50 +560,6 @@ export default function ProfilePage() {
               >
                 Continue to Spectator Room
               </a>
-            </div>
-          </div>
-        )}
-
-        {role === 'commissioner' && (
-          <div className="rounded-lg border border-line px-3.5 py-3 mb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide m-0" style={{ color: 'var(--df-text-muted)' }}>
-                  Dark Mode (GM Draft Page)
-                </p>
-                <p className="text-[11px] m-0 mt-1" style={{ color: 'var(--df-text-faint)' }}>
-                  Applies only to the GM Draft page while this is being tested.
-                </p>
-              </div>
-              <button
-                onClick={handleToggleDarkMode}
-                disabled={savingDarkMode}
-                role="switch"
-                aria-checked={darkModeEnabled}
-                style={{
-                  width: 44,
-                  height: 24,
-                  borderRadius: 12,
-                  background: darkModeEnabled ? 'var(--df-accent)' : 'var(--df-border)',
-                  border: 'none',
-                  position: 'relative',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                }}
-              >
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: 2,
-                    left: darkModeEnabled ? 22 : 2,
-                    width: 20,
-                    height: 20,
-                    borderRadius: '50%',
-                    background: 'var(--df-surface)',
-                    transition: 'left 0.15s ease',
-                  }}
-                />
-              </button>
             </div>
           </div>
         )}

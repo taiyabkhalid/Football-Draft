@@ -152,6 +152,7 @@ function DraftPageContent() {
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const prevDraftStatusRef = useRef(null);
   const prevShowDraftOrderPreviewRef = useRef(false);
+  const animationStartTimeRef = useRef(null);
 
   // ---- Auth check ----
   useEffect(() => {
@@ -327,8 +328,8 @@ function DraftPageContent() {
     };
   }, []);
 
-  function teamTint(hex, amount) {
-    return lightenColor(hex, amount, isDarkMode ? [23, 33, 46] : [255, 255, 255]);
+  function teamTint(hex, amount, darkTarget = [23, 33, 46]) {
+    return lightenColor(hex, amount, isDarkMode ? darkTarget : [255, 255, 255]);
   }
 
   const numTeams = settings?.num_teams || teams.length;
@@ -452,15 +453,31 @@ function DraftPageContent() {
     if (!justEntered) return;
     if (draftStatus === 'not_started' && settings.auto_randomize_draft_order === true) {
       setShowRandomizingAnimation(true);
-      const timer = setTimeout(() => {
-        setShowRandomizingAnimation(false);
-        setUpcomingPicksOpen(true);
-      }, 4000);
-      return () => clearTimeout(timer);
+      animationStartTimeRef.current = Date.now();
     } else {
       setUpcomingPicksOpen(true);
     }
   }, [showDraftOrderPreview, draftStatus, settings]);
+
+  // Never closes the animation until the backend has actually confirmed
+  // randomization completed - the backend's cron job runs every ~15
+  // seconds, so a blind fixed-duration close could fire before the real
+  // data was ready, causing Upcoming Picks to briefly flash the stale,
+  // pre-randomization order before jumping to the correct one. Still
+  // guarantees a minimum display time via animationStartTimeRef, set
+  // the moment the animation opens above, so every viewer sees it
+  // briefly even if the backend had already finished by then.
+  useEffect(() => {
+    if (!showRandomizingAnimation) return;
+    if (settings?.draft_order_auto_randomized !== true) return;
+    const elapsed = Date.now() - (animationStartTimeRef.current || 0);
+    const remaining = Math.max(4000 - elapsed, 0);
+    const timer = setTimeout(() => {
+      setShowRandomizingAnimation(false);
+      setUpcomingPicksOpen(true);
+    }, remaining);
+    return () => clearTimeout(timer);
+  }, [settings?.draft_order_auto_randomized, showRandomizingAnimation]);
 
   const scrolledToTopForStartRef = useRef(false);
   useEffect(() => {
@@ -1978,7 +1995,7 @@ function DraftPageContent() {
 
   if (!authChecked || !settings) {
     return (
-      <main style={{ background: 'var(--df-surface)', minHeight: '100vh', paddingBottom: 48 }}>
+      <main data-theme={profile?.dark_mode_enabled ? 'dark' : 'light'} style={{ background: 'var(--df-surface)', minHeight: '100vh', paddingBottom: 48 }}>
         <BrandHeader pageLabel="Live draft" />
         <p style={{ padding: 40, textAlign: 'center', color: 'var(--df-text-muted)', fontSize: 13 }}>Loading draft room…</p>
       </main>
@@ -2016,7 +2033,7 @@ function DraftPageContent() {
                 style={{
                   width: 100,
                   height: 52,
-                  background: n.isSoonestMine ? teamTint(color, 0.7) : teamTint(color, 0.85),
+                  background: n.isSoonestMine ? teamTint(color, 0.7, [38, 51, 68]) : teamTint(color, 0.85, [38, 51, 68]),
                   color: 'var(--df-text-primary)',
                   border: n.isSoonestMine
                     ? `2px solid ${color}`
@@ -2025,7 +2042,7 @@ function DraftPageContent() {
                     : 'none',
                   cursor: n.team ? 'pointer' : 'default',
                   transition: 'background 0.4s, border 0.4s',
-                  '--pulse-color': color,
+                  '--pulse-color': isDarkMode && getLuminance(color) < 40 ? '#e2e8f0' : color,
                 }}
               >
                 {n.isSoonestMine && (
@@ -2551,7 +2568,7 @@ function DraftPageContent() {
                                 minHeight: 100,
                                 cursor: player ? 'pointer' : 'default',
                                 background: isClockSlot ? teamTint(teamColor, 0.85) : 'var(--df-surface-alt)',
-                                border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
+                                border: isClockSlot ? `2px solid ${isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor}` : '2px solid transparent',
                               }}
                             >
                               {isClockSlot ? (
@@ -2681,7 +2698,7 @@ function DraftPageContent() {
                           style={{
                             minHeight: 100,
                             background: isClockSlot ? teamTint(teamColor, 0.85) : 'var(--df-surface-alt)',
-                            border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
+                            border: isClockSlot ? `2px solid ${isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor}` : '2px solid transparent',
                             cursor: slot.player ? 'pointer' : 'default',
                           }}
                         >
@@ -3818,7 +3835,11 @@ function DraftPageContent() {
               <div>
                 <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Injury status</p>
                 <p className="text-xs text-ink m-0">
-                  {p.injury_status === 'None' ? 'None' : `${p.injury_status} (${p.weeks_until_recovered || '?'} weeks)`}
+                  {p.injury_status === 'None'
+                    ? 'None'
+                    : p.weeks_until_recovered
+                    ? `${p.injury_status} (${p.weeks_until_recovered} weeks)`
+                    : p.injury_status}
                 </p>
               </div>
 

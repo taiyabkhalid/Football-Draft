@@ -164,10 +164,17 @@ function LiveDraftPageContent() {
   const [selectedRound, setSelectedRound] = useState(1);
   const roundInitialized = useRef(false);
   const [openProfileIds, setOpenProfileIds] = useState([]);
+  // Each open player card can be dragged independently - this maps
+  // playerId -> {x, y} pixel offset from its default stacked position.
+  // A ref (not state) tracks the currently-active drag, since mousemove
+  // fires far too often to put through React state on every event.
+  const [cardDragOffsets, setCardDragOffsets] = useState({});
+  const activeDragRef = useRef(null);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const prevDraftStatusRef = useRef(null);
   const [showRandomizingAnimation, setShowRandomizingAnimation] = useState(false);
   const prevShowDraftOrderPreviewRef = useRef(false);
+  const animationStartTimeRef = useRef(null);
 
   const currentPickRef = useRef(null);
   const draftedScrollRef = useRef(null);
@@ -677,8 +684,8 @@ function LiveDraftPageContent() {
   // mode is active, so it stays a genuinely dark, team-tinted card
   // rather than a bright pastel one regardless of theme.
   const isDarkMode = darkModeEnabled;
-  function teamTint(hex, amount) {
-    return lightenColor(hex, amount, isDarkMode ? [23, 33, 46] : [255, 255, 255]);
+  function teamTint(hex, amount, darkTarget = [23, 33, 46]) {
+    return lightenColor(hex, amount, isDarkMode ? darkTarget : [255, 255, 255]);
   }
 
   // The actual randomization is completed by a backend cron job within
@@ -699,10 +706,26 @@ function LiveDraftPageContent() {
     if (!justEntered) return;
     if (draftStatus === 'not_started' && settings.auto_randomize_draft_order === true) {
       setShowRandomizingAnimation(true);
-      const timer = setTimeout(() => setShowRandomizingAnimation(false), 4000);
-      return () => clearTimeout(timer);
+      animationStartTimeRef.current = Date.now();
     }
   }, [showDraftOrderPreview, draftStatus, settings]);
+
+  // Never closes the animation until the backend has actually confirmed
+  // randomization completed - the backend's cron job runs every ~15
+  // seconds, so a blind fixed-duration close could fire before the real
+  // data was ready, causing Upcoming Picks to briefly flash the stale,
+  // pre-randomization order before jumping to the correct one. Still
+  // guarantees a minimum display time via animationStartTimeRef, set
+  // the moment the animation opens above, so every viewer sees it
+  // briefly even if the backend had already finished by then.
+  useEffect(() => {
+    if (!showRandomizingAnimation) return;
+    if (settings?.draft_order_auto_randomized !== true) return;
+    const elapsed = Date.now() - (animationStartTimeRef.current || 0);
+    const remaining = Math.max(4000 - elapsed, 0);
+    const timer = setTimeout(() => setShowRandomizingAnimation(false), remaining);
+    return () => clearTimeout(timer);
+  }, [settings?.draft_order_auto_randomized, showRandomizingAnimation]);
 
   function formatCountdown(ms) {
     if (ms === null) return '--:--';
@@ -738,7 +761,49 @@ function LiveDraftPageContent() {
   }
   function closeProfile(playerId) {
     setOpenProfileIds((ids) => ids.filter((id) => id !== playerId));
+    setCardDragOffsets((prev) => {
+      const next = { ...prev };
+      delete next[playerId];
+      return next;
+    });
   }
+
+  function startCardDrag(playerId, clientX, clientY) {
+    const current = cardDragOffsets[playerId] || { x: 0, y: 0 };
+    activeDragRef.current = { playerId, startX: clientX, startY: clientY, baseX: current.x, baseY: current.y };
+  }
+
+  useEffect(() => {
+    function applyMove(clientX, clientY) {
+      const drag = activeDragRef.current;
+      if (!drag) return;
+      const dx = clientX - drag.startX;
+      const dy = clientY - drag.startY;
+      setCardDragOffsets((prev) => ({ ...prev, [drag.playerId]: { x: drag.baseX + dx, y: drag.baseY + dy } }));
+    }
+    function handleMouseMove(e) {
+      applyMove(e.clientX, e.clientY);
+    }
+    function handleTouchMove(e) {
+      if (activeDragRef.current && e.touches[0]) {
+        e.preventDefault();
+        applyMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }
+    function handleEnd() {
+      activeDragRef.current = null;
+    }
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleEnd);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+  }, []);
 
   const playersById = useMemo(() => Object.fromEntries(players.map((p) => [p.id, p])), [players]);
   const teamsById = useMemo(() => Object.fromEntries(teams.map((t) => [t.id, t])), [teams]);
@@ -1153,16 +1218,19 @@ function LiveDraftPageContent() {
               style={{
                 width: 100,
                 height: 52,
-                background: isOnClock ? teamTint(color, 0.7) : teamTint(color, 0.85),
+                background: isOnClock ? teamTint(color, 0.7, [38, 51, 68]) : teamTint(color, 0.85, [38, 51, 68]),
                 color: 'var(--df-text-primary)',
-                border: isOnClock ? `2px solid ${color}` : 'none',
+                border: isOnClock ? `2px solid ${isDarkMode && getLuminance(color) < 40 ? '#e2e8f0' : color}` : 'none',
                 cursor: n.team ? 'pointer' : 'default',
                 transition: 'background 0.4s, border 0.4s',
-                '--pulse-color': color,
+                '--pulse-color': isDarkMode && getLuminance(color) < 40 ? '#e2e8f0' : color,
               }}
             >
               {isOnClock && (
-                <span className="text-[9px] font-semibold" style={{ color }}>
+                <span
+                  className="text-[9px] font-semibold"
+                  style={{ color: isDarkMode && getLuminance(color) < 40 ? '#e2e8f0' : color }}
+                >
                   On the clock
                 </span>
               )}
@@ -1418,7 +1486,7 @@ function LiveDraftPageContent() {
                 className="flex-none rounded-2xl p-4 flex flex-col items-center text-center"
                 style={{ width: 210, border: `4px solid ${poppedTeamColor}`, background: 'var(--df-surface)', cursor: 'pointer' }}
               >
-                <p className="text-[19px] font-medium m-0 mb-2.5 tracking-wide" style={{ color: poppedTeamColor }}>
+                <p className="text-[19px] font-medium m-0 mb-2.5 tracking-wide" style={{ color: isDarkMode ? '#ffffff' : poppedTeamColor }}>
                   JUST DRAFTED!
                 </p>
                 <div className="flex items-center justify-center gap-1.5 mb-1">
@@ -1515,7 +1583,9 @@ function LiveDraftPageContent() {
                 height: 210,
                 background: isClockSlot ? teamTint(teamColor, 0.85) : 'var(--df-surface)',
                 border: isClockSlot
-                  ? `2px solid ${teamColor}`
+                  ? `2px solid ${isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor}`
+                  : slot.player
+                  ? `1.5px solid ${isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor}`
                   : slot.pickNumber === currentPickNumber
                   ? '1.5px solid var(--df-accent)'
                   : '1px solid var(--df-border)',
@@ -2381,18 +2451,23 @@ function LiveDraftPageContent() {
         return (
           <div
             key={id}
-            className="fixed rounded-xl bg-df-surface border border-line"
+            className="fixed rounded-xl bg-df-surface border border-line df-modal-card"
             style={{
               width: 290,
-              right: 16 + idx * 20,
-              bottom: 16 + idx * 20,
+              right: 16 + idx * 20 - (cardDragOffsets[id]?.x || 0),
+              bottom: 16 + idx * 20 - (cardDragOffsets[id]?.y || 0),
               zIndex: 60 + idx,
               maxHeight: '75vh',
               overflowY: 'auto',
               boxShadow: '0 8px 24px rgba(12,35,64,0.25)',
             }}
           >
-            <div className="flex items-start justify-between gap-2 px-4 pt-3.5 pb-2 border-b border-line">
+            <div
+              onMouseDown={(e) => startCardDrag(id, e.clientX, e.clientY)}
+              onTouchStart={(e) => e.touches[0] && startCardDrag(id, e.touches[0].clientX, e.touches[0].clientY)}
+              className="flex items-start justify-between gap-2 px-4 pt-3.5 pb-2 border-b border-line"
+              style={{ cursor: 'move' }}
+            >
               <div className="flex gap-2.5 items-center min-w-0">
                 {p.headshot_url ? (
                   <img src={p.headshot_url} alt={p.full_name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
@@ -2474,7 +2549,11 @@ function LiveDraftPageContent() {
               <div>
                 <p className="text-[10px] uppercase tracking-wide text-faint m-0 mb-0.5">Injury status</p>
                 <p className="text-xs text-ink m-0">
-                  {p.injury_status === 'None' ? 'None' : `${p.injury_status} (${p.weeks_until_recovered || '?'} weeks)`}
+                  {p.injury_status === 'None'
+                    ? 'None'
+                    : p.weeks_until_recovered
+                    ? `${p.injury_status} (${p.weeks_until_recovered} weeks)`
+                    : p.injury_status}
                 </p>
               </div>
 
