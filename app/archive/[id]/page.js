@@ -22,6 +22,14 @@ export default function ArchivedDraftPage() {
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
 
   useEffect(() => {
+    function handleDarkModeChanged(e) {
+      setDarkModeEnabled(e.detail.enabled);
+    }
+    window.addEventListener('df-dark-mode-changed', handleDarkModeChanged);
+    return () => window.removeEventListener('df-dark-mode-changed', handleDarkModeChanged);
+  }, []);
+
+  useEffect(() => {
     async function loadDarkModePreference() {
       const {
         data: { user },

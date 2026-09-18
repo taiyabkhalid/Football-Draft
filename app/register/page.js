@@ -52,6 +52,14 @@ export default function RegisterPage() {
   const [registrationLocked, setRegistrationLocked] = useState(false);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
 
+  useEffect(() => {
+    function handleDarkModeChanged(e) {
+      setDarkModeEnabled(e.detail.enabled);
+    }
+    window.addEventListener('df-dark-mode-changed', handleDarkModeChanged);
+    return () => window.removeEventListener('df-dark-mode-changed', handleDarkModeChanged);
+  }, []);
+
   const [form, setForm] = useState(initialForm);
   const [photoBlob, setPhotoBlob] = useState(null);
   const [existingHeadshotUrl, setExistingHeadshotUrl] = useState(null);

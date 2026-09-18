@@ -291,6 +291,14 @@ function DraftPageContent() {
   // whenever dark mode is active, so the result stays a genuinely dark,
   // team-tinted card rather than a bright pastel one regardless of theme.
   const isDarkMode = Boolean(profile?.dark_mode_enabled);
+
+  useEffect(() => {
+    function handleDarkModeChanged(e) {
+      setProfile((prev) => (prev ? { ...prev, dark_mode_enabled: e.detail.enabled } : prev));
+    }
+    window.addEventListener('df-dark-mode-changed', handleDarkModeChanged);
+    return () => window.removeEventListener('df-dark-mode-changed', handleDarkModeChanged);
+  }, []);
   function startCardDrag(playerId, clientX, clientY) {
     const current = cardDragOffsets[playerId] || { x: 0, y: 0 };
     activeDragRef.current = { playerId, startX: clientX, startY: clientY, baseX: current.x, baseY: current.y };
@@ -2111,7 +2119,7 @@ function DraftPageContent() {
                 <span style={{ position: 'absolute', left: 24, top: '50%', marginTop: -8 }}>
                   <FootballIcon color={teamColor} size={16} isDarkMode={isDarkMode} />
                 </span>
-                <p className="text-[15px] font-semibold m-0 text-center" style={{ color: teamColor }}>
+                <p className="text-[15px] font-semibold m-0 text-center" style={{ color: isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor }}>
                   {team?.name || 'Your team'}
                 </p>
               </div>
@@ -2575,9 +2583,9 @@ function DraftPageContent() {
                                 <>
                                   <div
                                     className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center"
-                                    style={{ border: `2px solid ${teamColor}` }}
+                                    style={{ border: `2px solid ${isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor}` }}
                                   >
-                                    <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
+                                    <i className="ti ti-clock text-base" style={{ color: isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor }} aria-hidden="true" />
                                   </div>
                                   <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: 'var(--df-text-primary)' }}>
                                     On the clock
@@ -2731,9 +2739,9 @@ function DraftPageContent() {
                             <>
                               <div
                                 className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center"
-                                style={{ border: `2px solid ${teamColor}` }}
+                                style={{ border: `2px solid ${isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor}` }}
                               >
-                                <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
+                                <i className="ti ti-clock text-base" style={{ color: isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor }} aria-hidden="true" />
                               </div>
                               <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: 'var(--df-text-primary)' }}>
                                 On the clock

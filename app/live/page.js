@@ -128,6 +128,14 @@ function LiveDraftPageContent() {
   const [myEmail, setMyEmail] = useState(null);
   const [myRole, setMyRole] = useState(null);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
+
+  useEffect(() => {
+    function handleDarkModeChanged(e) {
+      setDarkModeEnabled(e.detail.enabled);
+    }
+    window.addEventListener('df-dark-mode-changed', handleDarkModeChanged);
+    return () => window.removeEventListener('df-dark-mode-changed', handleDarkModeChanged);
+  }, []);
   const [teamRankings, setTeamRankings] = useState([]);
   const [rankingToast, setRankingToast] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1484,7 +1492,12 @@ function LiveDraftPageContent() {
                 ref={currentPickRef}
                 onClick={() => openProfile(player.id)}
                 className="flex-none rounded-2xl p-4 flex flex-col items-center text-center"
-                style={{ width: 210, border: `4px solid ${poppedTeamColor}`, background: 'var(--df-surface)', cursor: 'pointer' }}
+                style={{
+                  width: 210,
+                  border: `4px solid ${isDarkMode && getLuminance(poppedTeamColor) < 40 ? '#e2e8f0' : poppedTeamColor}`,
+                  background: 'var(--df-surface)',
+                  cursor: 'pointer',
+                }}
               >
                 <p className="text-[19px] font-medium m-0 mb-2.5 tracking-wide" style={{ color: isDarkMode ? '#ffffff' : poppedTeamColor }}>
                   JUST DRAFTED!
@@ -1497,7 +1510,10 @@ function LiveDraftPageContent() {
                   <p className="text-[13px] m-0 mb-3" style={{ color: 'var(--df-text-muted)' }}>
                     <span
                       className="text-[10px] font-medium rounded px-1.5 py-px mr-1"
-                      style={{ color: poppedTeamColor, background: teamTint(poppedTeamColor, 0.85) }}
+                      style={{
+                        color: isDarkMode && getLuminance(poppedTeamColor) < 40 ? '#e2e8f0' : poppedTeamColor,
+                        background: teamTint(poppedTeamColor, 0.85),
+                      }}
                     >
                       GM
                     </span>
@@ -1549,7 +1565,10 @@ function LiveDraftPageContent() {
                   <div className="flex items-center justify-center gap-1 mb-3 w-full">
                     <span
                       className="text-[10px] font-medium rounded px-1.5 py-px"
-                      style={{ color: skipTeamColor, background: teamTint(skipTeamColor, 0.85) }}
+                      style={{
+                        color: isDarkMode && getLuminance(skipTeamColor) < 40 ? '#e2e8f0' : skipTeamColor,
+                        background: teamTint(skipTeamColor, 0.85),
+                      }}
                     >
                       GM
                     </span>
@@ -1585,7 +1604,7 @@ function LiveDraftPageContent() {
                 border: isClockSlot
                   ? `2px solid ${isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor}`
                   : slot.player
-                  ? `1.5px solid ${isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor}`
+                  ? `2px solid ${isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor}`
                   : slot.pickNumber === currentPickNumber
                   ? '1.5px solid var(--df-accent)'
                   : '1px solid var(--df-border)',
@@ -1630,9 +1649,9 @@ function LiveDraftPageContent() {
                   </p>
                   <div
                     className="w-10 h-10 rounded-full bg-df-surface flex items-center justify-center my-1.5"
-                    style={{ border: `2px solid ${teamColor}` }}
+                    style={{ border: `2px solid ${isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor}` }}
                   >
-                    <i className="ti ti-clock text-xl" style={{ color: teamColor }} aria-hidden="true" />
+                    <i className="ti ti-clock text-xl" style={{ color: isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor }} aria-hidden="true" />
                   </div>
                   <p className="text-base font-semibold m-0 mb-1.5" style={{ color: 'var(--df-text-primary)' }}>
                     {timerDisplay}
@@ -2021,16 +2040,16 @@ function LiveDraftPageContent() {
                               minHeight: 100,
                               cursor: player ? 'pointer' : 'default',
                               background: isClockSlot ? teamTint(teamColor, 0.85) : 'var(--df-surface-alt)',
-                              border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
+                              border: isClockSlot ? `2px solid ${isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor}` : '2px solid transparent',
                             }}
                           >
                             {isClockSlot ? (
                               <>
                                 <div
                                   className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center"
-                                  style={{ border: `2px solid ${teamColor}` }}
+                                  style={{ border: `2px solid ${isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor}` }}
                                 >
-                                  <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
+                                  <i className="ti ti-clock text-base" style={{ color: isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor }} aria-hidden="true" />
                                 </div>
                                 <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: 'var(--df-text-primary)' }}>
                                   On the clock
@@ -2151,7 +2170,7 @@ function LiveDraftPageContent() {
                         style={{
                           minHeight: 100,
                           background: isClockSlot ? teamTint(teamColor, 0.85) : 'var(--df-surface-alt)',
-                          border: isClockSlot ? `2px solid ${teamColor}` : '2px solid transparent',
+                          border: isClockSlot ? `2px solid ${isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor}` : '2px solid transparent',
                           cursor: slot.player ? 'pointer' : 'default',
                         }}
                       >
@@ -2189,9 +2208,9 @@ function LiveDraftPageContent() {
                           <>
                             <div
                               className="w-8 h-8 rounded-full bg-df-surface flex items-center justify-center"
-                              style={{ border: `2px solid ${teamColor}` }}
+                              style={{ border: `2px solid ${isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor}` }}
                             >
-                              <i className="ti ti-clock text-base" style={{ color: teamColor }} aria-hidden="true" />
+                              <i className="ti ti-clock text-base" style={{ color: isDarkMode && getLuminance(teamColor) < 40 ? '#e2e8f0' : teamColor }} aria-hidden="true" />
                             </div>
                             <p className="text-[9px] font-medium m-0 mt-1 leading-tight truncate w-full" style={{ color: 'var(--df-text-primary)' }}>
                               On the clock

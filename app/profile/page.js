@@ -19,6 +19,14 @@ export default function ProfilePage() {
   const [settings, setSettings] = useState(null);
   const [role, setRole] = useState(null);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
+
+  useEffect(() => {
+    function handleDarkModeChanged(e) {
+      setDarkModeEnabled(e.detail.enabled);
+    }
+    window.addEventListener('df-dark-mode-changed', handleDarkModeChanged);
+    return () => window.removeEventListener('df-dark-mode-changed', handleDarkModeChanged);
+  }, []);
   const [teamNameDraft, setTeamNameDraft] = useState('');
   const [teamColorDraft, setTeamColorDraft] = useState('var(--df-accent-secondary)');
 
